@@ -1,0 +1,13 @@
+[package]
+name = "antlog"
+version = "0.1.0"
+authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+edition = "2018"
+
+[dependencies.log]
+git = "https://github.com/KodrAus/log.git"
+branch = "feat/source-get"
+features = ["std", "kv_unstable"]
+
+[dependencies.humantime]
+version = "~1"
