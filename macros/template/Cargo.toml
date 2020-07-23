@@ -1,0 +1,15 @@
+[package]
+name = "antlog_macros_template"
+version = "0.1.0"
+authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+edition = "2018"
+
+[dependencies.syn]
+version = "1"
+features = ["full"]
+
+[dependencies.quote]
+version = "1"
+
+[dependencies.thiserror]
+version = "1"

@@ -4,10 +4,27 @@ version = "0.1.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
 
+[workspace]
+members = [
+    "macros",
+    "macros/private",
+    "macros/template",
+    "enrich",
+]
+
+[features]
+default = [
+    "antlog_macros"
+]
+
 [dependencies.log]
 git = "https://github.com/KodrAus/log.git"
-branch = "feat/source-get"
+branch = "feat/antlog"
 features = ["std", "kv_unstable"]
 
+[dependencies.antlog_macros]
+path = "macros"
+optional = true
+
 [dependencies.humantime]
-version = "~1"
+version = "~2"

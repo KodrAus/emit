@@ -1,0 +1,10 @@
+[package]
+name = "antlog_macros_private"
+version = "0.0.0"
+authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+edition = "2018"
+
+[dependencies.log]
+git = "https://github.com/KodrAus/log.git"
+branch = "feat/antlog"
+features = ["kv_unstable"]

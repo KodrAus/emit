@@ -1,0 +1,10 @@
+error[E0277]: `Input` doesn't implement `std::fmt::Display`
+  --> $DIR/capture_unsatisfied_trait.rs:16:9
+   |
+16 |         #[display] input,
+   |         ^^^^^^^^^^ `Input` cannot be formatted with the default formatter
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `Input`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+   = note: required because of the requirements on the impl of `antlog_macros_private::capture::Capture<antlog_macros_private::capture::CaptureDisplay>` for `Input`
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

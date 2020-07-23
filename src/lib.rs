@@ -1,16 +1,9 @@
-use std::{
-    fmt,
-    error,
-    time::SystemTime,
-};
+use std::{error, fmt, time::SystemTime};
 
 #[doc(inline)]
-pub use log::{
-    Level,
-    kv,
-};
+pub use log::{kv, Level};
 
-use self::kv::{ToValue, Key, Value};
+use self::kv::{Key, ToValue, Value};
 
 const TIMESTAMP: &'static str = "timestamp";
 
@@ -68,14 +61,16 @@ impl<'a> Source<'a> {
         let timestamp = if let Some(timestamp) = source.get(Key::from_str(TIMESTAMP)) {
             Timestamp(Captured::Captured(timestamp))
         } else {
-            Timestamp(Captured::Provided(humantime::format_rfc3339_nanos(SystemTime::now())))
+            Timestamp(Captured::Provided(humantime::format_rfc3339_nanos(
+                SystemTime::now(),
+            )))
         };
 
         Source {
             timestamp,
             template: None,
             error: None,
-            inner: source
+            inner: source,
         }
     }
 }
@@ -92,7 +87,7 @@ impl<'a> kv::Source for Source<'a> {
     fn get<'v>(&'v self, key: Key) -> Option<Value<'v>> {
         match key.as_str() {
             TIMESTAMP => Some(self.timestamp.to_value()),
-            _ => self.inner.get(key)
+            _ => self.inner.get(key),
         }
     }
 }
