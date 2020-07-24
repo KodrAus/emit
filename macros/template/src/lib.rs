@@ -18,8 +18,8 @@ A parsed template.
 */
 #[derive(Debug)]
 pub struct Template<'a> {
-    raw: &'a str,
-    parts: Vec<Part<'a>>,
+    pub raw: &'a str,
+    pub parts: Vec<Part<'a>>,
 }
 
 /**

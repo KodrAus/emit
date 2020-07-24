@@ -1,12 +1,13 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
-use syn::{Expr, ExprMethodCall, FieldValue, Member, Lit, ExprLit, LitStr, visit_mut::{self, VisitMut}};
+use syn::{
+    visit_mut::{self, VisitMut},
+    Expr, ExprLit, ExprMethodCall, FieldValue, Lit, LitStr, Member,
+};
 
 const DEFAULT_METHOD: &'static str = "__private_log_capture_with_default";
 
-pub(super) fn expand_default(expr: TokenStream) -> TokenStream {
-    let key_value = syn::parse2::<FieldValue>(expr).expect("failed to parse expr");
-
+pub(super) fn expand_default(key_value: FieldValue) -> TokenStream {
     let key_expr = ExprLit {
         attrs: vec![],
         lit: Lit::Str(match key_value.member {
@@ -26,11 +27,16 @@ pub(super) fn expand_default(expr: TokenStream) -> TokenStream {
     )
 }
 
-pub(super) fn expand(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
+pub(super) fn expand_default_tokens(expr: TokenStream) -> TokenStream {
+    let key_value = syn::parse2::<FieldValue>(expr).expect("failed to parse expr");
+    expand_default(key_value)
+}
+
+pub(super) fn expand(mut expr: Expr, fn_name: Ident) -> TokenStream {
     struct ReplaceLogDefaultMethod {
         with: Ident,
     }
-    
+
     impl VisitMut for ReplaceLogDefaultMethod {
         fn visit_expr_mut(&mut self, node: &mut Expr) {
             if let Expr::MethodCall(ExprMethodCall { ref mut method, .. }) = node {
@@ -38,20 +44,23 @@ pub(super) fn expand(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
                     *method = self.with.clone()
                 }
             }
-    
+
             // Delegate to the default impl to visit nested expressions.
             visit_mut::visit_expr_mut(self, node);
         }
     }
 
-    let mut expr = syn::parse2::<Expr>(expr)
-        .expect("failed to parse expr");
-
-    let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
-
     ReplaceLogDefaultMethod { with: fn_name }.visit_expr_mut(&mut expr);
 
     expr.to_token_stream()
+}
+
+pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
+    let expr = syn::parse2::<Expr>(expr).expect("failed to parse expr");
+
+    let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
+
+    expand(expr, fn_name)
 }
 
 #[cfg(test)]
@@ -78,7 +87,7 @@ mod tests {
         ];
 
         for (expr, expected) in cases {
-            let actual = expand_default(expr);
+            let actual = expand_default_tokens(expr);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
@@ -89,7 +98,7 @@ mod tests {
         let cases = vec![
             (
                 (
-                    expand_default(quote!(a)),
+                    expand_default_tokens(quote!(a)),
                     quote!(__private_log_capture_from_debug),
                 ),
                 quote!({
@@ -99,7 +108,7 @@ mod tests {
             ),
             (
                 (
-                    expand_default(quote!(a: 42)),
+                    expand_default_tokens(quote!(a: 42)),
                     quote!(__private_log_capture_from_display),
                 ),
                 quote!({
@@ -110,7 +119,7 @@ mod tests {
         ];
 
         for ((expr, fn_name), expected) in cases {
-            let actual = expand(expr, fn_name);
+            let actual = expand_tokens(expr, fn_name);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
