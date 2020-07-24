@@ -45,5 +45,8 @@ mod tests {
             Some("a string"),
             v.__private_log_capture_with_default().to_borrowed_str()
         );
+
+        // Capture a value with parens
+        let _ = (SomeType).__private_log_capture_with_default();
     }
 }
