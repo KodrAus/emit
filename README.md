@@ -1,5 +1,7 @@
 # `antlog`
 
+**Current Status: Still writing an initial implementation**
+
 An experimental wrapper around the [`log`](https://docs.rs/log/0.4.6/log/) crate that exposes its structured features. The goal is to explore ways to leverage `log`'s structured logging to build more useful APIs on top.
 
 It currently requires a `nightly` compiler.
