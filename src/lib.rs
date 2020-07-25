@@ -114,6 +114,12 @@ impl<'a> ToValue for Template<'a> {
     }
 }
 
+impl<'a> Template<'a> {
+    pub fn render(&self, fmt: impl FnMut(fmt::Write, &str, Value) -> fmt::Result) {
+        unimplemented!("iterate through template parts and render using `source.get(label)`")
+    }
+}
+
 struct SourceError<'a>(Captured<'a, &'a (dyn error::Error + 'static)>);
 
 impl<'a> ToValue for SourceError<'a> {

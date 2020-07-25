@@ -7,11 +7,21 @@ This crate is not intended to be consumed directly.
 #![feature(min_specialization)] // required to accept `T: Sized + 'static || str`
 #![feature(extern_types)] // could be replaced by empty enums
 
+#![cfg_attr(test, feature(test))] // for some benchmarks
+
+#![cfg(test)]
+extern crate test;
+
+mod source;
 mod capture;
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::capture::__PrivateLogCapture;
+    pub use crate::{
+        capture::__PrivateLogCapture,
+        source::Captured,
+    };
+
     pub use log::kv::Value;
 }
 

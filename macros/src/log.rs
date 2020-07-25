@@ -26,6 +26,7 @@ pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
         }
     });
 
+    // TODO: Make this return a `private::Captured`
     quote!(&[
         #(#fields),*
     ])
