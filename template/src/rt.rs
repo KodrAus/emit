@@ -17,21 +17,22 @@ impl<'a> Template<'a> {
 
     The context helps the template find
     */
-    pub fn render<'brw, 'ctx_fill, 'ctx_missing>(
+    pub fn render<'brw>(
         &'brw self,
-        ctx: Context<'ctx_fill, 'ctx_missing>,
-    ) -> impl fmt::Display + 'brw
-    where
-        'ctx_fill: 'brw,
-        'ctx_missing: 'brw,
-    {
-        struct ImplDisplay<'tpl, 'brw, 'ctx_fill, 'ctx_missing> {
+        ctx: Context<
+            impl (Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>) + 'brw,
+            impl (Fn(&mut dyn fmt::Write, &str) -> fmt::Result) + 'brw,
+        >,
+    ) -> impl fmt::Display + 'brw {
+        struct ImplDisplay<'tpl, 'brw, TFill, TMissing> {
             template: &'brw Template<'tpl>,
-            ctx: Context<'ctx_fill, 'ctx_missing>,
+            ctx: Context<TFill, TMissing>,
         }
 
-        impl<'tpl, 'brw, 'ctx_fill, 'ctx_missing> fmt::Display
-            for ImplDisplay<'tpl, 'brw, 'ctx_fill, 'ctx_missing>
+        impl<'tpl, 'brw, TFill, TMissing> fmt::Display for ImplDisplay<'tpl, 'brw, TFill, TMissing>
+        where
+            TFill: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+            TMissing: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 for part in self.template.parts {
@@ -61,29 +62,39 @@ impl<'a> Template<'a> {
 /**
 A context used to render a template.
 */
-pub struct Context<'fill, 'missing> {
-    fill: &'fill dyn Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-    missing: &'missing dyn Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+pub struct Context<TFill, TMissing> {
+    // fill: &'fill dyn Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+    // missing: &'missing dyn Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+    fill: TFill,
+    missing: TMissing,
 }
 
-impl<'fill, 'missing> Context<'fill, 'missing> {
-    /**
-    Create a new, empty context.
-    */
-    pub fn new() -> Context<'fill, 'missing> {
+impl
+    Context<
+        fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+        fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+    >
+{
+    pub fn new() -> Self {
         Context {
-            fill: &|_, _| None,
-            missing: &|f, label| f.write_fmt(format_args!("`{}`", label)),
+            fill: |_, _| None,
+            missing: |f, label| f.write_fmt(format_args!("`{}`", label)),
         }
     }
+}
 
+impl<TFill, TMissing> Context<TFill, TMissing>
+where
+    TFill: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+    TMissing: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+{
     /**
     Provide a function to fill the holes in the template with.
     */
-    pub fn fill<'a>(
-        self,
-        fill: &'a impl Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-    ) -> Context<'a, 'missing> {
+    pub fn fill<T>(self, fill: T) -> Context<T, TMissing>
+    where
+        T: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+    {
         Context {
             fill,
             missing: self.missing,
@@ -93,10 +104,10 @@ impl<'fill, 'missing> Context<'fill, 'missing> {
     /**
     Provide a function to handle unfilled holes.
     */
-    pub fn missing<'a>(
-        self,
-        missing: &'a impl Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
-    ) -> Context<'fill, 'a> {
+    pub fn missing<T>(self, missing: T) -> Context<TFill, T>
+    where
+        T: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+    {
         Context {
             fill: self.fill,
             missing,
@@ -104,7 +115,12 @@ impl<'fill, 'missing> Context<'fill, 'missing> {
     }
 }
 
-impl<'fill, 'missing> Default for Context<'fill, 'missing> {
+impl Default
+    for Context<
+        fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+        fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+    >
+{
     fn default() -> Self {
         Self::new()
     }
@@ -130,7 +146,10 @@ mod tests {
         let cases = vec![
             (
                 &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
-                Context::new().fill(&|write, label| Some(write.write_str(label))),
+                Context::new().fill(
+                    (|write, label| Some(write.write_str(label)))
+                        as fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+                ),
                 "Hello world!",
             ),
             (
@@ -140,8 +159,10 @@ mod tests {
             ),
             (
                 &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
-                Context::new()
-                    .missing(&|write, label| write.write_fmt(format_args!("{{{}}}", label))),
+                Context::new().missing(
+                    (|write, label| write.write_fmt(format_args!("{{{}}}", label)))
+                        as fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+                ),
                 "Hello {world}!",
             ),
         ];
@@ -174,7 +195,7 @@ mod tests {
             let template = build(parts);
 
             let actual = template
-                .render(Context::new().fill(&|write, label| {
+                .render(Context::new().fill(|write, label| {
                     Source::get(&source, Key::from(label))
                         .map(|value| write.write_fmt(format_args!("{}", value)))
                 }))

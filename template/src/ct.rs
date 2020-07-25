@@ -6,7 +6,7 @@ use std::{fmt, iter::Peekable, str::CharIndices};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{FieldValue, ExprLit, LitStr, Lit, Member};
+use syn::{ExprLit, FieldValue, Lit, LitStr, Member};
 use thiserror::Error;
 
 /**
@@ -223,20 +223,22 @@ impl<'a> Template<'a> {
     }
 
     pub fn generate_rt(&self) -> TokenStream {
-        let parts = self.parts.iter().map(|part| {
-            match part {
-                Part::Text(text) => quote!(log_template::__private::Part::Text(#text)),
-                Part::Hole(field) => {
-                    let label = ExprLit {
-                        attrs: vec![],
-                        lit: Lit::Str(match field.member {
-                            Member::Named(ref member) => LitStr::new(&member.to_string(), member.span()),
-                            Member::Unnamed(ref member) => LitStr::new(&member.index.to_string(), member.span),
-                        }),
-                    };
+        let parts = self.parts.iter().map(|part| match part {
+            Part::Text(text) => quote!(log_template::__private::Part::Text(#text)),
+            Part::Hole(field) => {
+                let label = ExprLit {
+                    attrs: vec![],
+                    lit: Lit::Str(match field.member {
+                        Member::Named(ref member) => {
+                            LitStr::new(&member.to_string(), member.span())
+                        }
+                        Member::Unnamed(ref member) => {
+                            LitStr::new(&member.index.to_string(), member.span)
+                        }
+                    }),
+                };
 
-                    quote!(log_template::__private::Part::Hole(#label))
-                },
+                quote!(log_template::__private::Part::Hole(#label))
             }
         });
 
@@ -356,16 +358,14 @@ mod tests {
 
     #[test]
     fn into_rt() {
-        let cases = vec![
-            (
-                "Hello {#[log::debug] world}!",
-                quote!(log_template::__private::build(&[
-                    log_template::__private::Part::Text("Hello "),
-                    log_template::__private::Part::Hole("world"),
-                    log_template::__private::Part::Text("!")
-                ]))
-            )
-        ];
+        let cases = vec![(
+            "Hello {#[log::debug] world}!",
+            quote!(log_template::__private::build(&[
+                log_template::__private::Part::Text("Hello "),
+                log_template::__private::Part::Hole("world"),
+                log_template::__private::Part::Text("!")
+            ])),
+        )];
 
         for (template, expected) in cases {
             let template = Template::parse(template).expect("failed to parse template");
