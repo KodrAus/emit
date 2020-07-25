@@ -20,8 +20,8 @@ features = ["full", "extra-traits", "visit-mut"]
 [dependencies.antlog_macros_private]
 path = "private"
 
-[dependencies.antlog_macros_template]
-path = "template"
+[dependencies.antlog_template]
+path = "../template"
 
 [dev-dependencies.trybuild]
 version = "1"

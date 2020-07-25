@@ -1,4 +1,4 @@
-use log::kv::{Source, Visitor, Key, Value, ToValue, Error};
+use log::kv::{Error, Key, Source, ToValue, Value, Visitor};
 
 /**
 A `kv::Source` that can find the index for a key efficiently.
@@ -33,14 +33,10 @@ mod tests {
                 "a" => Some(0),
                 _ => None,
             },
-            key_values: &[
-                ("a", 42.into()),
-            ]
+            key_values: &[("a", 42.into())],
         };
 
-        b.iter(|| {
-            test::black_box(source.get(Key::from_str("a")))
-        })
+        b.iter(|| test::black_box(source.get(Key::from_str("a"))))
     }
 
     #[bench]
@@ -50,14 +46,10 @@ mod tests {
                 "a" => Some(0),
                 _ => None,
             },
-            key_values: &[
-                ("a", 42.into()),
-            ]
+            key_values: &[("a", 42.into())],
         };
 
-        b.iter(|| {
-            test::black_box(source.get(Key::from_str("b")))
-        })
+        b.iter(|| test::black_box(source.get(Key::from_str("b"))))
     }
 
     #[bench]
@@ -87,12 +79,10 @@ mod tests {
                 ("h", 1.into()),
                 ("i", 1.into()),
                 ("j", 1.into()),
-            ]
+            ],
         };
 
-        b.iter(|| {
-            test::black_box(source.get(Key::from_str("a")))
-        })
+        b.iter(|| test::black_box(source.get(Key::from_str("a"))))
     }
 
     #[bench]
@@ -122,11 +112,9 @@ mod tests {
                 ("h", 1.into()),
                 ("i", 1.into()),
                 ("j", 1.into()),
-            ]
+            ],
         };
 
-        b.iter(|| {
-            test::black_box(source.get(Key::from_str("k")))
-        })
+        b.iter(|| test::black_box(source.get(Key::from_str("k"))))
     }
 }

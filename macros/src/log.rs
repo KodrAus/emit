@@ -1,6 +1,6 @@
 use std::mem;
 
-use antlog_macros_template::{Part, Template};
+use antlog_template::ct::{Part, Template};
 use proc_macro2::TokenStream;
 use syn::LitStr;
 

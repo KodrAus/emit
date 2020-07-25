@@ -8,7 +8,7 @@ edition = "2018"
 members = [
     "macros",
     "macros/private",
-    "macros/template",
+    "template",
     "enrich",
 ]
 

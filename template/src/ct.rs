@@ -1,16 +1,12 @@
 /*!
-A different string template parser.
-
-The shape of templates accepted by this crate are different from `std::fmt`.
-It doesn't have any direct understanding of formatting flags.
-Instead, it just parses field expressions between braces in a string and
-leaves it up to a consumer to decide what to do with them.
+Compile-time string template parsing.
 */
 
 use std::{fmt, iter::Peekable, str::CharIndices};
 
+use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::FieldValue;
+use syn::{FieldValue, ExprLit, LitStr, Lit, Member};
 use thiserror::Error;
 
 /**
@@ -225,6 +221,29 @@ impl<'a> Template<'a> {
 
         Ok(Template { raw: input, parts })
     }
+
+    pub fn generate_rt(&self) -> TokenStream {
+        let parts = self.parts.iter().map(|part| {
+            match part {
+                Part::Text(text) => quote!(log_template::__private::Part::Text(#text)),
+                Part::Hole(field) => {
+                    let label = ExprLit {
+                        attrs: vec![],
+                        lit: Lit::Str(match field.member {
+                            Member::Named(ref member) => LitStr::new(&member.to_string(), member.span()),
+                            Member::Unnamed(ref member) => LitStr::new(&member.index.to_string(), member.span),
+                        }),
+                    };
+
+                    quote!(log_template::__private::Part::Hole(#label))
+                },
+            }
+        });
+
+        quote!(
+            log_template::__private::build(&[#(#parts),*])
+        )
+    }
 }
 
 #[cfg(test)]
@@ -332,6 +351,27 @@ mod tests {
                 "parsing template: {:?}",
                 template
             );
+        }
+    }
+
+    #[test]
+    fn into_rt() {
+        let cases = vec![
+            (
+                "Hello {#[log::debug] world}!",
+                quote!(log_template::__private::build(&[
+                    log_template::__private::Part::Text("Hello "),
+                    log_template::__private::Part::Hole("world"),
+                    log_template::__private::Part::Text("!")
+                ]))
+            )
+        ];
+
+        for (template, expected) in cases {
+            let template = Template::parse(template).expect("failed to parse template");
+
+            let actual = template.generate_rt();
+            assert_eq!(expected.to_string(), actual.to_string());
         }
     }
 
