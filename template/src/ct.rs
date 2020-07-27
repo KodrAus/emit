@@ -2,7 +2,7 @@
 Compile-time string template parsing.
 */
 
-use std::{fmt, iter::Peekable, str::CharIndices};
+use std::{ops::Range, fmt, iter::Peekable, str::CharIndices};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -25,11 +25,17 @@ pub enum Part<'a> {
     /**
     A fragment of text.
     */
-    Text(&'a str),
+    Text {
+        text: &'a str,
+        range: Range<usize>,
+    },
     /**
     A replacement expression.
     */
-    Hole(FieldValue),
+    Hole {
+        expr: FieldValue,
+        range: Range<usize>,
+    },
 }
 
 /**
@@ -76,8 +82,8 @@ impl Error {
 impl<'a> fmt::Debug for Part<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Part::Text(text) => text.fmt(f),
-            Part::Hole(expr) => f.write_fmt(format_args!("`{}`", expr.to_token_stream())),
+            Part::Text { text, range } => f.debug_struct("Text").field("text", text).field("range", range).finish(),
+            Part::Hole { expr, range } => f.debug_struct("Hole").field("expr", &format_args!("`{}`", expr.to_token_stream())).field("range", range).finish(),
         }
     }
 }
@@ -109,7 +115,7 @@ impl<'a> Template<'a> {
                     char,
                     &mut Peekable<CharIndices<'input>>,
                 ) -> Result<bool, Error>,
-            ) -> Result<Option<&'input str>, Error> {
+            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
                 let mut scan = || {
                     while let Some((i, c)) = self.iter.next() {
                         if until_true(c, &mut self.iter)? {
@@ -117,20 +123,23 @@ impl<'a> Template<'a> {
                             let end = i;
 
                             self.start = end + 1;
-                            return Ok(&self.input[start..end]);
+
+                            let range = start..end;
+                            return Ok((&self.input[range.clone()], range));
                         }
                     }
 
-                    Ok(&self.input[self.start..])
+                    let range = self.start..self.input.len();
+                    Ok((&self.input[range.clone()], range))
                 };
 
                 match scan()? {
-                    s if s.len() > 0 => Ok(Some(s)),
+                    (s, r) if s.len() > 0 => Ok(Some((s, r))),
                     _ => Ok(None),
                 }
             }
 
-            fn take_until_eof_or_hole_start(&mut self) -> Result<Option<&'input str>, Error> {
+            fn take_until_eof_or_hole_start(&mut self) -> Result<Option<(&'input str, Range<usize>)>, Error> {
                 self.take_until(|c, rest| match c {
                     '{' => match rest.peek().map(|(_, peeked)| *peeked) {
                         Some('{') => {
@@ -152,7 +161,7 @@ impl<'a> Template<'a> {
                 })
             }
 
-            fn take_until_hole_end(&mut self) -> Result<Option<&'input str>, Error> {
+            fn take_until_hole_end(&mut self) -> Result<Option<(&'input str, Range<usize>)>, Error> {
                 let mut depth = 1;
                 let mut matched_hole_end = false;
 
@@ -196,8 +205,8 @@ impl<'a> Template<'a> {
         while scan.has_input() {
             match expecting {
                 Expecting::TextOrEOF => {
-                    if let Some(text) = scan.take_until_eof_or_hole_start()? {
-                        parts.push(Part::Text(text));
+                    if let Some((text, range)) = scan.take_until_eof_or_hole_start()? {
+                        parts.push(Part::Text { text, range });
                     }
 
                     expecting = Expecting::Hole;
@@ -205,10 +214,10 @@ impl<'a> Template<'a> {
                 }
                 Expecting::Hole => {
                     match scan.take_until_hole_end()? {
-                        Some(expr) => {
+                        Some((expr, range)) => {
                             let expr =
                                 syn::parse_str(expr).map_err(|e| Error::parse_expr(expr, e))?;
-                            parts.push(Part::Hole(expr));
+                            parts.push(Part::Hole { expr, range });
                         }
                         None => Err(Error::missing_expr())?,
                     }
@@ -224,11 +233,11 @@ impl<'a> Template<'a> {
 
     pub fn generate_rt(&self) -> TokenStream {
         let parts = self.parts.iter().map(|part| match part {
-            Part::Text(text) => quote!(log_template::__private::Part::Text(#text)),
-            Part::Hole(field) => {
+            Part::Text { text, .. } => quote!(antlog_template::__private::Part::Text(#text)),
+            Part::Hole { expr, .. } => {
                 let label = ExprLit {
                     attrs: vec![],
-                    lit: Lit::Str(match field.member {
+                    lit: Lit::Str(match expr.member {
                         Member::Named(ref member) => {
                             LitStr::new(&member.to_string(), member.span())
                         }
@@ -238,12 +247,12 @@ impl<'a> Template<'a> {
                     }),
                 };
 
-                quote!(log_template::__private::Part::Hole(#label))
+                quote!(antlog_template::__private::Part::Hole(#label))
             }
         });
 
         quote!(
-            log_template::__private::build(&[#(#parts),*])
+            antlog_template::__private::build(&[#(#parts),*])
         )
     }
 }
@@ -256,53 +265,53 @@ mod tests {
     fn parse_ok() {
         let cases = vec![
             ("", vec![]),
-            ("Hello world 🎈📌", vec![text("Hello world 🎈📌")]),
+            ("Hello world 🎈📌", vec![text("Hello world 🎈📌", 0..20)]),
             (
                 "Hello {world} 🎈📌",
-                vec![text("Hello "), hole("world"), text(" 🎈📌")],
+                vec![text("Hello ", 0..6), hole("world", 7..12), text(" 🎈📌", 13..22)],
             ),
-            ("{world}", vec![hole("world")]),
+            ("{world}", vec![hole("world", 1..6)]),
             (
                 "Hello {#[log::debug] world} 🎈📌",
-                vec![text("Hello "), hole("#[log::debug] world"), text(" 🎈📌")],
+                vec![text("Hello ", 0..6), hole("#[log::debug] world", 7..26), text(" 🎈📌", 27..36)],
             ),
             (
                 "Hello {#[log::debug] world: 42} 🎈📌",
                 vec![
-                    text("Hello "),
-                    hole("#[log::debug] world: 42"),
-                    text(" 🎈📌"),
+                    text("Hello ", 0..6),
+                    hole("#[log::debug] world: 42", 7..30),
+                    text(" 🎈📌", 31..40),
                 ],
             ),
             (
                 "Hello {#[log::debug] world: \"is text\"} 🎈📌",
                 vec![
-                    text("Hello "),
-                    hole("#[log::debug] world: \"is text\""),
-                    text(" 🎈📌"),
+                    text("Hello ", 0..6),
+                    hole("#[log::debug] world: \"is text\"", 7..37),
+                    text(" 🎈📌", 38..47),
                 ],
             ),
             (
                 "{Hello} {world}",
-                vec![hole("Hello"), text(" "), hole("world")],
+                vec![hole("Hello", 1..6), text(" ", 7..8), hole("world", 9..14)],
             ),
-            ("{a}{b}{c}", vec![hole("a"), hole("b"), hole("c")]),
+            ("{a}{b}{c}", vec![hole("a", 1..2), hole("b", 4..5), hole("c", 7..8)]),
             (
                 "🎈📌{a}🎈📌{b}🎈📌{c}🎈📌",
                 vec![
-                    text("🎈📌"),
-                    hole("a"),
-                    text("🎈📌"),
-                    hole("b"),
-                    text("🎈📌"),
-                    hole("c"),
-                    text("🎈📌"),
+                    text("🎈📌", 0..8),
+                    hole("a", 9..10),
+                    text("🎈📌", 11..19),
+                    hole("b", 20..21),
+                    text("🎈📌", 22..30),
+                    hole("c", 31..32),
+                    text("🎈📌", 33..41),
                 ],
             ),
-            ("Hello 🎈📌 {{world}}", vec![text("Hello 🎈📌 {{world}}")]),
-            ("🎈📌 Hello world {{}}", vec![text("🎈📌 Hello world {{}}")]),
-            ("{{", vec![text("{{")]),
-            ("}}", vec![text("}}")]),
+            ("Hello 🎈📌 {{world}}", vec![text("Hello 🎈📌 {{world}}", 0..24)]),
+            ("🎈📌 Hello world {{}}", vec![text("🎈📌 Hello world {{}}", 0..25)]),
+            ("{{", vec![text("{{", 0..2)]),
+            ("}}", vec![text("}}", 0..2)]),
         ];
 
         for (template, expected) in cases {
@@ -360,10 +369,10 @@ mod tests {
     fn into_rt() {
         let cases = vec![(
             "Hello {#[log::debug] world}!",
-            quote!(log_template::__private::build(&[
-                log_template::__private::Part::Text("Hello "),
-                log_template::__private::Part::Hole("world"),
-                log_template::__private::Part::Text("!")
+            quote!(antlog_template::__private::build(&[
+                antlog_template::__private::Part::Text("Hello "),
+                antlog_template::__private::Part::Hole("world"),
+                antlog_template::__private::Part::Text("!")
             ])),
         )];
 
@@ -375,11 +384,11 @@ mod tests {
         }
     }
 
-    fn text(text: &str) -> Part {
-        Part::Text(text)
+    fn text(text: &str, range: Range<usize>) -> Part {
+        Part::Text { text, range }
     }
 
-    fn hole(expr: &str) -> Part {
-        Part::Hole(syn::parse_str(expr).expect("failed to parse expr"))
+    fn hole(expr: &str, range: Range<usize>) -> Part {
+        Part::Hole { expr: syn::parse_str(expr).expect("failed to parse expr"), range }
     }
 }
