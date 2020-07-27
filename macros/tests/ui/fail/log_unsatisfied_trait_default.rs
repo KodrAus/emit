@@ -7,7 +7,5 @@ extern crate antlog_macros;
 struct Input;
 
 fn main() {
-    let kvs = log!("Text and {a: Input} and more");
-
-    println!("{:?}", kvs);
+    log!("Text and {a: Input} and more");
 }

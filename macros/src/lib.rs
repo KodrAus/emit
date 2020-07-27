@@ -19,7 +19,13 @@ pub fn log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro]
 #[doc(hidden)]
 pub fn __log_private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_default_tokens(TokenStream::from(item)))
+    proc_macro::TokenStream::from(capture::expand_tokens(TokenStream::from(item), quote!(__private_log_capture_with_default)))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __log_private_capture_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(TokenStream::from(item), quote!(__private_log_capture_from_debug)))
 }
 
 /**
@@ -27,9 +33,10 @@ Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]
 pub fn debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_tokens(
+    proc_macro::TokenStream::from(capture::rename_default_tokens(
         TokenStream::from(item),
-        quote!(__private_log_capture_from_debug),
+        quote!(__log_private_capture),
+        quote!(__log_private_capture_debug),
     ))
 }
 

@@ -1,0 +1,10 @@
+error[E0277]: `Input` doesn't implement `std::fmt::Debug`
+  --> $DIR/log_unsatisfied_trait_debug.rs:10:21
+   |
+10 |     log!("Text and {#[debug] a: Input} and more");
+   |                     ^^^^^^^^^^^^^^^^^ `Input` cannot be formatted using `{:?}`
+   |
+   = help: the trait `std::fmt::Debug` is not implemented for `Input`
+   = note: add `#[derive(Debug)]` or manually implement `std::fmt::Debug`
+   = note: required because of the requirements on the impl of `antlog_macros_impl::capture::Capture<antlog_macros_impl::capture::CaptureDebug>` for `Input`
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

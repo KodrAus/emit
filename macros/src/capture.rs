@@ -1,47 +1,62 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Ident, TokenStream};
 use quote::ToTokens;
 use syn::{
     visit_mut::{self, VisitMut},
-    Expr, ExprLit, ExprMethodCall, FieldValue, Lit, LitStr, Member,
+    Expr, ExprLit, ExprMacro, FieldValue, Lit, LitStr, Member,
 };
 
-const DEFAULT_METHOD: &'static str = "__private_log_capture_with_default";
+pub(super) trait FieldValueExt {
+    fn key_expr(&self) -> ExprLit;
+}
 
-pub(super) fn expand_default(key_value: FieldValue) -> TokenStream {
-    let key_expr = ExprLit {
-        attrs: vec![],
-        lit: Lit::Str(match key_value.member {
-            Member::Named(member) => LitStr::new(&member.to_string(), member.span()),
-            Member::Unnamed(member) => LitStr::new(&member.index.to_string(), member.span),
-        }),
-    };
+impl FieldValueExt for FieldValue {
+    fn key_expr(&self) -> ExprLit {
+        ExprLit {
+            attrs: vec![],
+            lit: Lit::Str(match self.member {
+                Member::Named(ref member) => LitStr::new(&member.to_string(), member.span()),
+                Member::Unnamed(ref member) => LitStr::new(&member.index.to_string(), member.span),
+            }),
+        }
+    }
+}
 
+pub(super) fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
+    let key_expr = key_value.key_expr();
     let expr = key_value.expr;
-    let method = Ident::new(DEFAULT_METHOD, Span::call_site());
 
     quote!(
         {
             use antlog_macros_impl::__private::__PrivateLogCapture;
-            (#key_expr, (#expr).#method())
+            (#key_expr, (#expr).#fn_name())
         }
     )
 }
 
-pub(super) fn expand_default_tokens(expr: TokenStream) -> TokenStream {
+pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
     let key_value = syn::parse2::<FieldValue>(expr).expect("failed to parse expr");
-    expand_default(key_value)
+    let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
+
+    expand(key_value, fn_name)
 }
 
-pub(super) fn expand(mut expr: Expr, fn_name: Ident) -> TokenStream {
+pub(super) fn rename_default(mut expr: Expr, from: Ident, to: Ident) -> TokenStream {
     struct ReplaceLogDefaultMethod {
-        with: Ident,
+        from: Ident,
+        to: Ident,
     }
 
     impl VisitMut for ReplaceLogDefaultMethod {
         fn visit_expr_mut(&mut self, node: &mut Expr) {
-            if let Expr::MethodCall(ExprMethodCall { ref mut method, .. }) = node {
-                if method == DEFAULT_METHOD {
-                    *method = self.with.clone()
+            if let Expr::Macro(ExprMacro { ref mut mac, .. }) = node {
+                if let Some(last) = mac.path.segments.last_mut() {
+                    if last.ident == self.from {
+                        let span = last.ident.span();
+
+                        // Set the name of the identifier, retaining its original span
+                        last.ident = self.to.clone();
+                        last.ident.set_span(span);
+                    }
                 }
             }
 
@@ -50,17 +65,17 @@ pub(super) fn expand(mut expr: Expr, fn_name: Ident) -> TokenStream {
         }
     }
 
-    ReplaceLogDefaultMethod { with: fn_name }.visit_expr_mut(&mut expr);
+    ReplaceLogDefaultMethod { from, to }.visit_expr_mut(&mut expr);
 
     expr.to_token_stream()
 }
 
-pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
+pub(super) fn rename_default_tokens(expr: TokenStream, from: TokenStream, to: TokenStream) -> TokenStream {
     let expr = syn::parse2::<Expr>(expr).expect("failed to parse expr");
+    let from = syn::parse2::<Ident>(from).expect("failed to parse ident");
+    let to = syn::parse2::<Ident>(to).expect("failed to parse ident");
 
-    let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
-
-    expand(expr, fn_name)
+    rename_default(expr, from, to)
 }
 
 #[cfg(test)]
@@ -68,10 +83,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expand_capture_default() {
+    fn expand_capture() {
         let cases = vec![
             (
                 quote!(a),
+                quote!(__private_log_capture_with_default),
                 quote!({
                     use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_with_default())
@@ -79,6 +95,7 @@ mod tests {
             ),
             (
                 quote!(a: 42),
+                quote!(__private_log_capture_with_default),
                 quote!({
                     use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_with_default())
@@ -86,40 +103,36 @@ mod tests {
             ),
         ];
 
-        for (expr, expected) in cases {
-            let actual = expand_default_tokens(expr);
+        for (expr, fn_name, expected) in cases {
+            let actual = expand_tokens(expr, fn_name);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
     }
 
     #[test]
-    fn expand_capture() {
+    fn expand_rename() {
         let cases = vec![
             (
                 (
-                    expand_default_tokens(quote!(a)),
-                    quote!(__private_log_capture_from_debug),
+                    quote!(__log_private_capture!(a)),
+                    quote!(__log_private_capture),
+                    quote!(__log_private_capture_debug),
                 ),
-                quote!({
-                    use antlog_macros_impl::__private::__PrivateLogCapture;
-                    ("a", (a).__private_log_capture_from_debug())
-                }),
+                quote!(__log_private_capture_debug!(a)),
             ),
             (
                 (
-                    expand_default_tokens(quote!(a: 42)),
-                    quote!(__private_log_capture_from_display),
+                    quote!(log::__log_private_capture!(a: 42)),
+                    quote!(__log_private_capture),
+                    quote!(__log_private_capture_debug),
                 ),
-                quote!({
-                    use antlog_macros_impl::__private::__PrivateLogCapture;
-                    ("a", (42).__private_log_capture_from_display())
-                }),
+                quote!(log::__log_private_capture_debug!(a: 42)),
             ),
         ];
 
-        for ((expr, fn_name), expected) in cases {
-            let actual = expand_tokens(expr, fn_name);
+        for ((expr, from, to), expected) in cases {
+            let actual = rename_default_tokens(expr, from, to);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
