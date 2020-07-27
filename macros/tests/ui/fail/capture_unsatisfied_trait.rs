@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn call(input: Input) {
-    let kvs: &[(&str, antlog_macros_private::__private::Value)] = &[
+    let kvs: &[(&str, antlog_macros_impl::__private::Value)] = &[
         #[display]__log_private_capture!(input),
     ];
 

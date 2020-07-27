@@ -21,7 +21,7 @@ pub(super) fn expand_default(key_value: FieldValue) -> TokenStream {
 
     quote!(
         {
-            use antlog_macros_private::__private::__PrivateLogCapture;
+            use antlog_macros_impl::__private::__PrivateLogCapture;
             (#key_expr, (#expr).#method())
         }
     )
@@ -73,14 +73,14 @@ mod tests {
             (
                 quote!(a),
                 quote!({
-                    use antlog_macros_private::__private::__PrivateLogCapture;
+                    use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_with_default())
                 }),
             ),
             (
                 quote!(a: 42),
                 quote!({
-                    use antlog_macros_private::__private::__PrivateLogCapture;
+                    use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_with_default())
                 }),
             ),
@@ -102,7 +102,7 @@ mod tests {
                     quote!(__private_log_capture_from_debug),
                 ),
                 quote!({
-                    use antlog_macros_private::__private::__PrivateLogCapture;
+                    use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_from_debug())
                 }),
             ),
@@ -112,7 +112,7 @@ mod tests {
                     quote!(__private_log_capture_from_display),
                 ),
                 quote!({
-                    use antlog_macros_private::__private::__PrivateLogCapture;
+                    use antlog_macros_impl::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_from_display())
                 }),
             ),

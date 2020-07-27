@@ -50,5 +50,18 @@ mod tests {
 
         // Capture a value with parens
         let _ = (SomeType).__private_log_capture_with_default();
+
+        // Capture and borrow a string as an expression
+        let v = SomeType;
+        match (
+            (v).__private_log_capture_with_default(),
+            (String::from("a string")).__private_log_capture_with_default(),
+        ) {
+            (a, b) => {
+                let _ = a;
+                let _ = b;
+            }
+        }
+        let _ = v;
     }
 }

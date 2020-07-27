@@ -2,7 +2,7 @@
 Compile-time string template parsing.
 */
 
-use std::{ops::Range, fmt, iter::Peekable, str::CharIndices};
+use std::{fmt, iter::Peekable, ops::Range, str::CharIndices};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -25,10 +25,7 @@ pub enum Part<'a> {
     /**
     A fragment of text.
     */
-    Text {
-        text: &'a str,
-        range: Range<usize>,
-    },
+    Text { text: &'a str, range: Range<usize> },
     /**
     A replacement expression.
     */
@@ -82,8 +79,16 @@ impl Error {
 impl<'a> fmt::Debug for Part<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Part::Text { text, range } => f.debug_struct("Text").field("text", text).field("range", range).finish(),
-            Part::Hole { expr, range } => f.debug_struct("Hole").field("expr", &format_args!("`{}`", expr.to_token_stream())).field("range", range).finish(),
+            Part::Text { text, range } => f
+                .debug_struct("Text")
+                .field("text", text)
+                .field("range", range)
+                .finish(),
+            Part::Hole { expr, range } => f
+                .debug_struct("Hole")
+                .field("expr", &format_args!("`{}`", expr.to_token_stream()))
+                .field("range", range)
+                .finish(),
         }
     }
 }
@@ -139,7 +144,9 @@ impl<'a> Template<'a> {
                 }
             }
 
-            fn take_until_eof_or_hole_start(&mut self) -> Result<Option<(&'input str, Range<usize>)>, Error> {
+            fn take_until_eof_or_hole_start(
+                &mut self,
+            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
                 self.take_until(|c, rest| match c {
                     '{' => match rest.peek().map(|(_, peeked)| *peeked) {
                         Some('{') => {
@@ -161,7 +168,9 @@ impl<'a> Template<'a> {
                 })
             }
 
-            fn take_until_hole_end(&mut self) -> Result<Option<(&'input str, Range<usize>)>, Error> {
+            fn take_until_hole_end(
+                &mut self,
+            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
                 let mut depth = 1;
                 let mut matched_hole_end = false;
 
@@ -268,12 +277,20 @@ mod tests {
             ("Hello world 🎈📌", vec![text("Hello world 🎈📌", 0..20)]),
             (
                 "Hello {world} 🎈📌",
-                vec![text("Hello ", 0..6), hole("world", 7..12), text(" 🎈📌", 13..22)],
+                vec![
+                    text("Hello ", 0..6),
+                    hole("world", 7..12),
+                    text(" 🎈📌", 13..22),
+                ],
             ),
             ("{world}", vec![hole("world", 1..6)]),
             (
                 "Hello {#[log::debug] world} 🎈📌",
-                vec![text("Hello ", 0..6), hole("#[log::debug] world", 7..26), text(" 🎈📌", 27..36)],
+                vec![
+                    text("Hello ", 0..6),
+                    hole("#[log::debug] world", 7..26),
+                    text(" 🎈📌", 27..36),
+                ],
             ),
             (
                 "Hello {#[log::debug] world: 42} 🎈📌",
@@ -295,7 +312,10 @@ mod tests {
                 "{Hello} {world}",
                 vec![hole("Hello", 1..6), text(" ", 7..8), hole("world", 9..14)],
             ),
-            ("{a}{b}{c}", vec![hole("a", 1..2), hole("b", 4..5), hole("c", 7..8)]),
+            (
+                "{a}{b}{c}",
+                vec![hole("a", 1..2), hole("b", 4..5), hole("c", 7..8)],
+            ),
             (
                 "🎈📌{a}🎈📌{b}🎈📌{c}🎈📌",
                 vec![
@@ -308,8 +328,14 @@ mod tests {
                     text("🎈📌", 33..41),
                 ],
             ),
-            ("Hello 🎈📌 {{world}}", vec![text("Hello 🎈📌 {{world}}", 0..24)]),
-            ("🎈📌 Hello world {{}}", vec![text("🎈📌 Hello world {{}}", 0..25)]),
+            (
+                "Hello 🎈📌 {{world}}",
+                vec![text("Hello 🎈📌 {{world}}", 0..24)],
+            ),
+            (
+                "🎈📌 Hello world {{}}",
+                vec![text("🎈📌 Hello world {{}}", 0..25)],
+            ),
             ("{{", vec![text("{{", 0..2)]),
             ("}}", vec![text("}}", 0..2)]),
         ];
@@ -389,6 +415,9 @@ mod tests {
     }
 
     fn hole(expr: &str, range: Range<usize>) -> Part {
-        Part::Hole { expr: syn::parse_str(expr).expect("failed to parse expr"), range }
+        Part::Hole {
+            expr: syn::parse_str(expr).expect("failed to parse expr"),
+            range,
+        }
     }
 }
