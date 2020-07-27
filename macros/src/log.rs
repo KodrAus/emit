@@ -17,10 +17,10 @@ pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
 
     let template = Template::parse(&lit).expect("failed to parse");
     let fields = template.parts.into_iter().filter_map(|part| {
-        if let Part::Hole(mut field) = part {
-            let attrs = mem::replace(&mut field.attrs, vec![]);
+        if let Part::Hole { mut expr, .. } = part {
+            let attrs = mem::replace(&mut expr.attrs, vec![]);
 
-            Some(quote!(#(#attrs)* antlog_macros::__log_private_capture!(#field)))
+            Some(quote!(#(#attrs)* antlog_macros::__log_private_capture!(#expr)))
         } else {
             None
         }
