@@ -1,7 +1,7 @@
 use log::kv::{Error, Key, Source, ToValue, Value, Visitor};
 
 /**
-A `kv::Source` that can find the index for a key efficiently.
+A `kv::Source` that can find the index for a key more efficiently than scanning.
 */
 pub struct Captured<'a> {
     pub lookup: fn(&str) -> Option<usize>,
