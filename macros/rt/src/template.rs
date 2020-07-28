@@ -4,6 +4,8 @@ Runtime string template formatting.
 
 use std::fmt;
 
+use log::kv::{Key, Source};
+
 /**
 A text template.
 */
@@ -20,8 +22,8 @@ impl<'a> Template<'a> {
     pub fn render<'brw>(
         &'brw self,
         ctx: Context<
-            impl (Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>) + 'brw,
-            impl (Fn(&mut dyn fmt::Write, &str) -> fmt::Result) + 'brw,
+            impl (Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>) + 'brw,
+            impl (Fn(&mut fmt::Formatter, &str) -> fmt::Result) + 'brw,
         >,
     ) -> impl fmt::Display + 'brw {
         struct ImplDisplay<'tpl, 'brw, TFill, TMissing> {
@@ -31,8 +33,8 @@ impl<'a> Template<'a> {
 
         impl<'tpl, 'brw, TFill, TMissing> fmt::Display for ImplDisplay<'tpl, 'brw, TFill, TMissing>
         where
-            TFill: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-            TMissing: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+            TFill: Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
+            TMissing: Fn(&mut fmt::Formatter, &str) -> fmt::Result,
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 for part in self.template.parts {
@@ -63,16 +65,14 @@ impl<'a> Template<'a> {
 A context used to render a template.
 */
 pub struct Context<TFill, TMissing> {
-    // fill: &'fill dyn Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-    // missing: &'missing dyn Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
     fill: TFill,
     missing: TMissing,
 }
 
 impl
     Context<
-        fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-        fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+        fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
+        fn(&mut fmt::Formatter, &str) -> fmt::Result,
     >
 {
     pub fn new() -> Self {
@@ -85,15 +85,15 @@ impl
 
 impl<TFill, TMissing> Context<TFill, TMissing>
 where
-    TFill: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-    TMissing: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+    TFill: Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
+    TMissing: Fn(&mut fmt::Formatter, &str) -> fmt::Result,
 {
     /**
     Provide a function to fill the holes in the template with.
     */
     pub fn fill<T>(self, fill: T) -> Context<T, TMissing>
     where
-        T: Fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+        T: Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
     {
         Context {
             fill,
@@ -102,11 +102,27 @@ where
     }
 
     /**
+    Provide a `Source` to fill the holes in the template with.
+    */
+    pub fn fill_source<S>(
+        self,
+        src: S,
+    ) -> Context<impl Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>, TMissing>
+    where
+        S: Source,
+    {
+        self.fill(move |write: &mut fmt::Formatter, label| {
+            src.get(Key::from(label))
+                .map(|value| fmt::Display::fmt(&value, write))
+        })
+    }
+
+    /**
     Provide a function to handle unfilled holes.
     */
     pub fn missing<T>(self, missing: T) -> Context<TFill, T>
     where
-        T: Fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+        T: Fn(&mut fmt::Formatter, &str) -> fmt::Result,
     {
         Context {
             fill: self.fill,
@@ -117,8 +133,8 @@ where
 
 impl Default
     for Context<
-        fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
-        fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+        fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
+        fn(&mut fmt::Formatter, &str) -> fmt::Result,
     >
 {
     fn default() -> Self {
@@ -139,7 +155,7 @@ pub fn build<'a>(parts: &'a [Part<'a>]) -> Template<'a> {
 mod tests {
     use super::*;
 
-    use log::kv::{Key, Source, Value};
+    use log::kv::Value;
 
     #[test]
     fn render() {
@@ -148,7 +164,7 @@ mod tests {
                 &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
                 Context::new().fill(
                     (|write, label| Some(write.write_str(label)))
-                        as fn(&mut dyn fmt::Write, &str) -> Option<fmt::Result>,
+                        as fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>,
                 ),
                 "Hello world!",
             ),
@@ -161,7 +177,7 @@ mod tests {
                 &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
                 Context::new().missing(
                     (|write, label| write.write_fmt(format_args!("{{{}}}", label)))
-                        as fn(&mut dyn fmt::Write, &str) -> fmt::Result,
+                        as fn(&mut fmt::Formatter, &str) -> fmt::Result,
                 ),
                 "Hello {world}!",
             ),
@@ -195,10 +211,7 @@ mod tests {
             let template = build(parts);
 
             let actual = template
-                .render(Context::new().fill(|write, label| {
-                    Source::get(&source, Key::from(label))
-                        .map(|value| write.write_fmt(format_args!("{}", value)))
-                }))
+                .render(Context::new().fill_source(source))
                 .to_string();
 
             assert_eq!(expected, actual);

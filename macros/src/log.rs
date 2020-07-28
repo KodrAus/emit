@@ -1,6 +1,6 @@
 use std::mem;
 
-use antlog_template::ct::{Part, Template};
+use crate::template::{Part, Template};
 use proc_macro2::{Span, TokenStream, TokenTree};
 use syn::{Ident, LitStr};
 
@@ -16,8 +16,10 @@ pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
     let lit = lit.value();
 
     let template = Template::parse(&lit).expect("failed to parse");
+    let template_tokens = template.rt_tokens();
 
     // Extract the field values from the template
+    // The attributes on the field expression will be lifted out and applied further up
     // Each field value goes into a match-arm binding (to support short-lived values like `String::new()`)
     // Each field value also gets a match-arm that converts its key string into an index lookup
     let mut field_values = Vec::new();
@@ -49,12 +51,15 @@ pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
     quote!({
         match (#(#field_values),*) {
             (#(#field_bindings),*) => {
-                let captured = antlog_macros_impl::__private::Captured {
+                let captured = antlog_macros_rt::__private::Captured {
                     lookup: |k| match k { #(#field_lookups),* },
                     key_values: &[#(#field_bindings),*]
                 };
 
+                let template = #template_tokens;
+
                 println!("{:?}", captured.key_values);
+                println!("{}", template.render(antlog_macros_rt::__private::Context::new().fill_source(&captured)));
             }
         }
     })
@@ -77,7 +82,7 @@ mod tests {
                     antlog_macros::__log_private_capture!(c)
                 ) {
                     (__tmp0, __tmp1, __tmp2) => {
-                        let captured = antlog_macros_impl::__private::Captured {
+                        let captured = antlog_macros_rt::__private::Captured {
                             lookup: |k| match k {
                                 "a" => Some(0usize),
                                 "b" => Some(1usize),
@@ -86,7 +91,18 @@ mod tests {
                             },
                             key_values: &[__tmp0, __tmp1, __tmp2]
                         };
+
+                        let template = antlog_macros_rt::__private::build(&[
+                            antlog_macros_rt::__private::Part::Text("Text and "),
+                            antlog_macros_rt::__private::Part::Hole ( "a"),
+                            antlog_macros_rt::__private::Part::Text(" and "),
+                            antlog_macros_rt::__private::Part::Hole ( "b"),
+                            antlog_macros_rt::__private::Part::Text(" and "),
+                            antlog_macros_rt::__private::Part::Hole ( "c" )
+                        ]);
+
                         println!("{:?}", captured.key_values);
+                        println!("{}", template.render(antlog_macros_rt::__private::Context::new().fill_source(&captured)));
                     }
                 }
             }),

@@ -7,8 +7,7 @@ edition = "2018"
 [workspace]
 members = [
     "macros",
-    "macros/impl",
-    "template",
+    "macros/rt",
 ]
 
 [features]
@@ -17,7 +16,7 @@ default = [
 ]
 macros = [
     "antlog_macros",
-    "antlog_macros_impl",
+    "antlog_macros_rt",
 ]
 
 [dependencies.log]
@@ -29,12 +28,9 @@ features = ["std", "kv_unstable"]
 path = "macros"
 optional = true
 
-[dependencies.antlog_macros_impl]
-path = "macros/impl"
+[dependencies.antlog_macros_rt]
+path = "macros/rt"
 optional = true
-
-[dependencies.antlog_template]
-path = "template"
 
 [dependencies.humantime]
 version = "~2"

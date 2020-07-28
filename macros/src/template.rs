@@ -240,9 +240,9 @@ impl<'a> Template<'a> {
         Ok(Template { raw: input, parts })
     }
 
-    pub fn generate_rt(&self) -> TokenStream {
+    pub fn rt_tokens(&self) -> TokenStream {
         let parts = self.parts.iter().map(|part| match part {
-            Part::Text { text, .. } => quote!(antlog_template::__private::Part::Text(#text)),
+            Part::Text { text, .. } => quote!(antlog_macros_rt::__private::Part::Text(#text)),
             Part::Hole { expr, .. } => {
                 let label = ExprLit {
                     attrs: vec![],
@@ -256,12 +256,12 @@ impl<'a> Template<'a> {
                     }),
                 };
 
-                quote!(antlog_template::__private::Part::Hole(#label))
+                quote!(antlog_macros_rt::__private::Part::Hole(#label))
             }
         });
 
         quote!(
-            antlog_template::__private::build(&[#(#parts),*])
+            antlog_macros_rt::__private::build(&[#(#parts),*])
         )
     }
 }
@@ -392,20 +392,20 @@ mod tests {
     }
 
     #[test]
-    fn into_rt() {
+    fn rt_tokens() {
         let cases = vec![(
             "Hello {#[log::debug] world}!",
-            quote!(antlog_template::__private::build(&[
-                antlog_template::__private::Part::Text("Hello "),
-                antlog_template::__private::Part::Hole("world"),
-                antlog_template::__private::Part::Text("!")
+            quote!(antlog_macros_rt::__private::build(&[
+                antlog_macros_rt::__private::Part::Text("Hello "),
+                antlog_macros_rt::__private::Part::Hole("world"),
+                antlog_macros_rt::__private::Part::Text("!")
             ])),
         )];
 
         for (template, expected) in cases {
             let template = Template::parse(template).expect("failed to parse template");
 
-            let actual = template.generate_rt();
+            let actual = template.rt_tokens();
             assert_eq!(expected.to_string(), actual.to_string());
         }
     }

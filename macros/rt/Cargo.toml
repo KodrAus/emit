@@ -1,5 +1,5 @@
 [package]
-name = "antlog_macros_impl"
+name = "antlog_macros_rt"
 version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
@@ -8,6 +8,3 @@ edition = "2018"
 git = "https://github.com/KodrAus/log.git"
 branch = "feat/antlog"
 features = ["kv_unstable"]
-
-[dependencies.antlog_template]
-path = "../../template"

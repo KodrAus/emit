@@ -117,3 +117,52 @@ pub trait __PrivateLogCapture {
 }
 
 impl<T: ?Sized> __PrivateLogCapture for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt;
+
+    #[test]
+    fn capture_default() {
+        struct SomeType;
+
+        impl fmt::Display for SomeType {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "some type")
+            }
+        }
+
+        // Capture an arbitrary `Display`
+        let _ = SomeType.__private_log_capture_with_default();
+
+        // Capture a structured number
+        assert_eq!(
+            Some(42u64),
+            42u64.__private_log_capture_with_default().to_u64()
+        );
+
+        // Capture a borrowed (non-static) string
+        let v: &str = &String::from("a string");
+        assert_eq!(
+            Some("a string"),
+            v.__private_log_capture_with_default().to_borrowed_str()
+        );
+
+        // Capture a value with parens
+        let _ = (SomeType).__private_log_capture_with_default();
+
+        // Capture and borrow a string as an expression
+        let v = SomeType;
+        match (
+            (v).__private_log_capture_with_default(),
+            (String::from("a string")).__private_log_capture_with_default(),
+        ) {
+            (a, b) => {
+                let _ = a;
+                let _ = b;
+            }
+        }
+        let _ = v;
+    }
+}

@@ -27,7 +27,7 @@ pub(super) fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
 
     quote!(
         {
-            use antlog_macros_impl::__private::__PrivateLogCapture;
+            use antlog_macros_rt::__private::__PrivateLogCapture;
             (#key_expr, (#expr).#fn_name())
         }
     )
@@ -70,7 +70,11 @@ pub(super) fn rename_default(mut expr: Expr, from: Ident, to: Ident) -> TokenStr
     expr.to_token_stream()
 }
 
-pub(super) fn rename_default_tokens(expr: TokenStream, from: TokenStream, to: TokenStream) -> TokenStream {
+pub(super) fn rename_default_tokens(
+    expr: TokenStream,
+    from: TokenStream,
+    to: TokenStream,
+) -> TokenStream {
     let expr = syn::parse2::<Expr>(expr).expect("failed to parse expr");
     let from = syn::parse2::<Ident>(from).expect("failed to parse ident");
     let to = syn::parse2::<Ident>(to).expect("failed to parse ident");
@@ -89,7 +93,7 @@ mod tests {
                 quote!(a),
                 quote!(__private_log_capture_with_default),
                 quote!({
-                    use antlog_macros_impl::__private::__PrivateLogCapture;
+                    use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_with_default())
                 }),
             ),
@@ -97,7 +101,7 @@ mod tests {
                 quote!(a: 42),
                 quote!(__private_log_capture_with_default),
                 quote!({
-                    use antlog_macros_impl::__private::__PrivateLogCapture;
+                    use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_with_default())
                 }),
             ),
