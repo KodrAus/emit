@@ -4,6 +4,7 @@ use log::kv::{Error, Key, Source, ToValue, Value, Visitor};
 A `kv::Source` that can find the index for a key more efficiently than scanning.
 */
 pub struct Captured<'a> {
+    // TODO: Just remove this and make it `binary_search`
     pub lookup: fn(&str) -> Option<usize>,
     pub key_values: &'a [(&'a str, Value<'a>)],
 }

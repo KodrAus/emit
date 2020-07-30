@@ -29,6 +29,12 @@ pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
     let mut field_index = 0usize;
     for part in template.parts.into_iter() {
         if let Part::Hole { mut expr, range } = part {
+            // TODO: Consider lifting attributes out to the top-level `match`:
+            // 
+            // #[__log_private_apply(a, debug)]
+            // #[__log_private_apply(b, ignore)]
+            // 
+            // So that we can use attributes to entirely remove key-value pairs
             let attrs = mem::replace(&mut expr.attrs, vec![]);
             let field_span = src
                 .subspan(range.start + 1..range.end + 1)
