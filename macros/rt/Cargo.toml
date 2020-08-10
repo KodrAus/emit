@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies.log]
 git = "https://github.com/KodrAus/log.git"
-branch = "feat/antlog"
-features = ["kv_unstable"]
+branch = "feat/kv-error"
+features = ["std", "kv_unstable"]

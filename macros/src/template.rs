@@ -150,6 +150,7 @@ impl<'a> Template<'a> {
                 self.take_until(|c, rest| match c {
                     '{' => match rest.peek().map(|(_, peeked)| *peeked) {
                         Some('{') => {
+                            // TODO: need to unescape this string
                             let _ = rest.next();
                             Ok(false)
                         }

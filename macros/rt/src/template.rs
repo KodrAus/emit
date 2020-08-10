@@ -17,7 +17,8 @@ impl<'a> Template<'a> {
     /**
     Render the template using the given context.
 
-    The context helps the template find
+    The context helps the template find replacement values and determines how to render them if they're missing.
+    An empty context can be used to render out the template with just its holes.
     */
     pub fn render<'brw>(
         &'brw self,

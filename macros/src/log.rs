@@ -6,6 +6,22 @@ use syn::{Ident, LitStr};
 
 use crate::capture::FieldValueExt;
 
+/*
+Parse the macro input as:
+Option<Logger: FieldValue (of logger)>,
+Template: Literal | FieldValue (of template),
+Option<AdditionalPairs: (Brace, Vec<(FieldValue, Comma)>, Brace)>,
+
+Figure out how to disambiguate the logger argument from the others:
+
+log!(logger, "A")
+log!(logger: "my logger is a string for some reason", "A")
+log!(logger: x, template: "x", kvs: {})
+log!(x, "x", {})
+
+log!(template: "x", kvs: {}, logger: x)
+*/
+
 pub(super) fn expand_tokens(lit: TokenStream) -> TokenStream {
     let src = match lit.clone().into_iter().next() {
         Some(TokenTree::Literal(src)) => src,

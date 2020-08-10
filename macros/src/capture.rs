@@ -21,8 +21,8 @@ impl FieldValueExt for FieldValue {
     }
 }
 
-pub(super) fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
-    let key_expr = key_value.key_expr();
+pub(super) fn expand(key_value: FieldValue, fn_name: Ident, replace_key_expr: Option<ExprLit>) -> TokenStream {
+    let key_expr = replace_key_expr.unwrap_or_else(|| key_value.key_expr());
     let expr = key_value.expr;
 
     quote!(
@@ -33,11 +33,12 @@ pub(super) fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
     )
 }
 
-pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream) -> TokenStream {
+pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream, replace_key_expr: Option<TokenStream>) -> TokenStream {
     let key_value = syn::parse2::<FieldValue>(expr).expect("failed to parse expr");
     let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
+    let replace_key_expr = replace_key_expr.map(|replace_key_expr| syn::parse2::<ExprLit>(replace_key_expr).expect("failed to parse expr"));
 
-    expand(key_value, fn_name)
+    expand(key_value, fn_name, replace_key_expr)
 }
 
 pub(super) fn rename_default(mut expr: Expr, from: Ident, to: Ident) -> TokenStream {
@@ -92,6 +93,7 @@ mod tests {
             (
                 quote!(a),
                 quote!(__private_log_capture_with_default),
+                None,
                 quote!({
                     use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_with_default())
@@ -100,15 +102,25 @@ mod tests {
             (
                 quote!(a: 42),
                 quote!(__private_log_capture_with_default),
+                None,
                 quote!({
                     use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_with_default())
                 }),
             ),
+            (
+                quote!(a: 42),
+                quote!(__private_log_capture_with_default),
+                Some(quote!("error")),
+                quote!({
+                    use antlog_macros_rt::__private::__PrivateLogCapture;
+                    ("error", (42).__private_log_capture_with_default())
+                }),
+            ),
         ];
 
-        for (expr, fn_name, expected) in cases {
-            let actual = expand_tokens(expr, fn_name);
+        for (expr, fn_name, replace_key_expr, expected) in cases {
+            let actual = expand_tokens(expr, fn_name, replace_key_expr);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }

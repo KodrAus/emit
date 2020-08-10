@@ -21,7 +21,7 @@ macros = [
 
 [dependencies.log]
 git = "https://github.com/KodrAus/log.git"
-branch = "feat/antlog"
+branch = "feat/kv-error"
 features = ["std", "kv_unstable"]
 
 [dependencies.antlog_macros]

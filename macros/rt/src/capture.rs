@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, error};
 
 use log::kv;
 
@@ -19,9 +19,8 @@ pub type WithDefault = CaptureDisplay;
 
 extern "C" {
     pub type CaptureDisplay;
-    pub type AsDisplay;
     pub type CaptureDebug;
-    pub type AsDebug;
+    pub type CaptureError;
 }
 
 impl<T> Capture<CaptureDisplay> for T
@@ -33,12 +32,9 @@ where
     }
 }
 
-impl<T> Capture<AsDisplay> for T
-where
-    T: fmt::Display,
-{
-    default fn capture(&self) -> kv::Value {
-        kv::Value::from(self as &dyn fmt::Display)
+impl Capture<CaptureDisplay> for dyn fmt::Display {
+    fn capture(&self) -> kv::Value {
+        kv::Value::from(self)
     }
 }
 
@@ -51,12 +47,24 @@ where
     }
 }
 
-impl<T> Capture<AsDebug> for T
+impl Capture<CaptureDebug> for dyn fmt::Debug {
+    fn capture(&self) -> kv::Value {
+        kv::Value::from(self)
+    }
+}
+
+impl<T> Capture<CaptureError> for T
 where
-    T: fmt::Debug,
+    T: error::Error + 'static,
 {
     default fn capture(&self) -> kv::Value {
-        kv::Value::from(self as &dyn fmt::Debug)
+        kv::Value::capture_error(self)
+    }
+}
+
+impl Capture<CaptureError> for dyn error::Error {
+    fn capture(&self) -> kv::Value {
+        kv::Value::from(self)
     }
 }
 
@@ -101,16 +109,9 @@ pub trait __PrivateLogCapture {
         Capture::capture(self)
     }
 
-    fn __private_log_capture_as_display(&self) -> kv::Value
+    fn __private_log_capture_from_error(&self) -> kv::Value
     where
-        Self: Capture<AsDisplay>,
-    {
-        Capture::capture(self)
-    }
-
-    fn __private_log_capture_as_debug(&self) -> kv::Value
-    where
-        Self: Capture<AsDebug>,
+        Self: Capture<CaptureError>,
     {
         Capture::capture(self)
     }
@@ -164,5 +165,54 @@ mod tests {
             }
         }
         let _ = v;
+    }
+
+    #[test]
+    fn capture_display() {
+        struct SomeType;
+
+        impl fmt::Display for SomeType {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "some type")
+            }
+        }
+
+        // Capture an arbitrary `Display`
+        let _ = SomeType.__private_log_capture_from_display();
+
+        // Capture a `&dyn Display`
+        let v: &dyn fmt::Display = &SomeType;
+        let _ = v.__private_log_capture_from_display();
+    }
+
+    #[test]
+    fn capture_debug() {
+        struct SomeType;
+
+        impl fmt::Debug for SomeType {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "some type")
+            }
+        }
+
+        // Capture an arbitrary `Debug`
+        let _ = SomeType.__private_log_capture_from_debug();
+
+        // Capture a `&dyn Debug`
+        let v: &dyn fmt::Debug = &SomeType;
+        let _ = v.__private_log_capture_from_debug();
+    }
+
+    #[test]
+    fn capture_error() {
+        use std::io;
+
+        // Capture an arbitrary `Error`
+        let err = io::Error::from(io::ErrorKind::Other);
+        assert!(err.__private_log_capture_from_error().to_error().is_some());
+
+        // Capture a `&dyn Error`
+        let err: &dyn error::Error = &err;
+        assert!(err.__private_log_capture_from_error().to_error().is_some());
     }
 }

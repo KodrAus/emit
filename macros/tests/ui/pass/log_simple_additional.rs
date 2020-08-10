@@ -6,6 +6,7 @@ extern crate antlog_macros;
 fn main() {
     let a = String::from("hello");
     let c = 42;
+    let e = std::io::Error::from(std::io::ErrorKind::Other);
 
     log!("There's no replacements here", {
         a,
@@ -13,5 +14,7 @@ fn main() {
         #[debug]
         c,
         d: String::from("short lived!"),
+        #[error]
+        e,
     });
 }
