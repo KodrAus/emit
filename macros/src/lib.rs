@@ -22,10 +22,12 @@ Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]
 pub fn debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_default_tokens(
-        TokenStream::from(item),
-        quote!(__log_private_capture),
-        quote!(__log_private_capture_debug),
+    proc_macro::TokenStream::from(capture::rename_capture_tokens(
+        capture::RenameCaptureTokens {
+            expr: TokenStream::from(item),
+            predicate: |ident| ident.starts_with("__private_log_capture"),
+            to: quote!(__private_log_capture_from_debug),
+        },
     ))
 }
 
@@ -37,10 +39,12 @@ pub fn display(
     _: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_default_tokens(
-        TokenStream::from(item),
-        quote!(__log_private_capture),
-        quote!(__log_private_capture_display),
+    proc_macro::TokenStream::from(capture::rename_capture_tokens(
+        capture::RenameCaptureTokens {
+            expr: TokenStream::from(item),
+            predicate: |ident| ident.starts_with("__private_log_capture"),
+            to: quote!(__private_log_capture_from_display),
+        },
     ))
 }
 
@@ -48,60 +52,64 @@ pub fn display(
 Capture an Error.
 
 There should only be a single `#[error]` attribute per log statement.
-It will always use `"error"` as the key.
+It must use `err` as the key name.
 */
 #[proc_macro_attribute]
-pub fn error(
-    _: proc_macro::TokenStream,
+pub fn error(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::rename_capture_tokens(
+        capture::RenameCaptureTokens {
+            expr: TokenStream::from(item),
+            predicate: |ident| ident.starts_with("__private_log_capture"),
+            to: quote!(__private_log_capture_from_error),
+        },
+    ))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_log_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |key| match key {
+            "err" => quote!(__private_log_capture_from_error),
+            _ => quote!(__private_log_capture_with_default),
+        },
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_log_capture_from_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_log_capture_from_debug),
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_log_capture_from_display(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_default_tokens(
-        TokenStream::from(item),
-        quote!(__log_private_capture),
-        quote!(__log_private_capture_error),
-    ))
-}
-
-// TODO: Also add `error` (which sets the key name to `error` too)
-
-#[proc_macro]
-#[doc(hidden)]
-pub fn __log_private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_tokens(
-        TokenStream::from(item),
-        quote!(__private_log_capture_with_default),
-        None,
-    ))
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_log_capture_from_display),
+    }))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __log_private_capture_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_tokens(
-        TokenStream::from(item),
-        quote!(__private_log_capture_from_debug),
-        None,
-    ))
-}
+pub fn __private_log_capture_from_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |key| {
+            if key != "err" {
+                panic!("the #[error] attribute must use `err` as the key name")
+            }
 
-#[proc_macro]
-#[doc(hidden)]
-pub fn __log_private_capture_display(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_tokens(
-        TokenStream::from(item),
-        quote!(__private_log_capture_from_display),
-        None,
-    ))
-}
-
-#[proc_macro]
-#[doc(hidden)]
-pub fn __log_private_capture_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::expand_tokens(
-        TokenStream::from(item),
-        quote!(__private_log_capture_from_error),
-        Some(quote!("error")),
-    ))
+            quote!(__private_log_capture_from_error)
+        },
+    }))
 }
 
 #[cfg(test)]

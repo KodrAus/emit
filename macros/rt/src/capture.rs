@@ -1,4 +1,4 @@
-use std::{fmt, error};
+use std::{error, fmt};
 
 use log::kv;
 

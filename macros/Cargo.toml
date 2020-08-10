@@ -20,7 +20,7 @@ features = ["full", "extra-traits", "visit-mut"]
 [dependencies.thiserror]
 version = "1"
 
-[dependencies.antlog_macros_rt]
+[dev-dependencies.antlog_macros_rt]
 path = "rt"
 
 [dev-dependencies.trybuild]

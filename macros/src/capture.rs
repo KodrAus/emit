@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use proc_macro2::{Ident, TokenStream};
 use quote::ToTokens;
 use syn::{
@@ -7,6 +9,12 @@ use syn::{
 
 pub(super) trait FieldValueExt {
     fn key_expr(&self) -> ExprLit;
+    fn key_name(&self) -> Option<String> {
+        match self.key_expr().lit {
+            Lit::Str(s) => Some(s.value()),
+            _ => None,
+        }
+    }
 }
 
 impl FieldValueExt for FieldValue {
@@ -21,8 +29,23 @@ impl FieldValueExt for FieldValue {
     }
 }
 
-pub(super) fn expand(key_value: FieldValue, fn_name: Ident, replace_key_expr: Option<ExprLit>) -> TokenStream {
-    let key_expr = replace_key_expr.unwrap_or_else(|| key_value.key_expr());
+pub(super) struct ExpandTokens<F: Fn(&str) -> TokenStream> {
+    pub(super) expr: TokenStream,
+    pub(super) fn_name: F,
+}
+
+pub(super) fn expand_tokens(opts: ExpandTokens<impl Fn(&str) -> TokenStream>) -> TokenStream {
+    let key_value = syn::parse2::<FieldValue>(opts.expr).expect("failed to parse expr");
+
+    let key_name = key_value.key_name().expect("expected a string literal");
+
+    let fn_name = syn::parse2::<Ident>((opts.fn_name)(&key_name)).expect("failed to parse ident");
+
+    expand(key_value, fn_name)
+}
+
+fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
+    let key_expr = key_value.key_expr();
     let expr = key_value.expr;
 
     quote!(
@@ -33,25 +56,40 @@ pub(super) fn expand(key_value: FieldValue, fn_name: Ident, replace_key_expr: Op
     )
 }
 
-pub(super) fn expand_tokens(expr: TokenStream, fn_name: TokenStream, replace_key_expr: Option<TokenStream>) -> TokenStream {
-    let key_value = syn::parse2::<FieldValue>(expr).expect("failed to parse expr");
-    let fn_name = syn::parse2::<Ident>(fn_name).expect("failed to parse ident");
-    let replace_key_expr = replace_key_expr.map(|replace_key_expr| syn::parse2::<ExprLit>(replace_key_expr).expect("failed to parse expr"));
-
-    expand(key_value, fn_name, replace_key_expr)
+pub(super) struct RenameCaptureTokens<F: Fn(&str) -> bool> {
+    pub(super) expr: TokenStream,
+    pub(super) predicate: F,
+    pub(super) to: TokenStream,
 }
 
-pub(super) fn rename_default(mut expr: Expr, from: Ident, to: Ident) -> TokenStream {
-    struct ReplaceLogDefaultMethod {
-        from: Ident,
+pub(super) fn rename_capture_tokens(
+    opts: RenameCaptureTokens<impl Fn(&str) -> bool>,
+) -> TokenStream {
+    let expr = syn::parse2::<Expr>(opts.expr).expect("failed to parse expr");
+    let to = syn::parse2::<Ident>(opts.to).expect("failed to parse ident");
+
+    rename_capture(expr, opts.predicate, to)
+}
+
+fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -> TokenStream {
+    struct ReplaceLogDefaultMethod<F> {
+        scratch: String,
+        predicate: F,
         to: Ident,
     }
 
-    impl VisitMut for ReplaceLogDefaultMethod {
+    impl<F> VisitMut for ReplaceLogDefaultMethod<F>
+    where
+        F: Fn(&str) -> bool,
+    {
         fn visit_expr_mut(&mut self, node: &mut Expr) {
             if let Expr::Macro(ExprMacro { ref mut mac, .. }) = node {
                 if let Some(last) = mac.path.segments.last_mut() {
-                    if last.ident == self.from {
+                    self.scratch.clear();
+                    write!(&mut self.scratch, "{}", last.ident)
+                        .expect("infallible write to string");
+
+                    if (self.predicate)(&self.scratch) {
                         let span = last.ident.span();
 
                         // Set the name of the identifier, retaining its original span
@@ -66,21 +104,14 @@ pub(super) fn rename_default(mut expr: Expr, from: Ident, to: Ident) -> TokenStr
         }
     }
 
-    ReplaceLogDefaultMethod { from, to }.visit_expr_mut(&mut expr);
+    ReplaceLogDefaultMethod {
+        scratch: String::new(),
+        predicate,
+        to,
+    }
+    .visit_expr_mut(&mut expr);
 
     expr.to_token_stream()
-}
-
-pub(super) fn rename_default_tokens(
-    expr: TokenStream,
-    from: TokenStream,
-    to: TokenStream,
-) -> TokenStream {
-    let expr = syn::parse2::<Expr>(expr).expect("failed to parse expr");
-    let from = syn::parse2::<Ident>(from).expect("failed to parse ident");
-    let to = syn::parse2::<Ident>(to).expect("failed to parse ident");
-
-    rename_default(expr, from, to)
 }
 
 #[cfg(test)]
@@ -93,7 +124,6 @@ mod tests {
             (
                 quote!(a),
                 quote!(__private_log_capture_with_default),
-                None,
                 quote!({
                     use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (a).__private_log_capture_with_default())
@@ -102,25 +132,18 @@ mod tests {
             (
                 quote!(a: 42),
                 quote!(__private_log_capture_with_default),
-                None,
                 quote!({
                     use antlog_macros_rt::__private::__PrivateLogCapture;
                     ("a", (42).__private_log_capture_with_default())
                 }),
             ),
-            (
-                quote!(a: 42),
-                quote!(__private_log_capture_with_default),
-                Some(quote!("error")),
-                quote!({
-                    use antlog_macros_rt::__private::__PrivateLogCapture;
-                    ("error", (42).__private_log_capture_with_default())
-                }),
-            ),
         ];
 
-        for (expr, fn_name, replace_key_expr, expected) in cases {
-            let actual = expand_tokens(expr, fn_name, replace_key_expr);
+        for (expr, fn_name, expected) in cases {
+            let actual = expand_tokens(ExpandTokens {
+                expr,
+                fn_name: |_| fn_name.clone(),
+            });
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
@@ -131,24 +154,26 @@ mod tests {
         let cases = vec![
             (
                 (
-                    quote!(__log_private_capture!(a)),
-                    quote!(__log_private_capture),
-                    quote!(__log_private_capture_debug),
+                    quote!(__private_log_capture!(a)),
+                    quote!(__private_log_capture_from_debug),
                 ),
-                quote!(__log_private_capture_debug!(a)),
+                quote!(__private_log_capture_from_debug!(a)),
             ),
             (
                 (
-                    quote!(log::__log_private_capture!(a: 42)),
-                    quote!(__log_private_capture),
-                    quote!(__log_private_capture_debug),
+                    quote!(log::__private_log_capture!(a: 42)),
+                    quote!(__private_log_capture_from_debug),
                 ),
-                quote!(log::__log_private_capture_debug!(a: 42)),
+                quote!(log::__private_log_capture_from_debug!(a: 42)),
             ),
         ];
 
-        for ((expr, from, to), expected) in cases {
-            let actual = rename_default_tokens(expr, from, to);
+        for ((expr, to), expected) in cases {
+            let actual = rename_capture_tokens(RenameCaptureTokens {
+                expr,
+                predicate: |ident| ident.starts_with("__private"),
+                to,
+            });
 
             assert_eq!(expected.to_string(), actual.to_string());
         }

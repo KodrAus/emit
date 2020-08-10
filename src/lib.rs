@@ -5,7 +5,8 @@ pub use log::{kv, Level};
 
 use self::kv::{Key, ToValue, Value};
 
-const TIMESTAMP: &'static str = "timestamp";
+pub const ERROR_KEY: &'static str = "error";
+pub const TIMESTAMP_KEY: &'static str = "timestamp";
 
 pub struct Record<'a> {
     source: Source<'a>,
@@ -58,7 +59,7 @@ impl<'a> Record<'a> {
 
 impl<'a> Source<'a> {
     fn from_log(source: &'a dyn kv::Source) -> Self {
-        let timestamp = if let Some(timestamp) = source.get(Key::from_str(TIMESTAMP)) {
+        let timestamp = if let Some(timestamp) = source.get(Key::from_str(TIMESTAMP_KEY)) {
             Timestamp(Captured::Captured(timestamp))
         } else {
             Timestamp(Captured::Provided(humantime::format_rfc3339_nanos(
@@ -78,7 +79,7 @@ impl<'a> Source<'a> {
 impl<'a> kv::Source for Source<'a> {
     fn visit<'kvs>(&'kvs self, visitor: &mut dyn kv::Visitor<'kvs>) -> Result<(), kv::Error> {
         if let Captured::Provided(ref ts) = self.timestamp.0 {
-            visitor.visit_pair(Key::from_str(TIMESTAMP), Value::from_display(ts))?;
+            visitor.visit_pair(Key::from_str(TIMESTAMP_KEY), Value::from_display(ts))?;
         }
 
         self.inner.visit(visitor)
@@ -86,7 +87,7 @@ impl<'a> kv::Source for Source<'a> {
 
     fn get<'v>(&'v self, key: Key) -> Option<Value<'v>> {
         match key.as_str() {
-            TIMESTAMP => Some(self.timestamp.to_value()),
+            TIMESTAMP_KEY => Some(self.timestamp.to_value()),
             _ => self.inner.get(key),
         }
     }

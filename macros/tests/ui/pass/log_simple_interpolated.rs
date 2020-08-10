@@ -8,5 +8,5 @@ fn main() {
     let c = 42;
     let e = std::io::Error::from(std::io::ErrorKind::Other);
 
-    log!("Text and {a} and {b: 17} and {#[debug] c} or {#[debug] d: String::from(\"short lived!\")} and {#[error] e}");
+    log!("Text and {a} and {b: 17} and {#[debug] c} or {#[debug] d: String::from(\"short lived!\")} and {#[error] err: e}");
 }
