@@ -14,7 +14,7 @@ Logging statements.
 */
 #[proc_macro]
 pub fn log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
+    proc_macro::TokenStream::from(log::rearrange_tokens(TokenStream::from(item)))
 }
 
 /**

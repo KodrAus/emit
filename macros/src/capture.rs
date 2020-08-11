@@ -7,28 +7,6 @@ use syn::{
     Expr, ExprLit, ExprMacro, FieldValue, Lit, LitStr, Member,
 };
 
-pub(super) trait FieldValueExt {
-    fn key_expr(&self) -> ExprLit;
-    fn key_name(&self) -> Option<String> {
-        match self.key_expr().lit {
-            Lit::Str(s) => Some(s.value()),
-            _ => None,
-        }
-    }
-}
-
-impl FieldValueExt for FieldValue {
-    fn key_expr(&self) -> ExprLit {
-        ExprLit {
-            attrs: vec![],
-            lit: Lit::Str(match self.member {
-                Member::Named(ref member) => LitStr::new(&member.to_string(), member.span()),
-                Member::Unnamed(ref member) => LitStr::new(&member.index.to_string(), member.span),
-            }),
-        }
-    }
-}
-
 pub(super) struct ExpandTokens<F: Fn(&str) -> TokenStream> {
     pub(super) expr: TokenStream,
     pub(super) fn_name: F,
@@ -112,6 +90,28 @@ fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -
     .visit_expr_mut(&mut expr);
 
     expr.to_token_stream()
+}
+
+pub(super) trait FieldValueExt {
+    fn key_expr(&self) -> ExprLit;
+    fn key_name(&self) -> Option<String> {
+        match self.key_expr().lit {
+            Lit::Str(s) => Some(s.value()),
+            _ => None,
+        }
+    }
+}
+
+impl FieldValueExt for FieldValue {
+    fn key_expr(&self) -> ExprLit {
+        ExprLit {
+            attrs: vec![],
+            lit: Lit::Str(match self.member {
+                Member::Named(ref member) => LitStr::new(&member.to_string(), member.span()),
+                Member::Unnamed(ref member) => LitStr::new(&member.index.to_string(), member.span),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]

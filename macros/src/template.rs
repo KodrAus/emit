@@ -25,7 +25,10 @@ pub enum Part<'a> {
     /**
     A fragment of text.
     */
-    Text { text: Cow<'a, str>, range: Range<usize> },
+    Text {
+        text: Cow<'a, str>,
+        range: Range<usize>,
+    },
     /**
     A replacement expression.
     */
@@ -203,7 +206,7 @@ impl<'a> Template<'a> {
                         // If the input is escaped, then replace `{{` and `}}` chars
                         let input = (&*input).replace("{{", "{").replace("}}", "}");
                         Ok(Some((Cow::Owned(input), range)))
-                    },
+                    }
                     scanned => Ok(scanned),
                 }
             }
@@ -239,7 +242,7 @@ impl<'a> Template<'a> {
                         '\\' => {
                             escaped = true;
                             Ok(false)
-                        },
+                        }
                         _ => Ok(false),
                     }
                 })?;
@@ -253,7 +256,7 @@ impl<'a> Template<'a> {
                         // If the input is escaped then replace `\"` with `"`
                         let input = (&*input).replace("\\\"", "\"");
                         Ok(Some((Cow::Owned(input), range)))
-                    },
+                    }
                     scanned => Ok(scanned),
                 }
             }
@@ -352,7 +355,11 @@ mod tests {
     fn parse_ok() {
         let cases = vec![
             ("", vec![]),
-            ("\"Hello world 🎈📌\"", vec![text("Hello world 🎈📌", 1..21)]),
+            ("\"\"", vec![]),
+            (
+                "\"Hello world 🎈📌\"",
+                vec![text("Hello world 🎈📌", 1..21)],
+            ),
             (
                 "\"Hello {world} 🎈📌\"",
                 vec![
@@ -490,7 +497,10 @@ mod tests {
     }
 
     fn text(text: &str, range: Range<usize>) -> Part {
-        Part::Text { text: Cow::Borrowed(text), range }
+        Part::Text {
+            text: Cow::Borrowed(text),
+            range,
+        }
     }
 
     fn hole(expr: &str, range: Range<usize>) -> Part {
