@@ -2,7 +2,7 @@
 Compile-time string template parsing.
 */
 
-use std::{fmt, iter::Peekable, ops::Range, str::CharIndices};
+use std::{borrow::Cow, fmt, iter::Peekable, ops::Range, str::CharIndices};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -25,7 +25,7 @@ pub enum Part<'a> {
     /**
     A fragment of text.
     */
-    Text { text: &'a str, range: Range<usize> },
+    Text { text: Cow<'a, str>, range: Range<usize> },
     /**
     A replacement expression.
     */
@@ -74,6 +74,13 @@ impl Error {
             source: Some(err.into()),
         }
     }
+
+    fn invalid_literal() -> Self {
+        Error {
+            reason: format!("templates must be parsed from string literals"),
+            source: None,
+        }
+    }
 }
 
 impl<'a> fmt::Debug for Part<'a> {
@@ -96,6 +103,19 @@ impl<'a> fmt::Debug for Part<'a> {
 impl<'a> Template<'a> {
     /**
     Try to parse a template into its parts.
+
+    The input string should be a raw, unescaped Rust string literal.
+    So:
+
+    ```text
+    "A string with \"embedded escapes\""
+    ```
+
+    instead of:
+
+    ```text
+    A string with "embedded escapes"
+    ```
     */
     pub fn parse(input: &'a str) -> Result<Self, Error> {
         enum Expecting {
@@ -106,6 +126,7 @@ impl<'a> Template<'a> {
         struct Scan<'input> {
             input: &'input str,
             start: usize,
+            end: usize,
             iter: Peekable<CharIndices<'input>>,
         }
 
@@ -120,7 +141,7 @@ impl<'a> Template<'a> {
                     char,
                     &mut Peekable<CharIndices<'input>>,
                 ) -> Result<bool, Error>,
-            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
+            ) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
                 let mut scan = || {
                     while let Some((i, c)) = self.iter.next() {
                         if until_true(c, &mut self.iter)? {
@@ -130,12 +151,12 @@ impl<'a> Template<'a> {
                             self.start = end + 1;
 
                             let range = start..end;
-                            return Ok((&self.input[range.clone()], range));
+                            return Ok((Cow::Borrowed(&self.input[range.clone()]), range));
                         }
                     }
 
-                    let range = self.start..self.input.len();
-                    Ok((&self.input[range.clone()], range))
+                    let range = self.start..self.end;
+                    Ok((Cow::Borrowed(&self.input[range.clone()]), range))
                 };
 
                 match scan()? {
@@ -146,19 +167,28 @@ impl<'a> Template<'a> {
 
             fn take_until_eof_or_hole_start(
                 &mut self,
-            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
-                self.take_until(|c, rest| match c {
+            ) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
+                let mut escaped = false;
+                let scanned = self.take_until(|c, rest| match c {
+                    // A `{` that's followed by another `{` is escaped
+                    // If it's followed by a different character then it's
+                    // the start of an interpolated expression
                     '{' => match rest.peek().map(|(_, peeked)| *peeked) {
                         Some('{') => {
-                            // TODO: need to unescape this string
+                            escaped = true;
                             let _ = rest.next();
                             Ok(false)
                         }
                         Some(_) => Ok(true),
                         None => Err(Error::incomplete_hole()),
                     },
+                    // A `}` that's followed by another `}` is escaped
+                    // We should never see these in this parser unless they're escaped
+                    // If we do it means an interpolated expression is missing its start
+                    // or it's been improperly escaped
                     '}' => match rest.peek().map(|(_, peeked)| *peeked) {
                         Some('}') => {
+                            escaped = true;
                             let _ = rest.next();
                             Ok(false)
                         }
@@ -166,31 +196,50 @@ impl<'a> Template<'a> {
                         None => Err(Error::unescaped_hole()),
                     },
                     _ => Ok(false),
-                })
+                })?;
+
+                match scanned {
+                    Some((input, range)) if escaped => {
+                        // If the input is escaped, then replace `{{` and `}}` chars
+                        let input = (&*input).replace("{{", "{").replace("}}", "}");
+                        Ok(Some((Cow::Owned(input), range)))
+                    },
+                    scanned => Ok(scanned),
+                }
             }
 
             fn take_until_hole_end(
                 &mut self,
-            ) -> Result<Option<(&'input str, Range<usize>)>, Error> {
+            ) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
                 let mut depth = 1;
                 let mut matched_hole_end = false;
+                let mut escaped = false;
 
-                let expr = self.take_until(|c, _| {
+                let scanned = self.take_until(|c, _| {
                     // NOTE: This isn't perfect, it will fail for `{` and `}` within strings:
                     // "Hello {#[log::debug] "some { string"}"
                     match c {
+                        // If the depth would return to its start then we've got a full expression
                         '}' if depth == 1 => {
                             matched_hole_end = true;
                             Ok(true)
                         }
+                        // A block end will reduce the depth
                         '}' => {
                             depth -= 1;
                             Ok(false)
                         }
+                        // A block start will increase the depth
                         '{' => {
                             depth += 1;
                             Ok(false)
                         }
+                        // A `\` means there's embedded escaped characters
+                        // For strings, we're only interested in `\"`
+                        '\\' => {
+                            escaped = true;
+                            Ok(false)
+                        },
                         _ => Ok(false),
                     }
                 })?;
@@ -199,17 +248,40 @@ impl<'a> Template<'a> {
                     Err(Error::incomplete_hole())?;
                 }
 
-                Ok(expr)
+                match scanned {
+                    Some((input, range)) if escaped => {
+                        // If the input is escaped then replace `\"` with `"`
+                        let input = (&*input).replace("\\\"", "\"");
+                        Ok(Some((Cow::Owned(input), range)))
+                    },
+                    scanned => Ok(scanned),
+                }
             }
         }
 
         let mut parts = Vec::new();
         let mut expecting = Expecting::TextOrEOF;
 
+        if input.len() == 0 {
+            return Ok(Template { raw: input, parts });
+        }
+
+        let mut iter = input.char_indices();
+        let start = iter.next();
+        let end = iter.next_back();
+
+        // This just checks that we're looking at a string
+        // It doesn't bother with ensuring that last quote is unescaped
+        // because the input to this is expected to be a proc-macro literal
+        if start.map(|(_, c)| c) != Some('"') || end.map(|(_, c)| c) != Some('"') {
+            return Err(Error::invalid_literal());
+        }
+
         let mut scan = Scan {
             input,
-            start: 0,
-            iter: input.char_indices().peekable(),
+            start: 1,
+            end: input.len() - 1,
+            iter: iter.peekable(),
         };
 
         while scan.has_input() {
@@ -226,7 +298,7 @@ impl<'a> Template<'a> {
                     match scan.take_until_hole_end()? {
                         Some((expr, range)) => {
                             let expr =
-                                syn::parse_str(expr).map_err(|e| Error::parse_expr(expr, e))?;
+                                syn::parse_str(&*expr).map_err(|e| Error::parse_expr(&*expr, e))?;
                             parts.push(Part::Hole { expr, range });
                         }
                         None => Err(Error::missing_expr())?,
@@ -241,6 +313,11 @@ impl<'a> Template<'a> {
         Ok(Template { raw: input, parts })
     }
 
+    /**
+    Generate an expression that will build a runtime template from this parsed one.
+
+    The runtime template does not need to allocate, everything is borrowed in-place.
+    */
     pub fn rt_tokens(&self) -> TokenStream {
         let parts = self.parts.iter().map(|part| match part {
             Part::Text { text, .. } => quote!(antlog_macros_rt::__private::Part::Text(#text)),
@@ -275,70 +352,70 @@ mod tests {
     fn parse_ok() {
         let cases = vec![
             ("", vec![]),
-            ("Hello world 🎈📌", vec![text("Hello world 🎈📌", 0..20)]),
+            ("\"Hello world 🎈📌\"", vec![text("Hello world 🎈📌", 1..21)]),
             (
-                "Hello {world} 🎈📌",
+                "\"Hello {world} 🎈📌\"",
                 vec![
-                    text("Hello ", 0..6),
-                    hole("world", 7..12),
-                    text(" 🎈📌", 13..22),
+                    text("Hello ", 1..7),
+                    hole("world", 8..13),
+                    text(" 🎈📌", 14..23),
                 ],
             ),
-            ("{world}", vec![hole("world", 1..6)]),
+            ("\"{world}\"", vec![hole("world", 2..7)]),
             (
-                "Hello {#[log::debug] world} 🎈📌",
+                "\"Hello {#[log::debug] world} 🎈📌\"",
                 vec![
-                    text("Hello ", 0..6),
-                    hole("#[log::debug] world", 7..26),
-                    text(" 🎈📌", 27..36),
-                ],
-            ),
-            (
-                "Hello {#[log::debug] world: 42} 🎈📌",
-                vec![
-                    text("Hello ", 0..6),
-                    hole("#[log::debug] world: 42", 7..30),
-                    text(" 🎈📌", 31..40),
+                    text("Hello ", 1..7),
+                    hole("#[log::debug] world", 8..27),
+                    text(" 🎈📌", 28..37),
                 ],
             ),
             (
-                "Hello {#[log::debug] world: \"is text\"} 🎈📌",
+                "\"Hello {#[log::debug] world: 42} 🎈📌\"",
                 vec![
-                    text("Hello ", 0..6),
-                    hole("#[log::debug] world: \"is text\"", 7..37),
-                    text(" 🎈📌", 38..47),
+                    text("Hello ", 1..7),
+                    hole("#[log::debug] world: 42", 8..31),
+                    text(" 🎈📌", 32..41),
                 ],
             ),
             (
-                "{Hello} {world}",
-                vec![hole("Hello", 1..6), text(" ", 7..8), hole("world", 9..14)],
-            ),
-            (
-                "{a}{b}{c}",
-                vec![hole("a", 1..2), hole("b", 4..5), hole("c", 7..8)],
-            ),
-            (
-                "🎈📌{a}🎈📌{b}🎈📌{c}🎈📌",
+                "\"Hello {#[log::debug] world: \\\"is text\\\"} 🎈📌\"",
                 vec![
-                    text("🎈📌", 0..8),
-                    hole("a", 9..10),
-                    text("🎈📌", 11..19),
-                    hole("b", 20..21),
-                    text("🎈📌", 22..30),
-                    hole("c", 31..32),
-                    text("🎈📌", 33..41),
+                    text("Hello ", 1..7),
+                    hole("#[log::debug] world: \"is text\"", 8..40),
+                    text(" 🎈📌", 41..50),
                 ],
             ),
             (
-                "Hello 🎈📌 {{world}}",
-                vec![text("Hello 🎈📌 {{world}}", 0..24)],
+                "\"{Hello} {world}\"",
+                vec![hole("Hello", 2..7), text(" ", 8..9), hole("world", 10..15)],
             ),
             (
-                "🎈📌 Hello world {{}}",
-                vec![text("🎈📌 Hello world {{}}", 0..25)],
+                "\"{a}{b}{c}\"",
+                vec![hole("a", 2..3), hole("b", 5..6), hole("c", 8..9)],
             ),
-            ("{{", vec![text("{{", 0..2)]),
-            ("}}", vec![text("}}", 0..2)]),
+            (
+                "\"🎈📌{a}🎈📌{b}🎈📌{c}🎈📌\"",
+                vec![
+                    text("🎈📌", 1..9),
+                    hole("a", 10..11),
+                    text("🎈📌", 12..20),
+                    hole("b", 21..22),
+                    text("🎈📌", 23..31),
+                    hole("c", 32..33),
+                    text("🎈📌", 34..42),
+                ],
+            ),
+            (
+                "\"Hello 🎈📌 {{world}}\"",
+                vec![text("Hello 🎈📌 {world}", 1..25)],
+            ),
+            (
+                "\"🎈📌 Hello world {{}}\"",
+                vec![text("🎈📌 Hello world {}", 1..26)],
+            ),
+            ("\"{{\"", vec![text("{", 1..3)]),
+            ("\"}}\"", vec![text("}", 1..3)]),
         ];
 
         for (template, expected) in cases {
@@ -365,16 +442,17 @@ mod tests {
     #[test]
     fn parse_err() {
         let cases = vec![
-            ("{", "parsing failed: unexpected end of input, expected `}`"),
-            ("a {", "parsing failed: unexpected end of input, expected `}`"),
-            ("a { a", "parsing failed: unexpected end of input, expected `}`"),
-            ("{ a", "parsing failed: unexpected end of input, expected `}`"),
-            ("}", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
-            ("} a", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
-            ("a } a", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
-            ("a }", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
-            ("{}", "parsing failed: empty replacements (`{}`) aren\'t supported, put the replacement inside like `{some_value}`"),
-            ("{not real rust}", "parsing failed: failed to parse `not real rust` as an expression"),
+            ("\"", "parsing failed: templates must be parsed from string literals"),
+            ("\"{\"", "parsing failed: unexpected end of input, expected `}`"),
+            ("\"a {\"", "parsing failed: unexpected end of input, expected `}`"),
+            ("\"a { a\"", "parsing failed: unexpected end of input, expected `}`"),
+            ("\"{ a\"", "parsing failed: unexpected end of input, expected `}`"),
+            ("\"}\"", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
+            ("\"} a\"", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
+            ("\"a } a\"", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
+            ("\"a }\"", "parsing failed: `{` and `}` characters must be escaped as `{{` and `}}`"),
+            ("\"{}\"", "parsing failed: empty replacements (`{}`) aren\'t supported, put the replacement inside like `{some_value}`"),
+            ("\"{not real rust}\"", "parsing failed: failed to parse `not real rust` as an expression"),
         ];
 
         for (template, expected) in cases {
@@ -395,7 +473,7 @@ mod tests {
     #[test]
     fn rt_tokens() {
         let cases = vec![(
-            "Hello {#[log::debug] world}!",
+            "\"Hello {#[log::debug] world}!\"",
             quote!(antlog_macros_rt::__private::build(&[
                 antlog_macros_rt::__private::Part::Text("Hello "),
                 antlog_macros_rt::__private::Part::Hole("world"),
@@ -412,7 +490,7 @@ mod tests {
     }
 
     fn text(text: &str, range: Range<usize>) -> Part {
-        Part::Text { text, range }
+        Part::Text { text: Cow::Borrowed(text), range }
     }
 
     fn hole(expr: &str, range: Range<usize>) -> Part {

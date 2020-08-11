@@ -7,5 +7,5 @@ extern crate antlog_macros;
 struct Input;
 
 fn main() {
-    log!("Text and {a: Input} and more");
+    log!("Text \"and\" {a: Input} and more");
 }

@@ -67,6 +67,12 @@ pub fn error(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
 
 #[proc_macro]
 #[doc(hidden)]
+pub fn __private_log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
+}
+
+#[proc_macro]
+#[doc(hidden)]
 pub fn __private_log_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
