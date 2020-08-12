@@ -1,5 +1,5 @@
 error[E0277]: `Input` doesn't implement `std::fmt::Display`
-  --> $DIR/log_unsatisfied_trait_default.rs:10:25
+  --> $DIR/log_interpolated_unsatisfied_trait_default.rs:10:25
    |
 10 |     log!("Text \"and\" {a: Input} and more");
    |                         ^^^^^^^^ `Input` cannot be formatted with the default formatter

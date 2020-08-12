@@ -8,13 +8,5 @@ fn main() {
     let c = 42;
     let e = std::io::Error::from(std::io::ErrorKind::Other);
 
-    log!("There's no replacements here", {
-        a,
-        b: 17,
-        #[debug]
-        c,
-        d: String::from("short lived!"),
-        #[error]
-        err: e,
-    });
+    log!("Text and {a} and {b: 17} and {#[debug] c} or {#[debug] d: String::from(\"short lived!\")} and {err: e}");
 }

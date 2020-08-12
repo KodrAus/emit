@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, mem, ops::Range};
+use std::{collections::BTreeMap, iter::Peekable, mem, ops::Range};
 
 use crate::template::{Part, Template};
-use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
+use proc_macro2::{Span, TokenStream, TokenTree};
 use syn::{Expr, ExprPath, ExprStruct, FieldValue, Ident};
 
 use crate::capture::FieldValueExt;
@@ -9,15 +9,39 @@ use crate::capture::FieldValueExt;
 pub(super) fn rearrange_tokens(input: TokenStream) -> TokenStream {
     let mut input = input.into_iter().peekable();
 
-    // The first argument is the string literal template
-    let template = expect_string_literal(&mut input);
+    // Take any arguments up to the string template
+    // These are control arguments for the log statement that aren't key-value pairs
+    let mut parsing_value = false;
+    let (args, template) = take_until(&mut input, |tt, _| {
+        // If we're parsing a value then skip over this token
+        // It won't be interpreted as the template because it belongs to an arg
+        if parsing_value {
+            parsing_value = false;
+            return false;
+        }
 
-    // If there's more tokens, they should be a comma followed by key-value pairs
+        match tt {
+            // A literal is interpreted as the template
+            TokenTree::Literal(_) => true,
+            // A `:` token marks the start of a value in a field-value
+            // The following token is the value, which isn't considered the template
+            TokenTree::Punct(p) if p.as_char() == ':' => {
+                parsing_value = true;
+                false
+            }
+            // Any other token isn't the template
+            _ => false,
+        }
+    });
+
+    let template = template.expect("missing string template");
+
+    // If there's more tokens, they should be a comma followed by comma-separated field-values
     if input.peek().is_some() {
         expect_punct(&mut input, ',');
-        let kvs = expect_group(&mut input, Delimiter::Brace);
+        let kvs: TokenStream = input.collect();
 
-        quote!(antlog_macros::__private_log!(#template Args { kvs: KeyValues #kvs }))
+        quote!(antlog_macros::__private_log!(#template Args { #args kvs: KeyValues { #kvs } }))
     } else {
         quote!(antlog_macros::__private_log!(#template))
     }
@@ -38,13 +62,16 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
     let template_tokens = template.rt_tokens();
 
-    // Exctract the rest of the input arguments
+    // Extract the rest of the input arguments
+    // These are parsed as a struct (the actual type doesn't matter)
+    // Specific fields on this struct are interpreted as the log target and additional field-values
     let args: TokenStream = input.collect();
 
+    // The log target expression
     let mut logger_tokens = None;
+    // Any field-values that aren't part of the template
     let mut extra_field_values = BTreeMap::new();
 
-    // If there are extra arguments following the template then parse them
     if !args.is_empty() {
         let args = syn::parse2::<ExprStruct>(args).expect("failed to parse");
 
@@ -100,6 +127,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
             field_values.push(quote_spanned!(field_span=> #(#attrs)* antlog_macros::__private_log_capture!(#expr)));
             field_bindings.push(value_expr.clone());
 
+            // Make sure keys aren't duplicated
             let previous = sorted_field_bindings.insert(key_name, value_expr);
             if previous.is_some() {
                 panic!("keys cannot be duplicated");
@@ -108,17 +136,21 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
             field_index += 1;
         };
 
-    // Push the field values that appear in the template
+    // Push the field-values that appear in the template
     for part in template.parts.into_iter() {
         if let Part::Hole { expr, range } = part {
             let key_name = expr.key_name().expect("expected a string key");
 
-            // If the hole
+            // If the hole has a corresponding field-value outside the template
+            // then it will be used as the source for the value and attributes
+            // In this case, it's expected that the field-value in the template is
+            // just a single identifier
             let expr = match extra_field_values.remove(&key_name) {
                 Some(extra_expr) => {
                     if let Expr::Path(ExprPath { ref path, .. }) = expr.expr {
                         let ident = path.get_ident().expect("");
 
+                        // Make sure the field-value in the template is just a plain identifier
                         assert!(expr.attrs.is_empty(), "keys that exist in the template and extra pairs should only use attributes on the extra pair");
                         assert_eq!(
                             ident.to_string(),
@@ -138,7 +170,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         }
     }
 
-    // Push any remaining extra field values
+    // Push any remaining extra field-values
     for (key_name, expr) in extra_field_values {
         push_field_value(key_name, expr, None);
     }
@@ -161,24 +193,30 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     })
 }
 
-fn expect_string_literal(mut input: impl Iterator<Item = TokenTree>) -> TokenTree {
-    match input.next() {
-        Some(TokenTree::Literal(l)) => TokenTree::Literal(l),
-        _ => panic!("expected a string literal"),
+fn take_until<I>(
+    iter: &mut Peekable<I>,
+    mut until_true: impl FnMut(&TokenTree, &mut Peekable<I>) -> bool,
+) -> (TokenStream, Option<TokenTree>)
+where
+    I: Iterator<Item = TokenTree>,
+{
+    let mut taken = TokenStream::new();
+
+    while let Some(tt) = iter.next() {
+        if until_true(&tt, iter) {
+            return (taken, Some(tt));
+        }
+
+        taken.extend(Some(tt));
     }
+
+    (taken, None)
 }
 
 fn expect_punct(mut input: impl Iterator<Item = TokenTree>, c: char) -> TokenTree {
     match input.next() {
         Some(TokenTree::Punct(p)) if p.as_char() == c => TokenTree::Punct(p),
         _ => panic!("expected a {:?}", c),
-    }
-}
-
-fn expect_group(mut input: impl Iterator<Item = TokenTree>, delim: Delimiter) -> TokenTree {
-    match input.next() {
-        Some(TokenTree::Group(g)) if g.delimiter() == delim => TokenTree::Group(g),
-        _ => panic!("expected a {:?} separated group", delim),
     }
 }
 
@@ -191,7 +229,7 @@ mod tests {
     fn rearrange_log() {
         let cases = vec![
             (
-                quote!("There's no replacements here", {
+                quote!("There's no replacements here",
                     a,
                     b: 17,
                     #[debug]
@@ -199,7 +237,7 @@ mod tests {
                     d: String::from("short lived!"),
                     #[error]
                     e
-                }),
+                ),
                 quote!(antlog_macros::__private_log!("There's no replacements here" Args {
                     kvs: KeyValues {
                         a,
@@ -210,6 +248,20 @@ mod tests {
                         #[error]
                         e
                     }
+                }))
+            ),
+            (
+                quote!(log, "There's no replacements here", a),
+                quote!(antlog_macros::__private_log!("There's no replacements here" Args {
+                    log,
+                    kvs: KeyValues { a }
+                }))
+            ),
+            (
+                quote!(log: { let x = "lol string"; x }, "There's no replacements here", a),
+                quote!(antlog_macros::__private_log!("There's no replacements here" Args {
+                    log: { let x = "lol string"; x },
+                    kvs: KeyValues { a }
                 }))
             )
         ];
