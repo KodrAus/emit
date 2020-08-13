@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, iter::Peekable, mem, ops::Range};
+use std::{collections::BTreeMap, iter::Peekable, mem};
 
 use crate::template::{Part, Template};
 use proc_macro2::{Span, TokenStream, TokenTree};
@@ -106,35 +106,29 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let mut sorted_field_bindings = BTreeMap::new();
     let mut field_index = 0usize;
 
-    let mut push_field_value =
-        |key_name, mut expr: FieldValue, template_range: Option<Range<usize>>| {
-            // TODO: Consider lifting attributes out to the top-level `match`:
-            //
-            // #[__log_private_apply(a, debug)]
-            // #[__log_private_apply(b, ignore)]
-            //
-            // So that we can use attributes to entirely remove key-value pairs
-            let attrs = mem::replace(&mut expr.attrs, vec![]);
+    let mut push_field_value = |key_name, mut expr: FieldValue, span: Span| {
+        // TODO: Consider lifting attributes out to the top-level `match`:
+        //
+        // #[__log_private_apply(a, debug)]
+        // #[__log_private_apply(b, ignore)]
+        //
+        // So that we can use attributes to entirely remove key-value pairs
+        let attrs = mem::replace(&mut expr.attrs, vec![]);
 
-            let field_span = template_range
-                .and_then(|template_range| {
-                    template_src.subspan(template_range.start..template_range.end)
-                })
-                .unwrap_or_else(Span::call_site);
+        let value_expr = Ident::new(&format!("__tmp{}", field_index), span.clone());
 
-            let value_expr = Ident::new(&format!("__tmp{}", field_index), Span::call_site());
+        field_values
+            .push(quote_spanned!(span=> #(#attrs)* antlog_macros::__private_log_capture!(#expr)));
+        field_bindings.push(value_expr.clone());
 
-            field_values.push(quote_spanned!(field_span=> #(#attrs)* antlog_macros::__private_log_capture!(#expr)));
-            field_bindings.push(value_expr.clone());
+        // Make sure keys aren't duplicated
+        let previous = sorted_field_bindings.insert(key_name, value_expr);
+        if previous.is_some() {
+            panic!("keys cannot be duplicated");
+        }
 
-            // Make sure keys aren't duplicated
-            let previous = sorted_field_bindings.insert(key_name, value_expr);
-            if previous.is_some() {
-                panic!("keys cannot be duplicated");
-            }
-
-            field_index += 1;
-        };
+        field_index += 1;
+    };
 
     // Push the field-values that appear in the template
     for part in template.parts.into_iter() {
@@ -148,13 +142,11 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
             let expr = match extra_field_values.remove(&key_name) {
                 Some(extra_expr) => {
                     if let Expr::Path(ExprPath { ref path, .. }) = expr.expr {
-                        let ident = path.get_ident().expect("");
-
                         // Make sure the field-value in the template is just a plain identifier
                         assert!(expr.attrs.is_empty(), "keys that exist in the template and extra pairs should only use attributes on the extra pair");
                         assert_eq!(
-                            ident.to_string(),
-                            key_name,
+                            path.get_ident().map(|ident| ident.to_string()).as_ref(),
+                            Some(&key_name),
                             "the key name and path don't match"
                         );
                     } else {
@@ -166,13 +158,19 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
                 None => expr,
             };
 
-            push_field_value(key_name, expr, Some(range));
+            push_field_value(
+                key_name,
+                expr,
+                template_src
+                    .subspan(range.start..range.end)
+                    .unwrap_or_else(Span::call_site),
+            );
         }
     }
 
     // Push any remaining extra field-values
     for (key_name, expr) in extra_field_values {
-        push_field_value(key_name, expr, None);
+        push_field_value(key_name, expr, Span::call_site());
     }
 
     let sorted_field_bindings = sorted_field_bindings.values();
