@@ -148,7 +148,7 @@ pub enum Part<'a> {
     Hole(&'a str),
 }
 
-pub fn build<'a>(parts: &'a [Part<'a>]) -> Template<'a> {
+pub fn template<'a>(parts: &'a [Part<'a>]) -> Template<'a> {
     Template { parts }
 }
 
@@ -185,7 +185,7 @@ mod tests {
         ];
 
         for (parts, ctx, expected) in cases {
-            let template = build(parts);
+            let template = template(parts);
 
             let actual = template.render(ctx).to_string();
 
@@ -209,7 +209,7 @@ mod tests {
         ];
 
         for (parts, source, expected) in cases {
-            let template = build(parts);
+            let template = template(parts);
 
             let actual = template
                 .render(Context::new().fill_source(source))

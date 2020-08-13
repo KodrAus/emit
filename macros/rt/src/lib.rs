@@ -16,7 +16,7 @@ pub mod __private {
     pub use crate::{
         capture::__PrivateLogCapture,
         source::Captured,
-        template::{build, Context, Part, Template},
+        template::{template, Context, Part, Template},
     };
 
     pub use log::kv::{Key, Value};

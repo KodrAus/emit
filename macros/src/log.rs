@@ -290,7 +290,7 @@ mod tests {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
-                            let template = antlog_macros_rt::__private::build(&[
+                            let template = antlog_macros_rt::__private::template(&[
                                 antlog_macros_rt::__private::Part::Text("Text and "),
                                 antlog_macros_rt::__private::Part::Hole ( "b"),
                                 antlog_macros_rt::__private::Part::Text(" and "),
@@ -318,7 +318,7 @@ mod tests {
                                 sorted_key_values: &[__tmp0]
                             };
 
-                            let template = antlog_macros_rt::__private::build(&[
+                            let template = antlog_macros_rt::__private::template(&[
                                 antlog_macros_rt::__private::Part::Text("Text and "),
                                 antlog_macros_rt::__private::Part::Hole ( "a")
                             ]);

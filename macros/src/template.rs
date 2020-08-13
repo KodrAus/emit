@@ -342,7 +342,7 @@ impl<'a> Template<'a> {
         });
 
         quote!(
-            antlog_macros_rt::__private::build(&[#(#parts),*])
+            antlog_macros_rt::__private::template(&[#(#parts),*])
         )
     }
 }
@@ -481,7 +481,7 @@ mod tests {
     fn rt_tokens() {
         let cases = vec![(
             "\"Hello {#[log::debug] world}!\"",
-            quote!(antlog_macros_rt::__private::build(&[
+            quote!(antlog_macros_rt::__private::template(&[
                 antlog_macros_rt::__private::Part::Text("Hello "),
                 antlog_macros_rt::__private::Part::Hole("world"),
                 antlog_macros_rt::__private::Part::Text("!")
