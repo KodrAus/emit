@@ -20,6 +20,7 @@ pub type WithDefault = CaptureDisplay;
 extern "C" {
     pub type CaptureDisplay;
     pub type CaptureDebug;
+    pub type CaptureSval;
     pub type CaptureError;
 }
 
@@ -48,6 +49,21 @@ where
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
+    fn capture(&self) -> kv::Value {
+        kv::Value::from(self)
+    }
+}
+
+impl<T> Capture<CaptureSval> for T
+where
+    T: sval::value::Value + 'static,
+{
+    default fn capture(&self) -> kv::Value {
+        kv::Value::capture_sval(self)
+    }
+}
+
+impl Capture<CaptureSval> for dyn sval::value::Value {
     fn capture(&self) -> kv::Value {
         kv::Value::from(self)
     }
@@ -105,6 +121,13 @@ pub trait __PrivateLogCapture {
     fn __private_log_capture_from_debug(&self) -> kv::Value
     where
         Self: Capture<CaptureDebug>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_log_capture_from_sval(&self) -> kv::Value
+    where
+        Self: Capture<CaptureSval>,
     {
         Capture::capture(self)
     }
@@ -201,6 +224,22 @@ mod tests {
         // Capture a `&dyn Debug`
         let v: &dyn fmt::Debug = &SomeType;
         let _ = v.__private_log_capture_from_debug();
+    }
+
+    #[test]
+    fn capture_sval() {
+        use std::collections::BTreeMap;
+
+        let mut map = BTreeMap::new();
+        map.insert("a", 42);
+        map.insert("b", 17);
+
+        // Capture an arbitrary `Value`
+        let _ = map.__private_log_capture_from_sval();
+
+        // Capture a `&dyn Value`
+        let v: &dyn sval::value::Value = &map;
+        let _ = v.__private_log_capture_from_sval();
     }
 
     #[test]

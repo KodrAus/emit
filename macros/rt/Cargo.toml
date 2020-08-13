@@ -7,4 +7,8 @@ edition = "2018"
 [dependencies.log]
 git = "https://github.com/KodrAus/log.git"
 branch = "feat/kv-error"
-features = ["std", "kv_unstable"]
+features = ["std", "kv_unstable", "kv_unstable_sval"]
+
+[dependencies.sval]
+version = "1.0.0-alpha.2"
+features = ["std"]

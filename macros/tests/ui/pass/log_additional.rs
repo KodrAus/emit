@@ -7,6 +7,12 @@ fn main() {
     let a = String::from("hello");
     let c = 42;
     let e = std::io::Error::from(std::io::ErrorKind::Other);
+    let f = {
+        let mut map = std::collections::BTreeMap::new();
+        map.insert("a", 42);
+        map.insert("b", 17);
+        map
+    };
 
     log!("There's no replacements here",
         a,
@@ -15,5 +21,7 @@ fn main() {
         c,
         d: String::from("short lived!"),
         err: e,
+        #[sval]
+        f,
     );
 }

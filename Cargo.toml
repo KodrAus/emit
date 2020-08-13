@@ -22,7 +22,7 @@ macros = [
 [dependencies.log]
 git = "https://github.com/KodrAus/log.git"
 branch = "feat/kv-error"
-features = ["std", "kv_unstable"]
+features = ["std", "kv_unstable", "kv_unstable_sval"]
 
 [dependencies.antlog_macros]
 path = "macros"
