@@ -9,15 +9,10 @@ This crate is not intended to be consumed directly.
 
 mod capture;
 mod source;
-mod template;
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::{
-        capture::__PrivateLogCapture,
-        source::Captured,
-        template::{template, Context, Part, Template},
-    };
+    pub use crate::{capture::__PrivateLogCapture, source::Captured};
 
     pub use log::kv::{Key, Value};
 }

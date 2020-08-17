@@ -6,6 +6,7 @@ edition = "2018"
 
 [workspace]
 members = [
+    "template",
     "macros",
     "macros/rt",
 ]

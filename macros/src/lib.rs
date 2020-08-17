@@ -7,14 +7,13 @@ use proc_macro2::TokenStream;
 
 mod capture;
 mod log;
-mod template;
 
 /**
 Logging statements.
 */
 #[proc_macro]
 pub fn log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(log::rearrange_tokens(TokenStream::from(item)))
+    proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
 }
 
 /**
@@ -77,12 +76,6 @@ pub fn error(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
             to: quote!(__private_log_capture_from_error),
         },
     ))
-}
-
-#[proc_macro]
-#[doc(hidden)]
-pub fn __private_log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
 }
 
 #[proc_macro]

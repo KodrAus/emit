@@ -1,11 +1,8 @@
 [package]
-name = "antlog_macros"
+name = "antlog_template"
 version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
-
-[lib]
-proc-macro = true
 
 [dependencies.proc-macro2]
 version = "1"
@@ -20,11 +17,8 @@ features = ["full", "extra-traits", "visit-mut"]
 [dependencies.thiserror]
 version = "1"
 
-[dependencies.antlog_template]
-path = "../template"
-
-[dev-dependencies.antlog_macros_rt]
-path = "rt"
-
-[dev-dependencies.trybuild]
-version = "1"
+# TODO: Replace with a generic `antlog_template_value` crate
+[dependencies.log]
+git = "https://github.com/KodrAus/log.git"
+branch = "feat/kv-error"
+features = ["kv_unstable"]
