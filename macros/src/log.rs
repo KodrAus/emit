@@ -1,9 +1,9 @@
 use std::{collections::BTreeMap, mem};
 
-use proc_macro2::{Span, TokenStream};
-use syn::{Expr, ExprPath, FieldValue, Ident};
+use proc_macro2::TokenStream;
+use syn::{spanned::Spanned, Expr, ExprPath, FieldValue, Ident};
 
-use antlog_template::ct::Template;
+use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
 
@@ -35,7 +35,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let mut sorted_field_bindings = BTreeMap::new();
     let mut field_index = 0usize;
 
-    let mut push_field_value = |k, mut fv: FieldValue, span: Span| {
+    let mut push_field_value = |k, mut fv: FieldValue| {
         // TODO: Consider lifting attributes out to the top-level `match`:
         //
         // #[__log_private_apply(a, debug)]
@@ -44,10 +44,11 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         // So that we can use attributes to entirely remove key-value pairs
         let attrs = mem::replace(&mut fv.attrs, vec![]);
 
-        let v = Ident::new(&format!("__tmp{}", field_index), span.clone());
+        let v = Ident::new(&format!("__tmp{}", field_index), fv.span());
 
-        field_values
-            .push(quote_spanned!(span=> #(#attrs)* antlog_macros::__private_log_capture!(#fv)));
+        field_values.push(
+            quote_spanned!(fv.span()=> #(#attrs)* antlog_macros::__private_log_capture!(#fv)),
+        );
         field_bindings.push(v.clone());
 
         // Make sure keys aren't duplicated
@@ -60,7 +61,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     };
 
     // Push the field-values that appear in the template
-    for (fv, span) in template.template_field_values() {
+    for fv in template.template_field_values() {
         let k = fv.key_name().expect("expected a string key");
 
         // If the hole has a corresponding field-value outside the template
@@ -86,12 +87,12 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
             None => fv,
         };
 
-        push_field_value(k, fv.clone(), span);
+        push_field_value(k, fv.clone());
     }
 
     // Push any remaining extra field-values
     for (k, fv) in extra_field_values {
-        push_field_value(k, fv.clone(), Span::call_site());
+        push_field_value(k, fv.clone());
     }
 
     let sorted_field_bindings = sorted_field_bindings.values();
@@ -103,10 +104,11 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
                     sorted_key_values: &[#(#sorted_field_bindings),*]
                 };
 
-                let template = #template_tokens;
+                let template = antlog_macros_rt::__private::Template(#template_tokens);
 
                 println!("{:?}", captured.sorted_key_values);
-                println!("{}", template.render(antlog_template::rt::Context::new().fill_source(&captured)));
+                println!("{}", template.render_template());
+                println!("{}", template.render_source(&captured));
             }
         }
     })
@@ -135,19 +137,20 @@ mod tests {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
-                            let template = antlog_template::rt::template(&[
-                                antlog_template::rt::Part::Text("Text and "),
-                                antlog_template::rt::Part::Hole ( "b"),
-                                antlog_template::rt::Part::Text(" and "),
-                                antlog_template::rt::Part::Hole ( "a"),
-                                antlog_template::rt::Part::Text(" and "),
-                                antlog_template::rt::Part::Hole ( "c" ),
-                                antlog_template::rt::Part::Text(" and "),
-                                antlog_template::rt::Part::Hole ( "d" )
-                            ]);
+                            let template = antlog_macros_rt::__private::Template(fv_template::rt::template(&[
+                                fv_template::rt::Part::Text("Text and "),
+                                fv_template::rt::Part::Hole ( "b"),
+                                fv_template::rt::Part::Text(" and "),
+                                fv_template::rt::Part::Hole ( "a"),
+                                fv_template::rt::Part::Text(" and "),
+                                fv_template::rt::Part::Hole ( "c" ),
+                                fv_template::rt::Part::Text(" and "),
+                                fv_template::rt::Part::Hole ( "d" )
+                            ]));
 
                             println!("{:?}", captured.sorted_key_values);
-                            println!("{}", template.render(antlog_template::rt::Context::new().fill_source(&captured)));
+                            println!("{}", template.render_template());
+                            println!("{}", template.render_source(&captured));
                         }
                     }
                 }),
@@ -163,13 +166,14 @@ mod tests {
                                 sorted_key_values: &[__tmp0]
                             };
 
-                            let template = antlog_template::rt::template(&[
-                                antlog_template::rt::Part::Text("Text and "),
-                                antlog_template::rt::Part::Hole ( "a")
-                            ]);
+                            let template = antlog_macros_rt::__private::Template(fv_template::rt::template(&[
+                                fv_template::rt::Part::Text("Text and "),
+                                fv_template::rt::Part::Hole ( "a")
+                            ]));
 
                             println!("{:?}", captured.sorted_key_values);
-                            println!("{}", template.render(antlog_template::rt::Context::new().fill_source(&captured)));
+                            println!("{}", template.render_template());
+                            println!("{}", template.render_source(&captured));
                         }
                     }
                 })

@@ -20,7 +20,7 @@ features = ["full", "extra-traits", "visit-mut"]
 [dependencies.thiserror]
 version = "1"
 
-[dependencies.antlog_template]
+[dependencies.fv-template]
 path = "../template"
 
 [dev-dependencies.antlog_macros_rt]

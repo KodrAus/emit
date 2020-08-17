@@ -4,8 +4,6 @@ Runtime string template formatting.
 
 use std::fmt;
 
-use log::kv::{Key, Source};
-
 /**
 A text template.
 */
@@ -103,22 +101,6 @@ where
     }
 
     /**
-    Provide a `Source` to fill the holes in the template with.
-    */
-    pub fn fill_source<S>(
-        self,
-        src: S,
-    ) -> Context<impl Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>, TMissing>
-    where
-        S: Source,
-    {
-        self.fill(move |write: &mut fmt::Formatter, label| {
-            src.get(Key::from(label))
-                .map(|value| fmt::Display::fmt(&value, write))
-        })
-    }
-
-    /**
     Provide a function to handle unfilled holes.
     */
     pub fn missing<T>(self, missing: T) -> Context<TFill, T>
@@ -156,7 +138,25 @@ pub fn template<'a>(parts: &'a [Part<'a>]) -> Template<'a> {
 mod tests {
     use super::*;
 
-    use log::kv::Value;
+    use log::kv::{Key, Source, Value};
+
+    impl<'a> Template<'a> {
+        /**
+        Provide a `Source` to fill the holes in the template with.
+        */
+        pub fn fill_source<S>(
+            self,
+            src: S,
+        ) -> Context<impl Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>, TMissing>
+        where
+            S: Source,
+        {
+            self.fill(move |write: &mut fmt::Formatter, label| {
+                src.get(Key::from(label))
+                    .map(|value| fmt::Display::fmt(&value, write))
+            })
+        }
+    }
 
     #[test]
     fn render() {

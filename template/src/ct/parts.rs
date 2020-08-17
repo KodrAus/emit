@@ -2,8 +2,15 @@
 Compile-time string template parsing.
 */
 
-use std::{fmt, iter::Peekable, ops::Range, str::CharIndices};
+use std::{
+    borrow::Cow,
+    fmt,
+    iter::Peekable,
+    ops::Range,
+    str::{self, CharIndices},
+};
 
+use proc_macro2::{Literal, TokenStream};
 use quote::ToTokens;
 use syn::FieldValue;
 use thiserror::Error;
@@ -20,6 +27,7 @@ pub(super) enum Part {
     A replacement expression.
     */
     Hole {
+        // TODO: Set the span on this properly
         expr: FieldValue,
         range: Range<usize>,
     },
@@ -75,6 +83,13 @@ impl Error {
         }
     }
 
+    fn lex_expr(expr: &str, err: proc_macro2::LexError) -> Self {
+        Error {
+            reason: format!("failed to parse `{}` as an expression", expr),
+            source: Some(format!("{:?}", err).into()),
+        }
+    }
+
     fn parse_expr(expr: &str, err: syn::Error) -> Self {
         Error {
             reason: format!("failed to parse `{}` as an expression", expr),
@@ -106,144 +121,13 @@ instead of:
 A string with "embedded escapes"
 ```
 */
-pub(super) fn parse(input: String) -> Result<Vec<Part>, Error> {
+pub(super) fn parse(lit: Literal) -> Result<Vec<Part>, Error> {
     enum Expecting {
         TextOrEOF,
         Hole,
     }
 
-    struct Scan<'input> {
-        input: &'input str,
-        start: usize,
-        end: usize,
-        iter: Peekable<CharIndices<'input>>,
-    }
-
-    impl<'input> Scan<'input> {
-        fn has_input(&mut self) -> bool {
-            self.iter.peek().is_some()
-        }
-
-        fn take_until(
-            &mut self,
-            mut until_true: impl FnMut(char, &mut Peekable<CharIndices<'input>>) -> Result<bool, Error>,
-        ) -> Result<Option<(String, Range<usize>)>, Error> {
-            let mut scan = || {
-                while let Some((i, c)) = self.iter.next() {
-                    if until_true(c, &mut self.iter)? {
-                        let start = self.start;
-                        let end = i;
-
-                        self.start = end + 1;
-
-                        let range = start..end;
-
-                        return Ok((self.input[range.clone()].to_owned(), range));
-                    }
-                }
-
-                let range = self.start..self.end;
-
-                Ok((self.input[range.clone()].to_owned(), range))
-            };
-
-            match scan()? {
-                (s, r) if s.len() > 0 => Ok(Some((s, r))),
-                _ => Ok(None),
-            }
-        }
-
-        fn take_until_eof_or_hole_start(
-            &mut self,
-        ) -> Result<Option<(String, Range<usize>)>, Error> {
-            let mut escaped = false;
-            let scanned = self.take_until(|c, rest| match c {
-                // A `{` that's followed by another `{` is escaped
-                // If it's followed by a different character then it's
-                // the start of an interpolated expression
-                '{' => match rest.peek().map(|(_, peeked)| *peeked) {
-                    Some('{') => {
-                        escaped = true;
-                        let _ = rest.next();
-                        Ok(false)
-                    }
-                    Some(_) => Ok(true),
-                    None => Err(Error::incomplete_hole()),
-                },
-                // A `}` that's followed by another `}` is escaped
-                // We should never see these in this parser unless they're escaped
-                // If we do it means an interpolated expression is missing its start
-                // or it's been improperly escaped
-                '}' => match rest.peek().map(|(_, peeked)| *peeked) {
-                    Some('}') => {
-                        escaped = true;
-                        let _ = rest.next();
-                        Ok(false)
-                    }
-                    Some(_) => Err(Error::unescaped_hole()),
-                    None => Err(Error::unescaped_hole()),
-                },
-                _ => Ok(false),
-            })?;
-
-            match scanned {
-                Some((input, range)) if escaped => {
-                    // If the input is escaped, then replace `{{` and `}}` chars
-                    let input = (&*input).replace("{{", "{").replace("}}", "}");
-                    Ok(Some((input, range)))
-                }
-                scanned => Ok(scanned),
-            }
-        }
-
-        fn take_until_hole_end(&mut self) -> Result<Option<(String, Range<usize>)>, Error> {
-            let mut depth = 1;
-            let mut matched_hole_end = false;
-            let mut escaped = false;
-
-            let scanned = self.take_until(|c, _| {
-                // NOTE: This isn't perfect, it will fail for `{` and `}` within strings:
-                // "Hello {#[log::debug] "some { string"}"
-                match c {
-                    // If the depth would return to its start then we've got a full expression
-                    '}' if depth == 1 => {
-                        matched_hole_end = true;
-                        Ok(true)
-                    }
-                    // A block end will reduce the depth
-                    '}' => {
-                        depth -= 1;
-                        Ok(false)
-                    }
-                    // A block start will increase the depth
-                    '{' => {
-                        depth += 1;
-                        Ok(false)
-                    }
-                    // A `\` means there's embedded escaped characters
-                    // For strings, we're only interested in `\"`
-                    '\\' => {
-                        escaped = true;
-                        Ok(false)
-                    }
-                    _ => Ok(false),
-                }
-            })?;
-
-            if !matched_hole_end {
-                Err(Error::incomplete_hole())?;
-            }
-
-            match scanned {
-                Some((input, range)) if escaped => {
-                    // If the input is escaped then replace `\"` with `"`
-                    let input = (&*input).replace("\\\"", "\"");
-                    Ok(Some((input, range)))
-                }
-                scanned => Ok(scanned),
-            }
-        }
-    }
+    let input = lit.to_string();
 
     let mut parts = Vec::new();
     let mut expecting = Expecting::TextOrEOF;
@@ -274,7 +158,10 @@ pub(super) fn parse(input: String) -> Result<Vec<Part>, Error> {
         match expecting {
             Expecting::TextOrEOF => {
                 if let Some((text, range)) = scan.take_until_eof_or_hole_start()? {
-                    parts.push(Part::Text { text, range });
+                    parts.push(Part::Text {
+                        text: text.into_owned(),
+                        range,
+                    });
                 }
 
                 expecting = Expecting::Hole;
@@ -283,8 +170,25 @@ pub(super) fn parse(input: String) -> Result<Vec<Part>, Error> {
             Expecting::Hole => {
                 match scan.take_until_hole_end()? {
                     Some((expr, range)) => {
-                        let expr =
-                            syn::parse_str(&*expr).map_err(|e| Error::parse_expr(&*expr, e))?;
+                        let tokens = {
+                            let tokens: TokenStream =
+                                str::parse(&*expr).map_err(|e| Error::lex_expr(&*expr, e))?;
+
+                            // Set the span to the correct place within the literal
+                            if let Some(span) = lit.subspan(range.start..range.end) {
+                                tokens
+                                    .into_iter()
+                                    .map(|mut tt| {
+                                        tt.set_span(span);
+                                        tt
+                                    })
+                                    .collect()
+                            } else {
+                                tokens
+                            }
+                        };
+
+                        let expr = syn::parse2(tokens).map_err(|e| Error::parse_expr(&*expr, e))?;
                         parts.push(Part::Hole { expr, range });
                     }
                     None => Err(Error::missing_expr())?,
@@ -297,6 +201,139 @@ pub(super) fn parse(input: String) -> Result<Vec<Part>, Error> {
     }
 
     Ok(parts)
+}
+
+struct Scan<'input> {
+    input: &'input str,
+    start: usize,
+    end: usize,
+    iter: Peekable<CharIndices<'input>>,
+}
+
+impl<'input> Scan<'input> {
+    fn has_input(&mut self) -> bool {
+        self.iter.peek().is_some()
+    }
+
+    fn take_until(
+        &mut self,
+        mut until_true: impl FnMut(char, &mut Peekable<CharIndices<'input>>) -> Result<bool, Error>,
+    ) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
+        let mut scan = || {
+            while let Some((i, c)) = self.iter.next() {
+                if until_true(c, &mut self.iter)? {
+                    let start = self.start;
+                    let end = i;
+
+                    self.start = end + 1;
+
+                    let range = start..end;
+
+                    return Ok((Cow::Borrowed(&self.input[range.clone()]), range));
+                }
+            }
+
+            let range = self.start..self.end;
+
+            Ok((Cow::Borrowed(&self.input[range.clone()]), range))
+        };
+
+        match scan()? {
+            (s, r) if s.len() > 0 => Ok(Some((s, r))),
+            _ => Ok(None),
+        }
+    }
+
+    fn take_until_eof_or_hole_start(
+        &mut self,
+    ) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
+        let mut escaped = false;
+        let scanned = self.take_until(|c, rest| match c {
+            // A `{` that's followed by another `{` is escaped
+            // If it's followed by a different character then it's
+            // the start of an interpolated expression
+            '{' => match rest.peek().map(|(_, peeked)| *peeked) {
+                Some('{') => {
+                    escaped = true;
+                    let _ = rest.next();
+                    Ok(false)
+                }
+                Some(_) => Ok(true),
+                None => Err(Error::incomplete_hole()),
+            },
+            // A `}` that's followed by another `}` is escaped
+            // We should never see these in this parser unless they're escaped
+            // If we do it means an interpolated expression is missing its start
+            // or it's been improperly escaped
+            '}' => match rest.peek().map(|(_, peeked)| *peeked) {
+                Some('}') => {
+                    escaped = true;
+                    let _ = rest.next();
+                    Ok(false)
+                }
+                Some(_) => Err(Error::unescaped_hole()),
+                None => Err(Error::unescaped_hole()),
+            },
+            _ => Ok(false),
+        })?;
+
+        match scanned {
+            Some((input, range)) if escaped => {
+                // If the input is escaped, then replace `{{` and `}}` chars
+                let input = (&*input).replace("{{", "{").replace("}}", "}");
+                Ok(Some((Cow::Owned(input), range)))
+            }
+            scanned => Ok(scanned),
+        }
+    }
+
+    fn take_until_hole_end(&mut self) -> Result<Option<(Cow<'input, str>, Range<usize>)>, Error> {
+        let mut depth = 1;
+        let mut matched_hole_end = false;
+        let mut escaped = false;
+
+        let scanned = self.take_until(|c, _| {
+            // NOTE: This isn't perfect, it will fail for `{` and `}` within strings:
+            // "Hello {#[log::debug] "some { string"}"
+            match c {
+                // If the depth would return to its start then we've got a full expression
+                '}' if depth == 1 => {
+                    matched_hole_end = true;
+                    Ok(true)
+                }
+                // A block end will reduce the depth
+                '}' => {
+                    depth -= 1;
+                    Ok(false)
+                }
+                // A block start will increase the depth
+                '{' => {
+                    depth += 1;
+                    Ok(false)
+                }
+                // A `\` means there's embedded escaped characters
+                // For strings, we're only interested in `\"`
+                '\\' => {
+                    escaped = true;
+                    Ok(false)
+                }
+                _ => Ok(false),
+            }
+        })?;
+
+        if !matched_hole_end {
+            Err(Error::incomplete_hole())?;
+        }
+
+        match scanned {
+            Some((input, range)) if escaped => {
+                // If the input is escaped then replace `\"` with `"`
+                let input = (&*input).replace("\\\"", "\"");
+                Ok(Some((Cow::Owned(input), range)))
+            }
+            scanned => Ok(scanned),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -378,7 +415,7 @@ mod tests {
         ];
 
         for (template, expected) in cases {
-            let actual = match Template::parse_str(template) {
+            let actual = match Template::parse(Literal::string(template)) {
                 Ok(template) => template,
                 Err(e) => panic!("failed to parse {:?}: {}", template, e),
             };
@@ -387,7 +424,6 @@ mod tests {
                 format!(
                     "{:?}",
                     Template {
-                        raw: template,
                         parts: expected
                     }
                 ),
@@ -415,7 +451,7 @@ mod tests {
         ];
 
         for (template, expected) in cases {
-            let actual = match Template::parse_str(template) {
+            let actual = match Template::parse(Literal::string(template)) {
                 Err(e) => e,
                 Ok(template) => panic!("parsing should've failed but produced {:?}", template),
             };
@@ -426,25 +462,6 @@ mod tests {
                 "parsing template: {:?}",
                 template
             );
-        }
-    }
-
-    #[test]
-    fn rt_tokens() {
-        let cases = vec![(
-            "\"Hello {#[log::debug] world}!\"",
-            quote!(antlog_macros_rt::__private::template(&[
-                antlog_macros_rt::__private::Part::Text("Hello "),
-                antlog_macros_rt::__private::Part::Hole("world"),
-                antlog_macros_rt::__private::Part::Text("!")
-            ])),
-        )];
-
-        for (template, expected) in cases {
-            let template = Template::parse_str(template).expect("failed to parse template");
-
-            let actual = template.rt_tokens();
-            assert_eq!(expected.to_string(), actual.to_string());
         }
     }
 

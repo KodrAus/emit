@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use proc_macro2::{Literal, Span, TokenStream, TokenTree};
+use proc_macro2::{Literal, TokenStream, TokenTree};
 use syn::{ExprLit, FieldValue, Lit, LitStr, Member};
 use thiserror::Error;
 
@@ -10,8 +10,7 @@ use self::parts::Part;
 
 pub struct Template {
     before_template: Vec<FieldValue>,
-    template_lit: Literal,
-    template_parts: Vec<Part>,
+    template: Vec<Part>,
     after_template: Vec<FieldValue>,
 }
 
@@ -67,14 +66,12 @@ impl Template {
         let before_template = collect_field_values(before_template);
         let after_template = collect_field_values(after_template);
 
-        let template_lit = take_literal(template.expect("missing string template"));
-        let template_parts =
-            parts::parse(template_lit.to_string().into()).expect("failed to parse");
+        let template = parts::parse(take_literal(template.expect("missing string template")))
+            .expect("failed to parse");
 
         Ok(Template {
             before_template,
-            template_lit,
-            template_parts,
+            template,
             after_template,
         })
     }
@@ -83,27 +80,14 @@ impl Template {
         self.before_template.iter()
     }
 
-    pub fn template_field_values<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (&'a FieldValue, Span)> + 'a {
-        let field_values: Vec<_> = self
-            .template_parts
-            .iter()
-            .filter_map(|part| {
-                if let Part::Hole { expr, range } = part {
-                    Some((
-                        expr,
-                        self.template_lit
-                            .subspan(range.start..range.end)
-                            .unwrap_or_else(Span::call_site),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        field_values.into_iter()
+    pub fn template_field_values<'a>(&'a self) -> impl Iterator<Item = &'a FieldValue> {
+        self.template.iter().filter_map(|part| {
+            if let Part::Hole { expr, .. } = part {
+                Some(expr)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn after_template_field_values<'a>(&'a self) -> impl Iterator<Item = &'a FieldValue> {
@@ -111,8 +95,8 @@ impl Template {
     }
 
     pub fn to_rt_tokens(&self) -> TokenStream {
-        let parts = self.template_parts.iter().map(|part| match part {
-            Part::Text { text, .. } => quote!(antlog_template::rt::Part::Text(#text)),
+        let parts = self.template.iter().map(|part| match part {
+            Part::Text { text, .. } => quote!(fv_template::rt::Part::Text(#text)),
             Part::Hole { expr, .. } => {
                 let label = ExprLit {
                     attrs: vec![],
@@ -126,12 +110,12 @@ impl Template {
                     }),
                 };
 
-                quote!(antlog_template::rt::Part::Hole(#label))
+                quote!(fv_template::rt::Part::Hole(#label))
             }
         });
 
         quote!(
-            antlog_template::rt::template(&[#(#parts),*])
+            fv_template::rt::template(&[#(#parts),*])
         )
     }
 }

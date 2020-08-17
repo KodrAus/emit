@@ -9,6 +9,9 @@ git = "https://github.com/KodrAus/log.git"
 branch = "feat/kv-error"
 features = ["std", "kv_unstable", "kv_unstable_sval"]
 
+[dependencies.fv-template]
+path = "../../template"
+
 [dependencies.sval]
 version = "1.0.0-alpha.2"
 features = ["std"]
