@@ -16,9 +16,3 @@ features = ["full", "extra-traits", "visit-mut"]
 
 [dependencies.thiserror]
 version = "1"
-
-# TODO: Replace with a generic `fv-template_value` crate
-[dev-dependencies.log]
-git = "https://github.com/KodrAus/log.git"
-branch = "feat/kv-error"
-features = ["kv_unstable"]

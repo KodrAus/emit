@@ -24,8 +24,8 @@ pub fn debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_log_capture"),
-            to: quote!(__private_log_capture_from_debug),
+            predicate: |ident| ident.starts_with("__private_capture"),
+            to: quote!(__private_capture_from_debug),
         },
     ))
 }
@@ -41,8 +41,8 @@ pub fn display(
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_log_capture"),
-            to: quote!(__private_log_capture_from_display),
+            predicate: |ident| ident.starts_with("__private_capture"),
+            to: quote!(__private_capture_from_display),
         },
     ))
 }
@@ -55,8 +55,8 @@ pub fn sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_m
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_log_capture"),
-            to: quote!(__private_log_capture_from_sval),
+            predicate: |ident| ident.starts_with("__private_capture"),
+            to: quote!(__private_capture_from_sval),
         },
     ))
 }
@@ -72,56 +72,54 @@ pub fn error(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_log_capture"),
-            to: quote!(__private_log_capture_from_error),
+            predicate: |ident| ident.starts_with("__private_capture"),
+            to: quote!(__private_capture_from_error),
         },
     ))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __private_log_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |key| match key {
-            "err" => quote!(__private_log_capture_from_error),
-            _ => quote!(__private_log_capture_with_default),
+            "err" => quote!(__private_capture_from_error),
+            _ => quote!(__private_capture_with_default),
         },
     }))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __private_log_capture_from_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn __private_capture_from_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |_| quote!(__private_log_capture_from_debug),
+        fn_name: |_| quote!(__private_capture_from_debug),
     }))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __private_log_capture_from_display(
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn __private_capture_from_display(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |_| quote!(__private_log_capture_from_display),
+        fn_name: |_| quote!(__private_capture_from_display),
     }))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __private_log_capture_from_sval(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn __private_capture_from_sval(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |_| quote!(__private_log_capture_from_sval),
+        fn_name: |_| quote!(__private_capture_from_sval),
     }))
 }
 
 #[proc_macro]
 #[doc(hidden)]
-pub fn __private_log_capture_from_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn __private_capture_from_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |key| {
@@ -129,7 +127,7 @@ pub fn __private_log_capture_from_error(item: proc_macro::TokenStream) -> proc_m
                 panic!("the #[error] attribute must use `err` as the key name")
             }
 
-            quote!(__private_log_capture_from_error)
+            quote!(__private_capture_from_error)
         },
     }))
 }

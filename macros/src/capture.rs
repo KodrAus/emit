@@ -28,7 +28,7 @@ fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
 
     quote!(
         {
-            use antlog_macros_rt::__private::__PrivateLogCapture;
+            use antlog_macros_rt::__private::__PrivateCapture;
             (#key_expr, (#expr).#fn_name())
         }
     )
@@ -123,18 +123,18 @@ mod tests {
         let cases = vec![
             (
                 quote!(a),
-                quote!(__private_log_capture_with_default),
+                quote!(__private_capture_with_default),
                 quote!({
-                    use antlog_macros_rt::__private::__PrivateLogCapture;
-                    ("a", (a).__private_log_capture_with_default())
+                    use antlog_macros_rt::__private::__PrivateCapture;
+                    ("a", (a).__private_capture_with_default())
                 }),
             ),
             (
                 quote!(a: 42),
-                quote!(__private_log_capture_with_default),
+                quote!(__private_capture_with_default),
                 quote!({
-                    use antlog_macros_rt::__private::__PrivateLogCapture;
-                    ("a", (42).__private_log_capture_with_default())
+                    use antlog_macros_rt::__private::__PrivateCapture;
+                    ("a", (42).__private_capture_with_default())
                 }),
             ),
         ];
@@ -154,17 +154,17 @@ mod tests {
         let cases = vec![
             (
                 (
-                    quote!(__private_log_capture!(a)),
-                    quote!(__private_log_capture_from_debug),
+                    quote!(__private_capture!(a)),
+                    quote!(__private_capture_from_debug),
                 ),
-                quote!(__private_log_capture_from_debug!(a)),
+                quote!(__private_capture_from_debug!(a)),
             ),
             (
                 (
-                    quote!(log::__private_log_capture!(a: 42)),
-                    quote!(__private_log_capture_from_debug),
+                    quote!(log::__private_capture!(a: 42)),
+                    quote!(__private_capture_from_debug),
                 ),
-                quote!(log::__private_log_capture_from_debug!(a: 42)),
+                quote!(log::__private_capture_from_debug!(a: 42)),
             ),
         ];
 

@@ -1,6 +1,6 @@
 use std::{error, fmt};
 
-use log::kv;
+use crate::value::ValueBag;
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -9,7 +9,7 @@ The parameter lets us choose the way values are captured, since many
 types can be captured in lots of different ways.
 */
 pub trait Capture<T: ?Sized> {
-    fn capture(&self) -> kv::Value;
+    fn capture(&self) -> ValueBag;
 }
 
 /**
@@ -28,14 +28,14 @@ impl<T> Capture<CaptureDisplay> for T
 where
     T: fmt::Display + 'static,
 {
-    default fn capture(&self) -> kv::Value {
-        kv::Value::capture_display(self)
+    default fn capture(&self) -> ValueBag {
+        ValueBag::capture_display(self)
     }
 }
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
-    fn capture(&self) -> kv::Value {
-        kv::Value::from(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::from(self)
     }
 }
 
@@ -43,14 +43,14 @@ impl<T> Capture<CaptureDebug> for T
 where
     T: fmt::Debug + 'static,
 {
-    default fn capture(&self) -> kv::Value {
-        kv::Value::capture_debug(self)
+    default fn capture(&self) -> ValueBag {
+        ValueBag::capture_debug(self)
     }
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
-    fn capture(&self) -> kv::Value {
-        kv::Value::from(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::from(self)
     }
 }
 
@@ -58,14 +58,14 @@ impl<T> Capture<CaptureSval> for T
 where
     T: sval::value::Value + 'static,
 {
-    default fn capture(&self) -> kv::Value {
-        kv::Value::capture_sval(self)
+    default fn capture(&self) -> ValueBag {
+        ValueBag::capture_sval(self)
     }
 }
 
 impl Capture<CaptureSval> for dyn sval::value::Value {
-    fn capture(&self) -> kv::Value {
-        kv::Value::from(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::from(self)
     }
 }
 
@@ -73,20 +73,20 @@ impl<T> Capture<CaptureError> for T
 where
     T: error::Error + 'static,
 {
-    default fn capture(&self) -> kv::Value {
-        kv::Value::capture_error(self)
+    default fn capture(&self) -> ValueBag {
+        ValueBag::capture_error(self)
     }
 }
 
 impl Capture<CaptureError> for dyn error::Error {
-    fn capture(&self) -> kv::Value {
-        kv::Value::from(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::from(self)
     }
 }
 
 impl<T: ?Sized> Capture<T> for str {
-    fn capture(&self) -> kv::Value {
-        kv::Value::from(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::from(self)
     }
 }
 
@@ -103,36 +103,36 @@ so that when a bound isn't satisfied we get a more accurate type error.
 - It uses clumsily uglified names that are unlikely to clash in non-hygeinic
 contexts. (We're expecting non-hygeinic spans to support value interpolation).
 */
-pub trait __PrivateLogCapture {
-    fn __private_log_capture_with_default(&self) -> kv::Value
+pub trait __PrivateCapture {
+    fn __private_capture_with_default(&self) -> ValueBag
     where
         Self: Capture<WithDefault>,
     {
         Capture::capture(self)
     }
 
-    fn __private_log_capture_from_display(&self) -> kv::Value
+    fn __private_capture_from_display(&self) -> ValueBag
     where
         Self: Capture<CaptureDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_log_capture_from_debug(&self) -> kv::Value
+    fn __private_capture_from_debug(&self) -> ValueBag
     where
         Self: Capture<CaptureDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_log_capture_from_sval(&self) -> kv::Value
+    fn __private_capture_from_sval(&self) -> ValueBag
     where
         Self: Capture<CaptureSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_log_capture_from_error(&self) -> kv::Value
+    fn __private_capture_from_error(&self) -> ValueBag
     where
         Self: Capture<CaptureError>,
     {
@@ -140,7 +140,7 @@ pub trait __PrivateLogCapture {
     }
 }
 
-impl<T: ?Sized> __PrivateLogCapture for T {}
+impl<T: ?Sized> __PrivateCapture for T {}
 
 #[cfg(test)]
 mod tests {
@@ -158,29 +158,26 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_log_capture_with_default();
+        let _ = SomeType.__private_capture_with_default();
 
         // Capture a structured number
-        assert_eq!(
-            Some(42u64),
-            42u64.__private_log_capture_with_default().to_u64()
-        );
+        assert_eq!(Some(42u64), 42u64.__private_capture_with_default().to_u64());
 
         // Capture a borrowed (non-static) string
         let v: &str = &String::from("a string");
         assert_eq!(
             Some("a string"),
-            v.__private_log_capture_with_default().to_borrowed_str()
+            v.__private_capture_with_default().to_borrowed_str()
         );
 
         // Capture a value with parens
-        let _ = (SomeType).__private_log_capture_with_default();
+        let _ = (SomeType).__private_capture_with_default();
 
         // Capture and borrow a string as an expression
         let v = SomeType;
         match (
-            (v).__private_log_capture_with_default(),
-            (String::from("a string")).__private_log_capture_with_default(),
+            (v).__private_capture_with_default(),
+            (String::from("a string")).__private_capture_with_default(),
         ) {
             (a, b) => {
                 let _ = a;
@@ -201,11 +198,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_log_capture_from_display();
+        let _ = SomeType.__private_capture_from_display();
 
         // Capture a `&dyn Display`
         let v: &dyn fmt::Display = &SomeType;
-        let _ = v.__private_log_capture_from_display();
+        let _ = v.__private_capture_from_display();
     }
 
     #[test]
@@ -219,11 +216,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Debug`
-        let _ = SomeType.__private_log_capture_from_debug();
+        let _ = SomeType.__private_capture_from_debug();
 
         // Capture a `&dyn Debug`
         let v: &dyn fmt::Debug = &SomeType;
-        let _ = v.__private_log_capture_from_debug();
+        let _ = v.__private_capture_from_debug();
     }
 
     #[test]
@@ -235,11 +232,11 @@ mod tests {
         map.insert("b", 17);
 
         // Capture an arbitrary `Value`
-        let _ = map.__private_log_capture_from_sval();
+        let _ = map.__private_capture_from_sval();
 
         // Capture a `&dyn Value`
         let v: &dyn sval::value::Value = &map;
-        let _ = v.__private_log_capture_from_sval();
+        let _ = v.__private_capture_from_sval();
     }
 
     #[test]
@@ -248,10 +245,10 @@ mod tests {
 
         // Capture an arbitrary `Error`
         let err = io::Error::from(io::ErrorKind::Other);
-        assert!(err.__private_log_capture_from_error().to_error().is_some());
+        assert!(err.__private_capture_from_error().to_error().is_some());
 
         // Capture a `&dyn Error`
         let err: &dyn error::Error = &err;
-        assert!(err.__private_log_capture_from_error().to_error().is_some());
+        assert!(err.__private_capture_from_error().to_error().is_some());
     }
 }

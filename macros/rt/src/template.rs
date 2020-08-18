@@ -1,6 +1,6 @@
 use std::fmt;
 
-use log::kv::{Key, Source};
+use crate::source::Source;
 
 pub struct Template<'a>(pub fv_template::rt::Template<'a>);
 
@@ -9,11 +9,11 @@ impl<'a> Template<'a> {
         self.0.render(Default::default())
     }
 
-    pub fn render_source<'b>(&'b self, source: impl Source + 'b) -> impl fmt::Display + 'b {
+    pub fn render_source<'b>(&'b self, source: Source<'b>) -> impl fmt::Display + 'b {
         self.0.render(fv_template::rt::Context::new().fill(
             move |write: &mut fmt::Formatter, label| {
                 source
-                    .get(Key::from(label))
+                    .get(label)
                     .map(|value| fmt::Display::fmt(&value, write))
             },
         ))

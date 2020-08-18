@@ -4,10 +4,9 @@ version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
 
-[dependencies.log]
-git = "https://github.com/KodrAus/log.git"
-branch = "feat/kv-error"
-features = ["std", "kv_unstable", "kv_unstable_sval"]
+[dependencies.value-bag]
+path = "../../value"
+features = ["std", "sval"]
 
 [dependencies.fv-template]
 path = "../../template"

@@ -11,7 +11,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template = Template::parse2(input).expect("failed to expand template");
 
     // The log target expression
-    let logger_tokens = template
+    let log_tokens = template
         .before_template_field_values()
         .find(|fv| fv.key_name().map(|k| k.as_str() == "log").unwrap_or(false));
 
@@ -25,7 +25,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template_tokens = template.to_rt_tokens();
 
     // TODO: Actually use the logger token
-    let _ = logger_tokens;
+    let _ = log_tokens;
 
     // The key-value expressions. These are extracted through a `match` expression
     let mut field_values = Vec::new();
@@ -46,9 +46,8 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
         let v = Ident::new(&format!("__tmp{}", field_index), fv.span());
 
-        field_values.push(
-            quote_spanned!(fv.span()=> #(#attrs)* antlog_macros::__private_log_capture!(#fv)),
-        );
+        field_values
+            .push(quote_spanned!(fv.span()=> #(#attrs)* antlog_macros::__private_capture!(#fv)));
         field_bindings.push(v.clone());
 
         // Make sure keys aren't duplicated
@@ -100,15 +99,15 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     quote!({
         match (#(#field_values),*) {
             (#(#field_bindings),*) => {
-                let captured = antlog_macros_rt::__private::Captured {
+                let source = antlog_macros_rt::__private::Source {
                     sorted_key_values: &[#(#sorted_field_bindings),*]
                 };
 
                 let template = antlog_macros_rt::__private::Template(#template_tokens);
 
-                println!("{:?}", captured.sorted_key_values);
+                println!("{:?}", source.sorted_key_values);
                 println!("{}", template.render_template());
-                println!("{}", template.render_source(&captured));
+                println!("{}", template.render_source(source));
             }
         }
     })
@@ -126,14 +125,14 @@ mod tests {
                 quote!("Text and {b: 17} and {a} and {#[debug] c} and {d: String::from(\"short lived\")}"),
                 quote!({
                     match (
-                        antlog_macros::__private_log_capture!(b: 17),
-                        antlog_macros::__private_log_capture!(a),
+                        antlog_macros::__private_capture!(b: 17),
+                        antlog_macros::__private_capture!(a),
                         #[debug]
-                        antlog_macros::__private_log_capture!(c),
-                        antlog_macros::__private_log_capture!(d: String::from("short lived"))
+                        antlog_macros::__private_capture!(c),
+                        antlog_macros::__private_capture!(d: String::from("short lived"))
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3) => {
-                            let captured = antlog_macros_rt::__private::Captured {
+                            let source = antlog_macros_rt::__private::Source {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
@@ -148,9 +147,9 @@ mod tests {
                                 fv_template::rt::Part::Hole ( "d" )
                             ]));
 
-                            println!("{:?}", captured.sorted_key_values);
+                            println!("{:?}", source.sorted_key_values);
                             println!("{}", template.render_template());
-                            println!("{}", template.render_source(&captured));
+                            println!("{}", template.render_source(source));
                         }
                     }
                 }),
@@ -159,10 +158,10 @@ mod tests {
                 quote!(log, "Text and {a}", a: 42),
                 quote!({
                     match (
-                        antlog_macros::__private_log_capture!(a: 42)
+                        antlog_macros::__private_capture!(a: 42)
                     ) {
                         (__tmp0) => {
-                            let captured = antlog_macros_rt::__private::Captured {
+                            let source = antlog_macros_rt::__private::Source {
                                 sorted_key_values: &[__tmp0]
                             };
 
@@ -171,9 +170,9 @@ mod tests {
                                 fv_template::rt::Part::Hole ( "a")
                             ]));
 
-                            println!("{:?}", captured.sorted_key_values);
+                            println!("{:?}", source.sorted_key_values);
                             println!("{}", template.render_template());
-                            println!("{}", template.render_source(&captured));
+                            println!("{}", template.render_source(source));
                         }
                     }
                 })

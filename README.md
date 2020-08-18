@@ -18,3 +18,11 @@ The goals of this experiment are:
 See the `ui/pass` tests for some examples.
 
 The `macros` crate is an alternative `log!` macro that's natively structured. It uses field value syntax within text templates to support interpolated key-value pairs. Templates with structured values are like an alternative `format_args!` that naturally support other capturing methods without needing to invent syntax for flags, and the rendering of late-bound and missing values.
+
+## `template`
+
+The parser behind the `log!` macros that doesn't depend on being consumed in any particular way.
+
+## `value`
+
+The `Value` API taken from `log` and packaged as a standalone library. It's able to capture structured values and convert them between different frameworks.

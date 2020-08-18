@@ -5,7 +5,7 @@ Runtime string template formatting.
 use std::fmt;
 
 /**
-A text template.
+A runtime field-value template.
 */
 pub struct Template<'a> {
     parts: &'a [Part<'a>],
@@ -138,26 +138,6 @@ pub fn template<'a>(parts: &'a [Part<'a>]) -> Template<'a> {
 mod tests {
     use super::*;
 
-    use log::kv::{Key, Source, Value};
-
-    impl<'a> Template<'a> {
-        /**
-        Provide a `Source` to fill the holes in the template with.
-        */
-        pub fn fill_source<S>(
-            self,
-            src: S,
-        ) -> Context<impl Fn(&mut fmt::Formatter, &str) -> Option<fmt::Result>, TMissing>
-        where
-            S: Source,
-        {
-            self.fill(move |write: &mut fmt::Formatter, label| {
-                src.get(Key::from(label))
-                    .map(|value| fmt::Display::fmt(&value, write))
-            })
-        }
-    }
-
     #[test]
     fn render() {
         let cases = vec![
@@ -188,32 +168,6 @@ mod tests {
             let template = template(parts);
 
             let actual = template.render(ctx).to_string();
-
-            assert_eq!(expected, actual);
-        }
-    }
-
-    #[test]
-    fn render_source() {
-        let cases = vec![
-            (
-                &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
-                vec![("world", Value::from(42))],
-                "Hello 42!",
-            ),
-            (
-                &[Part::Text("Hello "), Part::Hole("world"), Part::Text("!")],
-                vec![],
-                "Hello `world`!",
-            ),
-        ];
-
-        for (parts, source, expected) in cases {
-            let template = template(parts);
-
-            let actual = template
-                .render(Context::new().fill_source(source))
-                .to_string();
 
             assert_eq!(expected, actual);
         }
