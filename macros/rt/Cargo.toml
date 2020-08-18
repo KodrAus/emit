@@ -14,3 +14,6 @@ path = "../../template"
 [dependencies.sval]
 version = "1.0.0-alpha.2"
 features = ["std"]
+
+[dependencies.tracing-core]
+version = "0.1"

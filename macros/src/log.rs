@@ -10,11 +10,6 @@ use crate::capture::FieldValueExt;
 pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template = Template::parse2(input).expect("failed to expand template");
 
-    // The log target expression
-    let log_tokens = template
-        .before_template_field_values()
-        .find(|fv| fv.key_name().map(|k| k.as_str() == "log").unwrap_or(false));
-
     // Any field-values that aren't part of the template
     let mut extra_field_values: BTreeMap<_, _> = template
         .after_template_field_values()
@@ -23,9 +18,6 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens();
-
-    // TODO: Actually use the logger token
-    let _ = log_tokens;
 
     // The key-value expressions. These are extracted through a `match` expression
     let mut field_values = Vec::new();
@@ -94,20 +86,37 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         push_field_value(k, fv.clone());
     }
 
-    let sorted_field_bindings = sorted_field_bindings.values();
+    // The log target expression
+    let log_tokens = template
+        .before_template_field_values()
+        .find(|fv| fv.key_name().map(|k| k.as_str() == "log").unwrap_or(false))
+        .map(|fv| {
+            let logger = &fv.expr;
+            quote!(Some(#logger))
+        })
+        .unwrap_or_else(|| quote!(None));
+
+    let field_value_tokens = field_values.iter();
+    let field_binding_tokens = field_bindings.iter();
+    let sorted_field_key_tokens = sorted_field_bindings.keys();
+    let sorted_field_accessor_tokens = 0..sorted_field_bindings.len();
+    let sorted_field_binding_tokens = sorted_field_bindings.values();
 
     quote!({
-        match (#(#field_values),*) {
-            (#(#field_bindings),*) => {
+        match (#(#field_value_tokens),*) {
+            (#(#field_binding_tokens),*) => {
                 let source = antlog_macros_rt::__private::Source {
-                    sorted_key_values: &[#(#sorted_field_bindings),*]
+                    sorted_key_values: &[#(#sorted_field_binding_tokens),*]
                 };
 
                 let template = antlog_macros_rt::__private::Template(#template_tokens);
 
-                println!("{:?}", source.sorted_key_values);
-                println!("{}", template.render_template());
-                println!("{}", template.render_source(source));
+                let record = antlog_macros_rt::__private::Record {
+                    source,
+                    template,
+                };
+
+                antlog_macros_rt::__private_forward_tracing!(#log_tokens, [#(#sorted_field_key_tokens),*], [#(&record.source[#sorted_field_accessor_tokens]),*], &record);
             }
         }
     })
@@ -147,9 +156,17 @@ mod tests {
                                 fv_template::rt::Part::Hole ( "d" )
                             ]));
 
-                            println!("{:?}", source.sorted_key_values);
-                            println!("{}", template.render_template());
-                            println!("{}", template.render_source(source));
+                            let record = antlog_macros_rt::__private::Record {
+                                source,
+                                template,
+                            };
+
+                            antlog_macros_rt::__private_forward_tracing!(
+                                None,
+                                ["a", "b", "c", "d"],
+                                [&record.source[0usize], &record.source[1usize], &record.source[2usize], &record.source[3usize]],
+                                &record
+                            );
                         }
                     }
                 }),
@@ -170,9 +187,17 @@ mod tests {
                                 fv_template::rt::Part::Hole ( "a")
                             ]));
 
-                            println!("{:?}", source.sorted_key_values);
-                            println!("{}", template.render_template());
-                            println!("{}", template.render_source(source));
+                            let record = antlog_macros_rt::__private::Record {
+                                source,
+                                template,
+                            };
+
+                            antlog_macros_rt::__private_forward_tracing!(
+                                Some(log),
+                                ["a"],
+                                [&record.source[0usize]],
+                                &record
+                            );
                         }
                     }
                 })

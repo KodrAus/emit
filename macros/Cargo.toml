@@ -28,3 +28,9 @@ path = "rt"
 
 [dev-dependencies.trybuild]
 version = "1"
+
+[dev-dependencies.tracing]
+version = "0.1"
+
+[dev-dependencies.tracing-subscriber]
+version = "0.2"

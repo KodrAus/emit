@@ -4,6 +4,10 @@
 extern crate antlog_macros;
 
 fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     let a = String::from("hello");
     let c = 42;
     let e = std::io::Error::from(std::io::ErrorKind::Other);

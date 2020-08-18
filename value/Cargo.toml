@@ -3,7 +3,6 @@ name = "value-bag"
 version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
-build = "build.rs"
 
 [features]
 std = []
