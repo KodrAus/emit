@@ -1,6 +1,7 @@
-use std::fmt;
-
-use crate::source::Source;
+use crate::{
+    std::fmt,
+    source::Source,
+};
 
 pub struct Template<'a>(pub fv_template::rt::Template<'a>);
 

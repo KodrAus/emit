@@ -5,24 +5,88 @@ pub struct Record<'a> {
     pub template: Template<'a>,
 }
 
-pub mod console {
-    pub type Callsite = ();
+#[macro_export]
+#[doc(hidden)]
+#[cfg(feature = "tracing")]
+macro_rules! __private_forward {
+    ($($input:tt)*) => {
+        antlog_macros_rt::__private_forward_console!($($input)*);
+        antlog_macros_rt::__private_forward_tracing!($($input)*);
+    };
+}
 
+#[macro_export]
+#[doc(hidden)]
+#[cfg(not(feature = "tracing"))]
+macro_rules! __private_forward {
+    ($($input:tt)*) => {
+        antlog_macros_rt::__private_forward_console!($($input)*);
+    };
+}
+
+pub mod console {
     #[macro_export]
     #[doc(hidden)]
     macro_rules! __private_forward_console {
         ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
-            println!("{:?}", record.source.sorted_key_values);
-            println!("{}", record.template.render_template());
-            println!("{}", record.template.render_source(record.source));
+            println!("{:?}", $record.source.sorted_key_values);
+            println!("{}", $record.template.render_template());
+            println!("{}", $record.template.render_source($record.source));
         }};
     }
 }
 
+#[cfg(feature = "tracing")]
 pub mod tracing {
+    #[macro_export]
+    #[doc(hidden)]
+    macro_rules! __private_forward_tracing {
+        ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+            use antlog_macros_rt::__private::{
+                ValueBag,
+                tracing::{
+                    Callsite,
+                    core::{
+                        field::{self, FieldSet, Value, DebugValue}, identify_callsite, metadata::Kind,
+                        Callsite as TracingCallsite, Level, Metadata, LevelFilter, Event,
+                    },
+                }
+            };
+
+            let level = Level::INFO;
+
+            if level <= LevelFilter::current() {
+                static CALLSITE: Callsite = Callsite::new(&META);
+                static META: Metadata<'static> = Metadata::new(
+                    concat!("event ", file!(), ":", line!()),
+                    module_path!(),
+                    Level::INFO,
+                    Some(file!()),
+                    Some(line!()),
+                    Some(module_path!()),
+                    FieldSet::new(&[$($key),*], identify_callsite!(&CALLSITE)),
+                    Kind::EVENT,
+                );
+
+                CALLSITE.register();
+
+                if CALLSITE.is_enabled() {
+                    let meta = CALLSITE.metadata();
+                    let fields = meta.fields();
+
+                    Event::dispatch(meta, &fields.value_set(&[
+                        $(
+                            (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
+                        ),*
+                    ]));
+                }
+            }
+        }};
+    }
+
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    pub use tracing_core as __tracing;
+    pub use tracing_core as core;
 
     use tracing_core::{
         callsite, dispatcher, Callsite as TracingCallsite, Interest, Metadata, Once,
@@ -88,51 +152,5 @@ pub mod tracing {
         fn metadata(&self) -> &Metadata<'static> {
             &self.meta
         }
-    }
-
-    #[macro_export]
-    #[doc(hidden)]
-    macro_rules! __private_forward_tracing {
-        ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
-            use antlog_macros_rt::__private::{
-                ValueBag,
-                tracing::{
-                    Callsite,
-                    __tracing::{
-                        field::{self, FieldSet, Value, DebugValue}, identify_callsite, metadata::Kind,
-                        Callsite as TracingCallsite, Level, Metadata, LevelFilter, Event,
-                    },
-                }
-            };
-
-            let level = Level::INFO;
-
-            if level <= LevelFilter::current() {
-                static CALLSITE: Callsite = Callsite::new(&META);
-                static META: Metadata<'static> = Metadata::new(
-                    concat!("event ", file!(), ":", line!()),
-                    module_path!(),
-                    Level::INFO,
-                    Some(file!()),
-                    Some(line!()),
-                    Some(module_path!()),
-                    FieldSet::new(&[$($key),*], identify_callsite!(&CALLSITE)),
-                    Kind::EVENT,
-                );
-
-                CALLSITE.register();
-
-                if CALLSITE.is_enabled() {
-                    let meta = CALLSITE.metadata();
-                    let fields = meta.fields();
-
-                    Event::dispatch(meta, &fields.value_set(&[
-                        $(
-                            (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
-                        ),*
-                    ]));
-                }
-            }
-        }};
     }
 }

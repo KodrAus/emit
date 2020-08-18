@@ -1,6 +1,12 @@
-use std::{error, fmt};
+use crate::{
+    std::fmt,
+    value::ValueBag,
+};
 
-use crate::value::ValueBag;
+#[cfg(feature = "std")]
+use crate::std::error::Error;
+
+use sval::value::Value;
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -56,29 +62,31 @@ impl Capture<CaptureDebug> for dyn fmt::Debug {
 
 impl<T> Capture<CaptureSval> for T
 where
-    T: sval::value::Value + 'static,
+    T: Value + 'static,
 {
     default fn capture(&self) -> ValueBag {
         ValueBag::capture_sval(self)
     }
 }
 
-impl Capture<CaptureSval> for dyn sval::value::Value {
+impl Capture<CaptureSval> for dyn Value {
     fn capture(&self) -> ValueBag {
         ValueBag::from(self)
     }
 }
 
+#[cfg(feature = "std")]
 impl<T> Capture<CaptureError> for T
 where
-    T: error::Error + 'static,
+    T: Error + 'static,
 {
     default fn capture(&self) -> ValueBag {
         ValueBag::capture_error(self)
     }
 }
 
-impl Capture<CaptureError> for dyn error::Error {
+#[cfg(feature = "std")]
+impl Capture<CaptureError> for dyn Error {
     fn capture(&self) -> ValueBag {
         ValueBag::from(self)
     }
@@ -145,7 +153,10 @@ impl<T: ?Sized> __PrivateCapture for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fmt;
+    use crate::std::{
+        fmt,
+        string::String,
+    };
 
     #[test]
     fn capture_default() {
@@ -224,31 +235,47 @@ mod tests {
     }
 
     #[test]
-    fn capture_sval() {
-        use std::collections::BTreeMap;
 
-        let mut map = BTreeMap::new();
-        map.insert("a", 42);
-        map.insert("b", 17);
+    fn capture_sval() {
+        use sval::value::{self, Value};
+
+        struct Map;
+
+        impl Value for Map {
+            fn stream(&self, stream: &mut value::Stream) -> value::Result {
+                stream.map_begin(Some(2))?;
+                
+                stream.map_key("a")?;
+                stream.map_value(42)?;
+
+                stream.map_key("b")?;
+                stream.map_value(17)?;
+
+                stream.map_end()
+            }
+        }
+
+        let mut map = Map;
 
         // Capture an arbitrary `Value`
         let _ = map.__private_capture_from_sval();
 
         // Capture a `&dyn Value`
-        let v: &dyn sval::value::Value = &map;
+        let v: &dyn Value = &map;
         let _ = v.__private_capture_from_sval();
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn capture_error() {
-        use std::io;
+        use crate::std::io;
 
         // Capture an arbitrary `Error`
         let err = io::Error::from(io::ErrorKind::Other);
         assert!(err.__private_capture_from_error().to_error().is_some());
 
         // Capture a `&dyn Error`
-        let err: &dyn error::Error = &err;
+        let err: &dyn Error = &err;
         assert!(err.__private_capture_from_error().to_error().is_some());
     }
 }

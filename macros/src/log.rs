@@ -116,7 +116,12 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
                     template,
                 };
 
-                antlog_macros_rt::__private_forward_tracing!(#log_tokens, [#(#sorted_field_key_tokens),*], [#(&record.source[#sorted_field_accessor_tokens]),*], &record);
+                antlog_macros_rt::__private_forward!(
+                    #log_tokens,
+                    [#(#sorted_field_key_tokens),*],
+                    [#(&record.source[#sorted_field_accessor_tokens]),*],
+                    &record
+                );
             }
         }
     })
@@ -161,7 +166,7 @@ mod tests {
                                 template,
                             };
 
-                            antlog_macros_rt::__private_forward_tracing!(
+                            antlog_macros_rt::__private_forward!(
                                 None,
                                 ["a", "b", "c", "d"],
                                 [&record.source[0usize], &record.source[1usize], &record.source[2usize], &record.source[3usize]],
@@ -192,7 +197,7 @@ mod tests {
                                 template,
                             };
 
-                            antlog_macros_rt::__private_forward_tracing!(
+                            antlog_macros_rt::__private_forward!(
                                 Some(log),
                                 ["a"],
                                 [&record.source[0usize]],

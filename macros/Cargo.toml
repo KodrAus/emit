@@ -25,6 +25,7 @@ path = "../template"
 
 [dev-dependencies.antlog_macros_rt]
 path = "rt"
+features = ["std", "tracing"]
 
 [dev-dependencies.trybuild]
 version = "1"

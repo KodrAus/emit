@@ -4,16 +4,21 @@ version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
 
+[features]
+tracing = ["tracing-core"]
+std = ["value-bag/std", "sval/std"]
+
 [dependencies.value-bag]
 path = "../../value"
-features = ["std", "sval"]
+features = ["sval"]
 
 [dependencies.fv-template]
 path = "../../template"
 
 [dependencies.sval]
 version = "1.0.0-alpha.2"
-features = ["std"]
 
 [dependencies.tracing-core]
 version = "0.1"
+default-features = false
+optional = true
