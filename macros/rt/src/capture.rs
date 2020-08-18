@@ -1,7 +1,4 @@
-use crate::{
-    std::fmt,
-    value::ValueBag,
-};
+use crate::{std::fmt, value::ValueBag};
 
 #[cfg(feature = "std")]
 use crate::std::error::Error;
@@ -153,10 +150,7 @@ impl<T: ?Sized> __PrivateCapture for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::std::{
-        fmt,
-        string::String,
-    };
+    use crate::std::{fmt, string::String};
 
     #[test]
     fn capture_default() {
@@ -244,7 +238,7 @@ mod tests {
         impl Value for Map {
             fn stream(&self, stream: &mut value::Stream) -> value::Result {
                 stream.map_begin(Some(2))?;
-                
+
                 stream.map_key("a")?;
                 stream.map_value(42)?;
 

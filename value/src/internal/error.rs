@@ -1,7 +1,9 @@
-use std::{error, fmt};
+use crate::{
+    std::{error, fmt},
+    Slot, ValueBag,
+};
 
 use super::{cast, Inner};
-use crate::{Slot, ValueBag};
 
 impl<'v> ValueBag<'v> {
     /// Get a value from an error.
@@ -81,7 +83,7 @@ impl<'v> From<&'v (dyn error::Error)> for ValueBag<'v> {
 mod tests {
     use super::*;
 
-    use std::io;
+    use crate::std::io;
 
     #[test]
     fn error_capture() {

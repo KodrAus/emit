@@ -1,7 +1,6 @@
 // Test support for inspecting values
 
-use std::fmt;
-use std::str;
+use crate::std::{fmt, str};
 
 use super::internal;
 use super::{Error, ValueBag};

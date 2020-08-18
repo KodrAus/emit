@@ -5,13 +5,12 @@
 
 extern crate sval;
 
-use std::fmt;
+use crate::{std::fmt, Error, Slot, ValueBag};
 
 use super::{
     cast::{self, Cast},
     Inner, Primitive, Visitor,
 };
-use crate::{Error, Slot, ValueBag};
 
 impl<'v> ValueBag<'v> {
     /// Get a value from a structured type.

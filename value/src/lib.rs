@@ -1,5 +1,17 @@
 //! Structured values.
 
+#![no_std]
+
+#[cfg(any(feature = "std", test))]
+#[macro_use]
+#[allow(unused_imports)]
+extern crate std;
+
+#[cfg(not(any(feature = "std", test)))]
+#[macro_use]
+#[allow(unused_imports)]
+extern crate core as std;
+
 mod error;
 mod fill;
 mod impls;

@@ -1,4 +1,4 @@
-use std::fmt;
+use crate::std::fmt;
 
 /// An error encountered while working with structured data.
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl From<fmt::Error> for Error {
 #[cfg(feature = "std")]
 mod std_support {
     use super::*;
-    use std::{error, io};
+    use crate::std::{error, io};
 
     pub(super) type BoxedError = Box<dyn error::Error + Send + Sync>;
 

@@ -1,6 +1,6 @@
 //! Lazy value initialization.
 
-use std::fmt;
+use crate::std::fmt;
 
 use super::internal::{Inner, Visitor};
 use super::{Error, ValueBag};

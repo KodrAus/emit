@@ -4,7 +4,7 @@
 //! but may end up executing arbitrary caller code if the value is complex.
 //! They will also attempt to downcast erased types into a primitive where possible.
 
-use std::{any::TypeId, fmt};
+use crate::std::{any::TypeId, fmt};
 
 use super::{Inner, Primitive, Visitor};
 use crate::{Error, ValueBag};
@@ -366,7 +366,7 @@ impl<'v> Primitive<'v> {
 mod std_support {
     use super::*;
 
-    use std::borrow::Cow;
+    use crate::std::borrow::Cow;
 
     impl<'v> ValueBag<'v> {
         /// Try get a `str` from this value.

@@ -6,14 +6,12 @@ In the future when `min_specialization` is stabilized we could use it instead an
 the `'static` bound altogether.
 */
 
+use crate::std::any::TypeId;
+
+use crate::internal::Primitive;
+
 // Use consts to match a type with a conversion fn
-pub(super) fn from_any<'v, T: ?Sized + 'static>(
-    value: &'v T,
-) -> Option<crate::internal::Primitive<'v>> {
-    use std::any::TypeId;
-
-    use crate::internal::Primitive;
-
+pub(super) fn from_any<'v, T: ?Sized + 'static>(value: &'v T) -> Option<Primitive<'v>> {
     macro_rules! to_primitive {
         ($($ty:ty : ($const_ident:ident, $option_ident:ident),)*) => {
             trait ToPrimitive

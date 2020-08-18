@@ -3,10 +3,9 @@
 //! This module allows any `Value` to implement the `fmt::Debug` and `fmt::Display` traits,
 //! and for any `fmt::Debug` or `fmt::Display` to be captured as a `Value`.
 
-use std::fmt;
+use crate::{std::fmt, Error, Slot, ValueBag};
 
 use super::{cast, Inner, Visitor};
-use crate::{Error, Slot, ValueBag};
 
 impl<'v> ValueBag<'v> {
     /// Get a value from a debuggable type.
