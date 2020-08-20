@@ -65,7 +65,7 @@ pub mod tracing {
                     Some(file!()),
                     Some(line!()),
                     Some(module_path!()),
-                    FieldSet::new(&[$($key),*], identify_callsite!(&CALLSITE)),
+                    FieldSet::new(&["msg", $($key),*], identify_callsite!(&CALLSITE)),
                     Kind::EVENT,
                 );
 
@@ -76,6 +76,7 @@ pub mod tracing {
                     let fields = meta.fields();
 
                     Event::dispatch(meta, &fields.value_set(&[
+                        (&fields.field("msg").unwrap(), Some(&field::display($record.template.render_source($record.source)) as &dyn Value)),
                         $(
                             (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
                         ),*
