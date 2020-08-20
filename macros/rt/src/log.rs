@@ -29,9 +29,10 @@ pub mod console {
     #[doc(hidden)]
     macro_rules! __private_forward_console {
         ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
-            println!("{:?}", $record.source.sorted_key_values);
-            println!("{}", $record.template.render_template());
-            println!("{}", $record.template.render_source($record.source));
+            println!("kvs (debug): {}", $record.source.render_debug());
+            println!("kvs (json):  {}", $record.source.render_json());
+            println!("msg:         {}", $record.template.render_template());
+            println!("template:    {}", $record.template.render_source($record.source));
         }};
     }
 }

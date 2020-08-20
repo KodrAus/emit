@@ -6,6 +6,9 @@
 
 use crate::std::{any::TypeId, fmt};
 
+#[cfg(feature = "std")]
+use crate::std::{borrow::ToOwned, string::String};
+
 use super::{Inner, Primitive, Visitor};
 use crate::{Error, ValueBag};
 

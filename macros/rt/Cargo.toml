@@ -7,6 +7,7 @@ edition = "2018"
 [features]
 tracing = ["tracing-core"]
 std = ["value-bag/std", "sval/std"]
+serde = ["serde_lib", "value-bag/serde"]
 
 [dependencies.value-bag]
 path = "../../value"
@@ -16,6 +17,15 @@ features = ["sval"]
 path = "../../template"
 
 [dependencies.sval]
+version = "1.0.0-alpha.3"
+
+[dependencies.serde_lib]
+version = "1"
+default-features = false
+optional = true
+package = "serde"
+
+[dependencies.sval_json]
 version = "1.0.0-alpha.3"
 
 [dependencies.tracing-core]
