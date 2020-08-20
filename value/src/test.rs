@@ -1,6 +1,6 @@
 // Test support for inspecting values
 
-use crate::std::{fmt, str};
+use crate::std::{fmt, str, string::String};
 
 use super::internal;
 use super::{Error, ValueBag};
@@ -33,6 +33,9 @@ pub(crate) enum Token {
 
     #[cfg(feature = "sval")]
     Sval,
+
+    #[cfg(feature = "serde")]
+    Serde,
 }
 
 #[cfg(test)]
@@ -90,6 +93,12 @@ impl<'v> ValueBag<'v> {
             #[cfg(feature = "sval")]
             fn sval(&mut self, _: &dyn internal::sval::Value) -> Result<(), Error> {
                 self.0 = Some(Token::Sval);
+                Ok(())
+            }
+
+            #[cfg(feature = "serde")]
+            fn serde(&mut self, _: &dyn internal::serde::Serialize) -> Result<(), Error> {
+                self.0 = Some(Token::Serde);
                 Ok(())
             }
         }

@@ -40,7 +40,10 @@ impl_from_primitive![
 
 #[cfg(test)]
 mod tests {
-    use crate::test::{IntoValueBag, Token};
+    use crate::{
+        std::{borrow::ToOwned, string::ToString},
+        test::{IntoValueBag, Token},
+    };
 
     #[test]
     fn test_into_display() {

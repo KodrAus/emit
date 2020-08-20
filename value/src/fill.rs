@@ -84,6 +84,7 @@ impl<'s, 'f> Slot<'s, 'f> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::std::string::ToString;
 
     #[test]
     fn fill_value_borrowed() {

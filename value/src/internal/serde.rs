@@ -176,7 +176,7 @@ impl<'v> From<&'v (dyn Serialize)> for ValueBag<'v> {
 pub use erased_serde::Serialize;
 
 pub(super) fn fmt(f: &mut fmt::Formatter, v: &dyn Serialize) -> Result<(), Error> {
-    serde_fmt::to_writer(v, f)?;
+    fmt::Debug::fmt(&serde_fmt::to_debug(v), f)?;
     Ok(())
 }
 
@@ -399,3 +399,126 @@ impl serde_lib::ser::Error for InvalidCast {
 }
 
 impl serde_lib::ser::StdError for InvalidCast {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::Token;
+
+    #[test]
+    fn serde_capture() {
+        assert_eq!(ValueBag::capture_serde(&42u64).to_token(), Token::U64(42));
+    }
+
+    #[test]
+    fn serde_cast() {
+        assert_eq!(
+            42u32,
+            ValueBag::capture_serde(&42u64)
+                .to_u32()
+                .expect("invalid value")
+        );
+
+        assert_eq!(
+            "a string",
+            ValueBag::capture_serde(&"a string")
+                .to_borrowed_str()
+                .expect("invalid value")
+        );
+
+        #[cfg(feature = "std")]
+        assert_eq!(
+            "a string",
+            ValueBag::capture_serde(&"a string")
+                .to_str()
+                .expect("invalid value")
+        );
+    }
+
+    #[test]
+    fn serde_downcast() {
+        #[derive(Debug, PartialEq, Eq)]
+        struct Timestamp(usize);
+
+        impl serde_lib::Serialize for Timestamp {
+            fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde_lib::Serializer,
+            {
+                s.serialize_u64(self.0 as u64)
+            }
+        }
+
+        let ts = Timestamp(42);
+
+        assert_eq!(
+            &ts,
+            ValueBag::capture_serde(&ts)
+                .downcast_ref::<Timestamp>()
+                .expect("invalid value")
+        );
+    }
+
+    #[test]
+    fn serde_structured() {
+        use serde_test::{assert_ser_tokens, Token};
+
+        assert_ser_tokens(&ValueBag::from(42u64), &[Token::U64(42)]);
+    }
+
+    #[test]
+    fn serde_debug() {
+        struct TestSerde;
+
+        impl serde_lib::Serialize for TestSerde {
+            fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde_lib::Serializer,
+            {
+                s.serialize_u64(42)
+            }
+        }
+
+        assert_eq!(
+            format!("{:04?}", 42u64),
+            format!("{:04?}", ValueBag::capture_serde(&TestSerde)),
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "sval")]
+    fn serde_sval() {
+        use sval::test::Token;
+
+        struct TestSerde;
+
+        impl serde_lib::Serialize for TestSerde {
+            fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde_lib::Serializer,
+            {
+                s.serialize_u64(42)
+            }
+        }
+
+        assert_eq!(
+            vec![Token::Unsigned(42)],
+            sval::test::tokens(ValueBag::capture_serde(&TestSerde))
+        );
+    }
+
+    #[cfg(feature = "std")]
+    mod std_support {
+        use super::*;
+
+        #[test]
+        fn serde_cast() {
+            assert_eq!(
+                "a string",
+                ValueBag::capture_serde(&"a string".to_owned())
+                    .to_str()
+                    .expect("invalid value")
+            );
+        }
+    }
+}

@@ -42,3 +42,6 @@ version = "1.0.0-alpha.2"
 features = ["test"]
 git = "https://github.com/sval-rs/sval.git"
 branch = "fix/serde1-with-std"
+
+[dev-dependencies.serde_test]
+version = "1"

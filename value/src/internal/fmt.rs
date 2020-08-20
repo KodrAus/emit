@@ -260,7 +260,10 @@ impl<'v> From<&'v (dyn Display)> for ValueBag<'v> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test::{IntoValueBag, Token};
+    use crate::{
+        std::string::ToString,
+        test::{IntoValueBag, Token},
+    };
 
     #[test]
     fn fmt_capture() {

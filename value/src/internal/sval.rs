@@ -183,7 +183,7 @@ impl Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kv::value::test::Token;
+    use crate::test::Token;
 
     #[test]
     fn sval_capture() {
@@ -258,6 +258,22 @@ mod tests {
             format!("{:04?}", 42u64),
             format!("{:04?}", ValueBag::capture_sval(&TestSval)),
         );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn sval_serde() {
+        use serde_test::{assert_ser_tokens, Token};
+
+        struct TestSval;
+
+        impl Value for TestSval {
+            fn stream(&self, stream: &mut sval::value::Stream) -> sval::value::Result {
+                stream.u64(42)
+            }
+        }
+
+        assert_ser_tokens(&ValueBag::capture_sval(&TestSval), &[Token::U64(42)]);
     }
 
     #[cfg(feature = "std")]
