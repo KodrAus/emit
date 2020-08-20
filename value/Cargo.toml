@@ -6,13 +6,39 @@ edition = "2018"
 
 [features]
 std = []
+serde = [
+    "serde_lib",
+    "sval/serde1",
+    "sval/alloc",
+    "erased-serde/alloc",
+    "serde_fmt"
+]
 
 [dependencies.sval]
 version = "1.0.0-alpha.2"
 optional = true
 default-features = false
 features = ["fmt"]
+git = "https://github.com/sval-rs/sval.git"
+branch = "fix/serde1-with-std"
+
+[dependencies.serde_lib]
+version = "1"
+default-features = false
+optional = true
+package = "serde"
+
+[dependencies.serde_fmt]
+version = "1"
+optional = true
+
+[dependencies.erased-serde]
+version = "0.3"
+default-features = false
+optional = true
 
 [dev-dependencies.sval]
 version = "1.0.0-alpha.2"
 features = ["test"]
+git = "https://github.com/sval-rs/sval.git"
+branch = "fix/serde1-with-std"

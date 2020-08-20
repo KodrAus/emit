@@ -11,6 +11,8 @@ pub(super) mod cast;
 #[cfg(feature = "std")]
 pub(super) mod error;
 pub(super) mod fmt;
+#[cfg(feature = "serde")]
+pub(super) mod serde;
 #[cfg(feature = "sval")]
 pub(super) mod sval;
 
@@ -45,6 +47,13 @@ pub(super) enum Inner<'v> {
         value: &'v dyn sval::Value,
         type_id: Option<TypeId>,
     },
+
+    #[cfg(feature = "serde")]
+    /// A structured value from `serde`.
+    Serde {
+        value: &'v dyn serde::Serialize,
+        type_id: Option<TypeId>,
+    },
 }
 
 impl<'v> Inner<'v> {
@@ -61,6 +70,9 @@ impl<'v> Inner<'v> {
 
             #[cfg(feature = "sval")]
             Inner::Sval { value, .. } => visitor.sval(value),
+
+            #[cfg(feature = "serde")]
+            Inner::Serde { value, .. } => visitor.serde(value),
         }
     }
 }
@@ -90,6 +102,9 @@ pub(super) trait Visitor<'v> {
 
     #[cfg(feature = "sval")]
     fn sval(&mut self, v: &dyn sval::Value) -> Result<(), Error>;
+
+    #[cfg(feature = "serde")]
+    fn serde(&mut self, v: &dyn serde::Serialize) -> Result<(), Error>;
 }
 
 /// A captured primitive value.

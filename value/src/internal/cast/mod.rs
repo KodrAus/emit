@@ -209,6 +209,11 @@ impl<'v> ValueBag<'v> {
                 type_id: Some(type_id),
                 value,
             } if type_id == target => Some(unsafe { &*(value as *const _ as *const T) }),
+            #[cfg(feature = "serde")]
+            Inner::Serde {
+                type_id: Some(type_id),
+                value,
+            } if type_id == target => Some(unsafe { &*(value as *const _ as *const T) }),
             _ => None,
         }
     }
@@ -278,6 +283,12 @@ impl<'v> Inner<'v> {
             #[cfg(feature = "sval")]
             fn sval(&mut self, v: &dyn super::sval::Value) -> Result<(), Error> {
                 self.0 = super::sval::cast(v);
+                Ok(())
+            }
+
+            #[cfg(feature = "serde")]
+            fn serde(&mut self, v: &dyn super::serde::Serialize) -> Result<(), Error> {
+                self.0 = super::serde::cast(v);
                 Ok(())
             }
         }

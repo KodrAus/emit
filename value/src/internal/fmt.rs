@@ -1,7 +1,7 @@
 //! Integration between `Value` and `std::fmt`.
 //!
-//! This module allows any `Value` to implement the `fmt::Debug` and `fmt::Display` traits,
-//! and for any `fmt::Debug` or `fmt::Display` to be captured as a `Value`.
+//! This module allows any `Value` to implement the `Debug` and `Display` traits,
+//! and for any `Debug` or `Display` to be captured as a `Value`.
 
 use crate::{std::fmt, Error, Slot, ValueBag};
 
@@ -14,7 +14,7 @@ impl<'v> ValueBag<'v> {
     /// before resorting to using its `Debug` implementation.
     pub fn capture_debug<T>(value: &'v T) -> Self
     where
-        T: fmt::Debug + 'static,
+        T: Debug + 'static,
     {
         cast::try_from_primitive(value).unwrap_or(ValueBag {
             inner: Inner::Debug {
@@ -30,7 +30,7 @@ impl<'v> ValueBag<'v> {
     /// before resorting to using its `Display` implementation.
     pub fn capture_display<T>(value: &'v T) -> Self
     where
-        T: fmt::Display + 'static,
+        T: Display + 'static,
     {
         cast::try_from_primitive(value).unwrap_or(ValueBag {
             inner: Inner::Display {
@@ -51,7 +51,7 @@ impl<'s, 'f> Slot<'s, 'f> {
     /// Calling more than a single `fill` method on this slot will panic.
     pub fn fill_debug<T>(&mut self, value: T) -> Result<(), Error>
     where
-        T: fmt::Debug,
+        T: Debug,
     {
         self.fill(|visitor| visitor.debug(&value))
     }
@@ -65,7 +65,7 @@ impl<'s, 'f> Slot<'s, 'f> {
     /// Calling more than a single `fill` method on this slot will panic.
     pub fn fill_display<T>(&mut self, value: T) -> Result<(), Error>
     where
-        T: fmt::Display,
+        T: Display,
     {
         self.fill(|visitor| visitor.display(&value))
     }
@@ -73,55 +73,55 @@ impl<'s, 'f> Slot<'s, 'f> {
 
 pub use self::fmt::{Debug, Display};
 
-impl<'v> fmt::Debug for ValueBag<'v> {
+impl<'v> Debug for ValueBag<'v> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         struct DebugVisitor<'a, 'b: 'a>(&'a mut fmt::Formatter<'b>);
 
         impl<'a, 'b: 'a, 'v> Visitor<'v> for DebugVisitor<'a, 'b> {
-            fn debug(&mut self, v: &dyn fmt::Debug) -> Result<(), Error> {
-                fmt::Debug::fmt(v, self.0)?;
+            fn debug(&mut self, v: &dyn Debug) -> Result<(), Error> {
+                Debug::fmt(v, self.0)?;
 
                 Ok(())
             }
 
-            fn display(&mut self, v: &dyn fmt::Display) -> Result<(), Error> {
-                fmt::Display::fmt(v, self.0)?;
+            fn display(&mut self, v: &dyn Display) -> Result<(), Error> {
+                Display::fmt(v, self.0)?;
 
                 Ok(())
             }
 
             fn u64(&mut self, v: u64) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn i64(&mut self, v: i64) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn f64(&mut self, v: f64) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn bool(&mut self, v: bool) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn char(&mut self, v: char) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn str(&mut self, v: &str) -> Result<(), Error> {
-                fmt::Debug::fmt(&v, self.0)?;
+                Debug::fmt(&v, self.0)?;
 
                 Ok(())
             }
@@ -132,7 +132,7 @@ impl<'v> fmt::Debug for ValueBag<'v> {
 
             #[cfg(feature = "std")]
             fn error(&mut self, v: &dyn std::error::Error) -> Result<(), Error> {
-                fmt::Debug::fmt(v, self.0)?;
+                Debug::fmt(v, self.0)?;
 
                 Ok(())
             }
@@ -140,6 +140,11 @@ impl<'v> fmt::Debug for ValueBag<'v> {
             #[cfg(feature = "sval")]
             fn sval(&mut self, v: &dyn super::sval::Value) -> Result<(), Error> {
                 super::sval::fmt(self.0, v)
+            }
+
+            #[cfg(feature = "serde")]
+            fn serde(&mut self, v: &dyn super::serde::Serialize) -> Result<(), Error> {
+                super::serde::fmt(self.0, v)
             }
         }
 
@@ -149,55 +154,55 @@ impl<'v> fmt::Debug for ValueBag<'v> {
     }
 }
 
-impl<'v> fmt::Display for ValueBag<'v> {
+impl<'v> Display for ValueBag<'v> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         struct DisplayVisitor<'a, 'b: 'a>(&'a mut fmt::Formatter<'b>);
 
         impl<'a, 'b: 'a, 'v> Visitor<'v> for DisplayVisitor<'a, 'b> {
-            fn debug(&mut self, v: &dyn fmt::Debug) -> Result<(), Error> {
-                fmt::Debug::fmt(v, self.0)?;
+            fn debug(&mut self, v: &dyn Debug) -> Result<(), Error> {
+                Debug::fmt(v, self.0)?;
 
                 Ok(())
             }
 
-            fn display(&mut self, v: &dyn fmt::Display) -> Result<(), Error> {
-                fmt::Display::fmt(v, self.0)?;
+            fn display(&mut self, v: &dyn Display) -> Result<(), Error> {
+                Display::fmt(v, self.0)?;
 
                 Ok(())
             }
 
             fn u64(&mut self, v: u64) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn i64(&mut self, v: i64) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn f64(&mut self, v: f64) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn bool(&mut self, v: bool) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn char(&mut self, v: char) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
 
             fn str(&mut self, v: &str) -> Result<(), Error> {
-                fmt::Display::fmt(&v, self.0)?;
+                Display::fmt(&v, self.0)?;
 
                 Ok(())
             }
@@ -208,7 +213,7 @@ impl<'v> fmt::Display for ValueBag<'v> {
 
             #[cfg(feature = "std")]
             fn error(&mut self, v: &dyn std::error::Error) -> Result<(), Error> {
-                fmt::Display::fmt(v, self.0)?;
+                Display::fmt(v, self.0)?;
 
                 Ok(())
             }
@@ -216,6 +221,11 @@ impl<'v> fmt::Display for ValueBag<'v> {
             #[cfg(feature = "sval")]
             fn sval(&mut self, v: &dyn super::sval::Value) -> Result<(), Error> {
                 super::sval::fmt(self.0, v)
+            }
+
+            #[cfg(feature = "serde")]
+            fn serde(&mut self, v: &dyn super::serde::Serialize) -> Result<(), Error> {
+                super::serde::fmt(self.0, v)
             }
         }
 
@@ -225,8 +235,8 @@ impl<'v> fmt::Display for ValueBag<'v> {
     }
 }
 
-impl<'v> From<&'v (dyn fmt::Debug)> for ValueBag<'v> {
-    fn from(value: &'v (dyn fmt::Debug)) -> ValueBag<'v> {
+impl<'v> From<&'v (dyn Debug)> for ValueBag<'v> {
+    fn from(value: &'v (dyn Debug)) -> ValueBag<'v> {
         ValueBag {
             inner: Inner::Debug {
                 value,
@@ -236,8 +246,8 @@ impl<'v> From<&'v (dyn fmt::Debug)> for ValueBag<'v> {
     }
 }
 
-impl<'v> From<&'v (dyn fmt::Display)> for ValueBag<'v> {
-    fn from(value: &'v (dyn fmt::Display)) -> ValueBag<'v> {
+impl<'v> From<&'v (dyn Display)> for ValueBag<'v> {
+    fn from(value: &'v (dyn Display)) -> ValueBag<'v> {
         ValueBag {
             inner: Inner::Display {
                 value,
@@ -293,7 +303,7 @@ mod tests {
         #[derive(Debug, PartialEq, Eq)]
         struct Timestamp(usize);
 
-        impl fmt::Display for Timestamp {
+        impl Display for Timestamp {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "time is {}", self.0)
             }
