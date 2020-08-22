@@ -13,7 +13,11 @@ Logging statements.
 */
 #[proc_macro]
 pub fn log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
+    if log::matches_build_filter() {
+        proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
+    } else {
+        proc_macro::TokenStream::new()
+    }
 }
 
 /**

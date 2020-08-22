@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, mem};
+use std::{collections::BTreeMap, mem, env};
 
 use proc_macro2::TokenStream;
 use syn::{spanned::Spanned, Expr, ExprPath, FieldValue, Ident};
@@ -6,6 +6,14 @@ use syn::{spanned::Spanned, Expr, ExprPath, FieldValue, Ident};
 use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
+
+pub(super) fn matches_build_filter() -> bool {
+    // Just a simple equality check as an example
+    match (env::var("ANTLOG_FILTER"), env::var("CARGO_CRATE_NAME")) {
+        (Ok(filter), Ok(this_crate)) => filter == this_crate,
+        _ => true,
+    }
+}
 
 pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template = Template::parse2(input).expect("failed to expand template");
