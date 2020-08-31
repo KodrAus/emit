@@ -3,6 +3,9 @@ use crate::{std::fmt, value::ValueBag};
 #[cfg(feature = "std")]
 use crate::std::error::Error;
 
+#[cfg(feature = "serde")]
+use serde_lib::Serialize;
+
 use sval::value::Value;
 
 /**
@@ -24,6 +27,7 @@ extern "C" {
     pub type CaptureDisplay;
     pub type CaptureDebug;
     pub type CaptureSval;
+    pub type CaptureSerde;
     pub type CaptureError;
 }
 
@@ -69,6 +73,16 @@ where
 impl Capture<CaptureSval> for dyn Value {
     fn capture(&self) -> ValueBag {
         ValueBag::from(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T> Capture<CaptureSerde> for T
+where
+    T: Serialize + 'static,
+{
+    default fn capture(&self) -> ValueBag {
+        ValueBag::capture_serde(self)
     }
 }
 
@@ -133,6 +147,13 @@ pub trait __PrivateCapture {
     fn __private_capture_from_sval(&self) -> ValueBag
     where
         Self: Capture<CaptureSval>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_capture_from_serde(&self) -> ValueBag
+    where
+        Self: Capture<CaptureSerde>,
     {
         Capture::capture(self)
     }
@@ -257,6 +278,14 @@ mod tests {
         // Capture a `&dyn Value`
         let v: &dyn Value = &map;
         let _ = v.__private_capture_from_sval();
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn capture_serde() {
+        let tuple = (1, 2, 3, 4, 5);
+
+        let _ = tuple.__private_capture_from_serde();
     }
 
     #[test]

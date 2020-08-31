@@ -67,6 +67,20 @@ pub fn sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_m
 }
 
 /**
+Capture a key-value pair using its `serde::Serialize` implementation.
+*/
+#[proc_macro_attribute]
+pub fn serde(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::rename_capture_tokens(
+        capture::RenameCaptureTokens {
+            expr: TokenStream::from(item),
+            predicate: |ident| ident.starts_with("__private_capture"),
+            to: quote!(__private_capture_from_serde),
+        },
+    ))
+}
+
+/**
 Capture an Error.
 
 There should only be a single `#[error]` attribute per log statement.
@@ -119,6 +133,15 @@ pub fn __private_capture_from_sval(item: proc_macro::TokenStream) -> proc_macro:
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |_| quote!(__private_capture_from_sval),
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_capture_from_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_capture_from_serde),
     }))
 }
 

@@ -24,9 +24,19 @@ version = "1"
 [dependencies.fv-template]
 path = "../template"
 
+[dev-dependencies.serde]
+version = "1"
+
+[dev-dependencies.serde_derive]
+version = "1"
+
+[dev-dependencies.uuid]
+version = "0.8"
+features = ["v4", "serde"]
+
 [dev-dependencies.emit_macros_rt]
 path = "rt"
-features = ["std", "tracing"]
+features = ["std", "tracing", "serde"]
 
 [dev-dependencies.trybuild]
 version = "1"
