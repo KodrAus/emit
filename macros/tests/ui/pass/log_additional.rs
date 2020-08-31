@@ -1,7 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
 #[macro_use]
-extern crate antlog_macros;
+extern crate emit_macros;
 
 fn main() {
     tracing_subscriber::fmt().init();
@@ -16,7 +16,7 @@ fn main() {
         map
     };
 
-    log!("There's no replacements here",
+    emit!("There's no replacements here",
         a,
         b: 17,
         #[debug]

@@ -28,7 +28,7 @@ fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
 
     quote!(
         {
-            use antlog_macros_rt::__private::__PrivateCapture;
+            use emit_macros_rt::__private::__PrivateCapture;
             (#key_expr, (#expr).#fn_name())
         }
     )
@@ -125,7 +125,7 @@ mod tests {
                 quote!(a),
                 quote!(__private_capture_with_default),
                 quote!({
-                    use antlog_macros_rt::__private::__PrivateCapture;
+                    use emit_macros_rt::__private::__PrivateCapture;
                     ("a", (a).__private_capture_with_default())
                 }),
             ),
@@ -133,7 +133,7 @@ mod tests {
                 quote!(a: 42),
                 quote!(__private_capture_with_default),
                 quote!({
-                    use antlog_macros_rt::__private::__PrivateCapture;
+                    use emit_macros_rt::__private::__PrivateCapture;
                     ("a", (42).__private_capture_with_default())
                 }),
             ),

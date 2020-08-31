@@ -5,16 +5,17 @@ extern crate quote;
 
 use proc_macro2::TokenStream;
 
+mod filter;
 mod capture;
-mod log;
+mod emit;
 
 /**
 Logging statements.
 */
 #[proc_macro]
-pub fn log(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    if log::matches_build_filter() {
-        proc_macro::TokenStream::from(log::expand_tokens(TokenStream::from(item)))
+pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    if filter::matches_build_filter() {
+        proc_macro::TokenStream::from(emit::expand_tokens(TokenStream::from(item)))
     } else {
         proc_macro::TokenStream::new()
     }

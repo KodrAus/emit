@@ -1,5 +1,5 @@
 [package]
-name = "antlog_macros"
+name = "emit_macros"
 version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
@@ -24,7 +24,7 @@ version = "1"
 [dependencies.fv-template]
 path = "../template"
 
-[dev-dependencies.antlog_macros_rt]
+[dev-dependencies.emit_macros_rt]
 path = "rt"
 features = ["std", "tracing"]
 

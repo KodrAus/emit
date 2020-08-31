@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, mem, env};
+use std::{collections::BTreeMap, mem};
 
 use proc_macro2::TokenStream;
 use syn::{spanned::Spanned, Expr, ExprPath, FieldValue, Ident};
@@ -6,14 +6,6 @@ use syn::{spanned::Spanned, Expr, ExprPath, FieldValue, Ident};
 use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
-
-pub(super) fn matches_build_filter() -> bool {
-    // Just a simple equality check as an example
-    match (env::var("ANTLOG_FILTER"), env::var("CARGO_CRATE_NAME")) {
-        (Ok(filter), Ok(this_crate)) => filter == this_crate,
-        _ => true,
-    }
-}
 
 pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template = Template::parse2(input).expect("failed to expand template");
@@ -47,7 +39,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         let v = Ident::new(&format!("__tmp{}", field_index), fv.span());
 
         field_values
-            .push(quote_spanned!(fv.span()=> #(#attrs)* antlog_macros::__private_capture!(#fv)));
+            .push(quote_spanned!(fv.span()=> #(#attrs)* emit_macros::__private_capture!(#fv)));
         field_bindings.push(v.clone());
 
         // Make sure keys aren't duplicated
@@ -113,18 +105,18 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     quote!({
         match (#(#field_value_tokens),*) {
             (#(#field_binding_tokens),*) => {
-                let source = antlog_macros_rt::__private::Source {
+                let source = emit_macros_rt::__private::Source {
                     sorted_key_values: &[#(#sorted_field_binding_tokens),*]
                 };
 
-                let template = antlog_macros_rt::__private::Template(#template_tokens);
+                let template = emit_macros_rt::__private::Template(#template_tokens);
 
-                let record = antlog_macros_rt::__private::Record {
+                let record = emit_macros_rt::__private::Record {
                     source,
                     template,
                 };
 
-                antlog_macros_rt::__private_forward!(
+                emit_macros_rt::__private_forward!(
                     #log_tokens,
                     [#(#sorted_field_key_tokens),*],
                     [#(&record.source[#sorted_field_accessor_tokens]),*],
@@ -141,24 +133,24 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn expand_log() {
+    fn expand_emit() {
         let cases = vec![
             (
                 quote!("Text and {b: 17} and {a} and {#[debug] c} and {d: String::from(\"short lived\")}"),
                 quote!({
                     match (
-                        antlog_macros::__private_capture!(b: 17),
-                        antlog_macros::__private_capture!(a),
+                        emit_macros::__private_capture!(b: 17),
+                        emit_macros::__private_capture!(a),
                         #[debug]
-                        antlog_macros::__private_capture!(c),
-                        antlog_macros::__private_capture!(d: String::from("short lived"))
+                        emit_macros::__private_capture!(c),
+                        emit_macros::__private_capture!(d: String::from("short lived"))
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3) => {
-                            let source = antlog_macros_rt::__private::Source {
+                            let source = emit_macros_rt::__private::Source {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
-                            let template = antlog_macros_rt::__private::Template(fv_template::rt::template(&[
+                            let template = emit_macros_rt::__private::Template(fv_template::rt::template(&[
                                 fv_template::rt::Part::Text("Text and "),
                                 fv_template::rt::Part::Hole ( "b"),
                                 fv_template::rt::Part::Text(" and "),
@@ -169,12 +161,12 @@ mod tests {
                                 fv_template::rt::Part::Hole ( "d" )
                             ]));
 
-                            let record = antlog_macros_rt::__private::Record {
+                            let record = emit_macros_rt::__private::Record {
                                 source,
                                 template,
                             };
 
-                            antlog_macros_rt::__private_forward!(
+                            emit_macros_rt::__private_forward!(
                                 None,
                                 ["a", "b", "c", "d"],
                                 [&record.source[0usize], &record.source[1usize], &record.source[2usize], &record.source[3usize]],
@@ -188,24 +180,24 @@ mod tests {
                 quote!(log, "Text and {a}", a: 42),
                 quote!({
                     match (
-                        antlog_macros::__private_capture!(a: 42)
+                        emit_macros::__private_capture!(a: 42)
                     ) {
                         (__tmp0) => {
-                            let source = antlog_macros_rt::__private::Source {
+                            let source = emit_macros_rt::__private::Source {
                                 sorted_key_values: &[__tmp0]
                             };
 
-                            let template = antlog_macros_rt::__private::Template(fv_template::rt::template(&[
+                            let template = emit_macros_rt::__private::Template(fv_template::rt::template(&[
                                 fv_template::rt::Part::Text("Text and "),
                                 fv_template::rt::Part::Hole ( "a")
                             ]));
 
-                            let record = antlog_macros_rt::__private::Record {
+                            let record = emit_macros_rt::__private::Record {
                                 source,
                                 template,
                             };
 
-                            antlog_macros_rt::__private_forward!(
+                            emit_macros_rt::__private_forward!(
                                 Some(log),
                                 ["a"],
                                 [&record.source[0usize]],

@@ -1,7 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
 #[macro_use]
-extern crate antlog_macros;
+extern crate emit_macros;
 
 fn main() {
     tracing_subscriber::fmt().init();
@@ -16,5 +16,5 @@ fn main() {
         map
     };
 
-    log!("Text and {a} and {b: 17} and {#[debug] c} or {#[display] d: String::from(\"short lived!\")} and {err: e} and {#[sval] f}");
+    emit!("Text and {a} and {b: 17} and {#[debug] c} or {#[display] d: String::from(\"short lived!\")} and {err: e} and {#[sval] f}");
 }
