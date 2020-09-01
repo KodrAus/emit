@@ -83,7 +83,10 @@ impl<'v> From<&'v (dyn error::Error)> for ValueBag<'v> {
 mod tests {
     use super::*;
 
-    use crate::std::io;
+    use crate::std::{
+        io,
+        string::ToString,
+    };
 
     #[test]
     fn error_capture() {

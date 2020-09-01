@@ -270,7 +270,7 @@ mod tests {
             }
         }
 
-        let mut map = Map;
+        let map = Map;
 
         // Capture an arbitrary `Value`
         let _ = map.__private_capture_from_sval();
