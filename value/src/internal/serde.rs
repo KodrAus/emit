@@ -511,6 +511,8 @@ mod tests {
     mod std_support {
         use super::*;
 
+        use crate::std::borrow::ToOwned;
+
         #[test]
         fn serde_cast() {
             assert_eq!(
