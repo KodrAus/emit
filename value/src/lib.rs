@@ -1,5 +1,8 @@
 //! Structured values.
 
+// TODO: This will be necessary after https://github.com/rust-lang/rust/pull/77083 hits nightly
+// #![cfg_attr(value_bag_const_type_id, feature(const_type_id))]
+
 #![no_std]
 
 #[cfg(any(feature = "std", test))]
