@@ -9,19 +9,23 @@ pub struct Record<'a> {
 #[doc(hidden)]
 #[cfg(feature = "tracing")]
 macro_rules! __private_forward {
-    ($($input:tt)*) => {
-        emit_rt::__private_forward_console!($($input)*);
-        emit_rt::__private_forward_tracing!($($input)*);
-    };
+    ($($input:tt)*) => {{
+        extern crate emit;
+
+        self::emit::__private_forward_console!($($input)*);
+        self::emit::__private_forward_tracing!($($input)*);
+    }};
 }
 
 #[macro_export]
 #[doc(hidden)]
 #[cfg(not(feature = "tracing"))]
 macro_rules! __private_forward {
-    ($($input:tt)*) => {
-        emit_rt::__private_forward_console!($($input)*);
-    };
+    ($($input:tt)*) => {{
+        extern crate emit;
+
+        self::emit::__private_forward_console!($($input)*);
+    }};
 }
 
 pub mod console {
@@ -29,6 +33,10 @@ pub mod console {
     #[doc(hidden)]
     macro_rules! __private_forward_console {
         ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+            extern crate emit;
+
+            use self::emit::__private::TemplateRender;
+
             println!("kvs (debug): {}", $record.source.render_debug());
             println!("kvs (json):  {}", $record.source.render_json());
             println!("msg:         {}", $record.template.render_template());
@@ -43,8 +51,11 @@ pub mod tracing {
     #[doc(hidden)]
     macro_rules! __private_forward_tracing {
         ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
-            use emit_rt::__private::{
+            extern crate emit;
+
+            use self::emit::__private::{
                 ValueBag,
+                TemplateRender,
                 tracing::{
                     Callsite,
                     core::{

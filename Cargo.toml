@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "rt"
+    "ct",
+    "rt",
 ]
 
 [package]
@@ -8,26 +9,12 @@ name = "emit"
 version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
-build = "build.rs"
 
-[lib]
-proc-macro = true
+[dependencies.emit_rt]
+path = "rt"
 
-[dependencies.proc-macro2]
-version = "1"
-
-[dependencies.quote]
-version = "1"
-
-[dependencies.syn]
-version = "1"
-features = ["full", "extra-traits", "visit-mut"]
-
-[dependencies.thiserror]
-version = "1"
-
-[dependencies.fv-template]
-git = "https://github.com/sval-rs/fv-template"
+[dependencies.emit_ct]
+path = "ct"
 
 [dev-dependencies.serde]
 version = "1"

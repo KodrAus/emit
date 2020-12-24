@@ -17,7 +17,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         .collect();
 
     // A runtime representation of the template
-    let template_tokens = template.to_rt_tokens();
+    let template_tokens = template.to_rt_tokens(quote!(emit::__private));
 
     // The key-value expressions. These are extracted through a `match` expression
     let mut field_values = Vec::new();
@@ -105,18 +105,18 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     quote!({
         match (#(#field_value_tokens),*) {
             (#(#field_binding_tokens),*) => {
-                let source = emit_rt::__private::Source {
+                let source = emit::__private::Source {
                     sorted_key_values: &[#(#sorted_field_binding_tokens),*]
                 };
 
-                let template = emit_rt::__private::Template(#template_tokens);
+                let template = #template_tokens;
 
-                let record = emit_rt::__private::Record {
+                let record = emit::__private::Record {
                     source,
                     template,
                 };
 
-                emit_rt::__private_forward!(
+                emit::__private_forward!(
                     #log_tokens,
                     [#(#sorted_field_key_tokens),*],
                     [#(&record.source[#sorted_field_accessor_tokens]),*],
@@ -146,27 +146,27 @@ mod tests {
                         emit::__private_capture!(d: String::from("short lived"))
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3) => {
-                            let source = emit_rt::__private::Source {
+                            let source = emit::__private::Source {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
-                            let template = emit_rt::__private::Template(fv_template::rt::template(&[
-                                fv_template::rt::Part::Text("Text and "),
-                                fv_template::rt::Part::Hole ( "b"),
-                                fv_template::rt::Part::Text(" and "),
-                                fv_template::rt::Part::Hole ( "a"),
-                                fv_template::rt::Part::Text(" and "),
-                                fv_template::rt::Part::Hole ( "c" ),
-                                fv_template::rt::Part::Text(" and "),
-                                fv_template::rt::Part::Hole ( "d" )
-                            ]));
+                            let template = emit::__private::template(&[
+                                emit::__private::Part::Text("Text and "),
+                                emit::__private::Part::Hole ( "b"),
+                                emit::__private::Part::Text(" and "),
+                                emit::__private::Part::Hole ( "a"),
+                                emit::__private::Part::Text(" and "),
+                                emit::__private::Part::Hole ( "c" ),
+                                emit::__private::Part::Text(" and "),
+                                emit::__private::Part::Hole ( "d" )
+                            ]);
 
-                            let record = emit_rt::__private::Record {
+                            let record = emit::__private::Record {
                                 source,
                                 template,
                             };
 
-                            emit_rt::__private_forward!(
+                            emit::__private_forward!(
                                 None,
                                 ["a", "b", "c", "d"],
                                 [&record.source[0usize], &record.source[1usize], &record.source[2usize], &record.source[3usize]],
@@ -183,21 +183,21 @@ mod tests {
                         emit::__private_capture!(a: 42)
                     ) {
                         (__tmp0) => {
-                            let source = emit_rt::__private::Source {
+                            let source = emit::__private::Source {
                                 sorted_key_values: &[__tmp0]
                             };
 
-                            let template = emit_rt::__private::Template(fv_template::rt::template(&[
-                                fv_template::rt::Part::Text("Text and "),
-                                fv_template::rt::Part::Hole ( "a")
-                            ]));
+                            let template = emit::__private::template(&[
+                                emit::__private::Part::Text("Text and "),
+                                emit::__private::Part::Hole ( "a")
+                            ]);
 
-                            let record = emit_rt::__private::Record {
+                            let record = emit::__private::Record {
                                 source,
                                 template,
                             };
 
-                            emit_rt::__private_forward!(
+                            emit::__private_forward!(
                                 Some(log),
                                 ["a"],
                                 [&record.source[0usize]],

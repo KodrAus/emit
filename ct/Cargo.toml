@@ -1,0 +1,22 @@
+[package]
+name = "emit_ct"
+version = "0.0.0"
+authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+edition = "2018"
+build = "build.rs"
+
+[lib]
+proc-macro = true
+
+[dependencies.proc-macro2]
+version = "1"
+
+[dependencies.quote]
+version = "1"
+
+[dependencies.syn]
+version = "1"
+features = ["full", "extra-traits", "visit-mut"]
+
+[dependencies.fv-template]
+git = "https://github.com/sval-rs/fv-template"
