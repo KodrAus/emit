@@ -1,7 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
 #[macro_use]
-extern crate emit_macros;
+extern crate emit;
 
 fn main() {
     tracing_subscriber::fmt().init();

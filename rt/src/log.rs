@@ -10,8 +10,8 @@ pub struct Record<'a> {
 #[cfg(feature = "tracing")]
 macro_rules! __private_forward {
     ($($input:tt)*) => {
-        emit_macros_rt::__private_forward_console!($($input)*);
-        emit_macros_rt::__private_forward_tracing!($($input)*);
+        emit_rt::__private_forward_console!($($input)*);
+        emit_rt::__private_forward_tracing!($($input)*);
     };
 }
 
@@ -20,7 +20,7 @@ macro_rules! __private_forward {
 #[cfg(not(feature = "tracing"))]
 macro_rules! __private_forward {
     ($($input:tt)*) => {
-        emit_macros_rt::__private_forward_console!($($input)*);
+        emit_rt::__private_forward_console!($($input)*);
     };
 }
 
@@ -43,7 +43,7 @@ pub mod tracing {
     #[doc(hidden)]
     macro_rules! __private_forward_tracing {
         ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
-            use emit_macros_rt::__private::{
+            use emit_rt::__private::{
                 ValueBag,
                 tracing::{
                     Callsite,

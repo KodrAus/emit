@@ -42,7 +42,7 @@ where
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
     fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+        ValueBag::from_dyn_display(self)
     }
 }
 
@@ -57,7 +57,7 @@ where
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
     fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+        ValueBag::from_dyn_debug(self)
     }
 }
 
@@ -66,13 +66,13 @@ where
     T: Value + 'static,
 {
     default fn capture(&self) -> ValueBag {
-        ValueBag::capture_sval(self)
+        ValueBag::capture_sval1(self)
     }
 }
 
 impl Capture<CaptureSval> for dyn Value {
     fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+        ValueBag::from_dyn_sval1(self)
     }
 }
 
@@ -82,7 +82,7 @@ where
     T: Serialize + 'static,
 {
     default fn capture(&self) -> ValueBag {
-        ValueBag::capture_serde(self)
+        ValueBag::capture_serde1(self)
     }
 }
 
@@ -99,7 +99,7 @@ where
 #[cfg(feature = "std")]
 impl Capture<CaptureError> for dyn Error {
     fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+        ValueBag::from_dyn_error(self)
     }
 }
 

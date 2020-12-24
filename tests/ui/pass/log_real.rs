@@ -1,9 +1,6 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
 #[macro_use]
-extern crate emit_macros;
-
-#[macro_use]
 extern crate serde_derive;
 
 use uuid::Uuid;
@@ -28,7 +25,7 @@ fn main() {
         size: 1024,
     };
 
-    emit!("scheduling background work {description: work.description} ({id: work.id})", #[serde] work);
+    emit::emit!("scheduling background work {description: work.description} ({id: work.id})", #[emit::serde] work);
 
     work.complete();
 }
