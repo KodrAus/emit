@@ -13,7 +13,7 @@ It's just a proof-of-concept that will need a lot more work to be polished into 
 Given a macro input like:
 
 ```rust
-emit!("scheduling background work {description: work.description} ({id: work.id})", #[serde] work);
+info!("scheduling background work {description: work.description} ({id: work.id})", #[serde] work);
 ```
 
 the following output will be produced:
@@ -35,7 +35,7 @@ Aug 31 16:07:39.358  INFO trybuild003: msg=scheduling background work upload all
 
 The API is built around procedural macros that explicitly don't try to be backwards compatible with `format_args`. This is really just to keep the design space open.
 
-`emit!` is implemented as a series of procedural macros. `emit!` itself is a function-like macro, and capturing modifiers like `#[debug]`, `#[display]`, `#[error]`, `#[sval]`, and `#[serde]` are implemented as attribute-like macros.
+`info!` is implemented as a series of procedural macros. `emit!` itself is a function-like macro, and capturing modifiers like `#[debug]`, `#[display]`, `#[error]`, `#[sval]`, and `#[serde]` are implemented as attribute-like macros.
 
 The macro uses auto-ref to ensure owned and borrowed values are captured using the same syntax. It also expands to the same `match`-based expression as `format_args` so that short-lived inputs can still be captured.
 

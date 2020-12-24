@@ -16,7 +16,7 @@ fn main() {
         map
     };
 
-    emit!("There's no replacements here",
+    info!("There's no replacements here",
         a,
         b: 17,
         #[with_debug]

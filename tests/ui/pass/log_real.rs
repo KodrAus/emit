@@ -27,7 +27,7 @@ fn main() {
         size: 1024,
     };
 
-    emit::emit!("scheduling background work {description: work.description} ({id: work.id})", #[emit::with_serde] work);
+    emit::info!("scheduling background work {description: work.description} ({id: work.id})", #[emit::with_serde] work);
 
     work.complete();
 }

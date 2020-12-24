@@ -16,7 +16,7 @@ fn main() {
         map
     };
 
-    emit!("Text and {a} and {b} and {#[with_debug] c} or {d}",
+    info!("Text and {a} and {b} and {#[with_debug] c} or {d}",
         b: 17,
         #[with_debug]
         d: String::from("short lived!"),

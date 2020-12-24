@@ -5,6 +5,8 @@ pub use emit_rt::*;
 
 use std::{fmt, mem, error::Error};
 
+use sval::value::{self, Value};
+
 use self::__private::TemplateRender;
 
 pub type Emitter = fn(&Record);
@@ -18,6 +20,12 @@ An emitted record.
 */
 #[repr(transparent)]
 pub struct Record<'a>(__private::Record<'a>);
+
+impl<'a> Value for Record<'a> {
+    fn stream(&self, stream: &mut value::Stream) -> value::Result {
+        self.0.stream(stream)
+    }
+}
 
 impl<'a> Record<'a> {
     /**

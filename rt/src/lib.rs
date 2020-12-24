@@ -22,6 +22,7 @@ extern crate core as std;
 mod capture;
 mod emit;
 mod kvs;
+mod record;
 mod template;
 mod value;
 
@@ -30,5 +31,5 @@ This module is the entrypoint for the macros.
 */
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::{capture::__PrivateCapture, emit::*, kvs::*, template::*, value::*};
+    pub use crate::{capture::__PrivateCapture, record::*, emit::*, kvs::*, template::*, value::*};
 }

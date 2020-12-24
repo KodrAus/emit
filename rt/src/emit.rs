@@ -1,4 +1,4 @@
-use crate::{kvs::KeyValues, template::Template, std::{mem, cell::RefCell}};
+use crate::{record::Record, std::{mem, cell::RefCell}};
 
 pub type Emitter = fn(&Record);
 
@@ -36,11 +36,6 @@ pub fn emit(record: &Record) {
             (*current.borrow())(record);
         })
     }
-}
-
-pub struct Record<'a> {
-    pub kvs: KeyValues<'a>,
-    pub template: Template<'a>,
 }
 
 #[macro_export]

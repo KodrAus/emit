@@ -19,9 +19,6 @@ git = "https://github.com/sval-rs/fv-template"
 [dependencies.sval]
 version = "1.0.0-alpha.4"
 
-[dependencies.sval_json]
-version = "1.0.0-alpha.4"
-
 [dependencies.serde_lib]
 version = "1"
 default-features = false

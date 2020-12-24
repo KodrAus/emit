@@ -6,12 +6,13 @@ use std::io;
 
 fn main() {
     emit::target(|record| {
-        println!("{}", record.msg());
-
+        // Just make sure there's a typed `std::error::Error` there
         assert!(record.source().is_some());
+
+        println!("{}", sval_json::to_string(record).expect("failed to serialize"));
     });
 
     let err = io::Error::from(io::ErrorKind::Other);
 
-    emit::emit!("something went wrong ({source: err})");
+    emit::info!("something went wrong ({source: err})");
 }

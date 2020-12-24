@@ -16,6 +16,46 @@ mod capture;
 mod emit;
 
 /**
+Emit a trace record.
+*/
+#[proc_macro]
+pub fn trace(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    emit(item)
+}
+
+/**
+Emit a debug record.
+*/
+#[proc_macro]
+pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    emit(item)
+}
+
+/**
+Emit a info record.
+*/
+#[proc_macro]
+pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    emit(item)
+}
+
+/**
+Emit a warn record.
+*/
+#[proc_macro]
+pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    emit(item)
+}
+
+/**
+Emit a error record.
+*/
+#[proc_macro]
+pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    emit(item)
+}
+
+/**
 Logging statements.
 */
 #[proc_macro]

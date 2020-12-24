@@ -16,11 +16,18 @@ path = "rt"
 [dependencies.emit_ct]
 path = "ct"
 
+[dependencies.sval]
+version = "1.0.0-alpha.4"
+
 [dev-dependencies.serde]
 version = "1"
 
 [dev-dependencies.serde_derive]
 version = "1"
+
+[dev-dependencies.sval_json]
+version = "1.0.0-alpha.4"
+features = ["std"]
 
 [dev-dependencies.uuid]
 version = "0.8"
