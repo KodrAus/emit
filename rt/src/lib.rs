@@ -31,5 +31,5 @@ This module is the entrypoint for the macros.
 */
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::{capture::__PrivateCapture, record::*, emit::*, kvs::*, template::*, value::*};
+    pub use crate::{capture::__PrivateCapture, emit::*, kvs::*, record::*, template::*, value::*};
 }

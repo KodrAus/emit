@@ -11,9 +11,9 @@ extern crate quote;
 
 use proc_macro2::TokenStream;
 
-mod filter;
 mod capture;
 mod emit;
+mod filter;
 
 /**
 Emit a trace record.
@@ -71,7 +71,10 @@ pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]
-pub fn with_debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_debug(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -102,7 +105,10 @@ pub fn with_display(
 Capture a key-value pair using its `sval::Value` implementation.
 */
 #[proc_macro_attribute]
-pub fn with_sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_sval(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -116,7 +122,10 @@ pub fn with_sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> p
 Capture a key-value pair using its `serde::Serialize` implementation.
 */
 #[proc_macro_attribute]
-pub fn with_serde(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_serde(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -133,7 +142,10 @@ There should only be a single `#[source]` attribute per log statement.
 It must use `source` as the key name.
 */
 #[proc_macro_attribute]
-pub fn source(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn source(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),

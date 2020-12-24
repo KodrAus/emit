@@ -1,7 +1,4 @@
-use crate::std::{
-    fmt,
-    ops::Index,
-};
+use crate::std::{fmt, ops::Index};
 
 use super::value::ValueBag;
 

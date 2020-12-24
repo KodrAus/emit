@@ -12,6 +12,7 @@ edition = "2018"
 
 [dependencies.emit_rt]
 path = "rt"
+features = ["std"]
 
 [dependencies.emit_ct]
 path = "ct"
