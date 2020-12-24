@@ -9,7 +9,7 @@ use self::__private::TemplateRender;
 
 pub type Emitter = fn(&Record);
 
-pub fn set(emitter: Emitter) {
+pub fn target(emitter: Emitter) {
     let _ = __private::replace(unsafe { mem::transmute::<Emitter, __private::Emitter>(emitter) });
 }
 

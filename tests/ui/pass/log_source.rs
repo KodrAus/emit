@@ -5,7 +5,7 @@ extern crate emit;
 use std::io;
 
 fn main() {
-    emit::set(|record| {
+    emit::target(|record| {
         println!("{}", record.msg());
 
         assert!(record.source().is_some());
