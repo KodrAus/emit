@@ -30,8 +30,8 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let mut push_field_value = |k, mut fv: FieldValue| {
         // TODO: Consider lifting attributes out to the top-level `match`:
         //
-        // #[__log_private_apply(a, debug)]
-        // #[__log_private_apply(b, ignore)]
+        // #[__emit_private_apply(a, debug)]
+        // #[__emit_private_apply(b, ignore)]
         //
         // So that we can use attributes to entirely remove key-value pairs
         let attrs = mem::replace(&mut fv.attrs, vec![]);
@@ -87,12 +87,12 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     }
 
     // The log target expression
-    let log_tokens = template
+    let target_tokens = template
         .before_template_field_values()
         .find(|fv| fv.key_name().map(|k| k.as_str() == "log").unwrap_or(false))
         .map(|fv| {
-            let logger = &fv.expr;
-            quote!(Some(#logger))
+            let target = &fv.expr;
+            quote!(Some(#target))
         })
         .unwrap_or_else(|| quote!(None));
 
@@ -105,21 +105,21 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     quote!({
         match (#(#field_value_tokens),*) {
             (#(#field_binding_tokens),*) => {
-                let source = emit::__private::Source {
+                let kvs = emit::__private::KeyValues {
                     sorted_key_values: &[#(#sorted_field_binding_tokens),*]
                 };
 
                 let template = #template_tokens;
 
                 let record = emit::__private::Record {
-                    source,
+                    kvs,
                     template,
                 };
 
                 emit::__private_forward!(
-                    #log_tokens,
+                    #target_tokens,
                     [#(#sorted_field_key_tokens),*],
-                    [#(&record.source[#sorted_field_accessor_tokens]),*],
+                    [#(&record.kvs[#sorted_field_accessor_tokens]),*],
                     &record
                 );
             }
@@ -136,17 +136,17 @@ mod tests {
     fn expand_emit() {
         let cases = vec![
             (
-                quote!("Text and {b: 17} and {a} and {#[debug] c} and {d: String::from(\"short lived\")}"),
+                quote!("Text and {b: 17} and {a} and {#[with_debug] c} and {d: String::from(\"short lived\")}"),
                 quote!({
                     match (
                         emit::__private_capture!(b: 17),
                         emit::__private_capture!(a),
-                        #[debug]
+                        #[with_debug]
                         emit::__private_capture!(c),
                         emit::__private_capture!(d: String::from("short lived"))
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3) => {
-                            let source = emit::__private::Source {
+                            let kvs = emit::__private::KeyValues {
                                 sorted_key_values: &[__tmp1, __tmp0, __tmp2, __tmp3]
                             };
 
@@ -162,14 +162,14 @@ mod tests {
                             ]);
 
                             let record = emit::__private::Record {
-                                source,
+                                kvs,
                                 template,
                             };
 
                             emit::__private_forward!(
                                 None,
                                 ["a", "b", "c", "d"],
-                                [&record.source[0usize], &record.source[1usize], &record.source[2usize], &record.source[3usize]],
+                                [&record.kvs[0usize], &record.kvs[1usize], &record.kvs[2usize], &record.kvs[3usize]],
                                 &record
                             );
                         }
@@ -183,7 +183,7 @@ mod tests {
                         emit::__private_capture!(a: 42)
                     ) {
                         (__tmp0) => {
-                            let source = emit::__private::Source {
+                            let kvs = emit::__private::KeyValues {
                                 sorted_key_values: &[__tmp0]
                             };
 
@@ -193,14 +193,14 @@ mod tests {
                             ]);
 
                             let record = emit::__private::Record {
-                                source,
+                                kvs,
                                 template,
                             };
 
                             emit::__private_forward!(
                                 Some(log),
                                 ["a"],
-                                [&record.source[0usize]],
+                                [&record.kvs[0usize]],
                                 &record
                             );
                         }

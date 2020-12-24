@@ -16,12 +16,12 @@ fn main() {
         map
     };
 
-    emit!("Text and {a} and {b} and {#[debug] c} or {d}",
+    emit!("Text and {a} and {b} and {#[with_debug] c} or {d}",
         b: 17,
-        #[debug]
+        #[with_debug]
         d: String::from("short lived!"),
         err,
-        #[sval]
+        #[with_sval]
         f,
     );
 }

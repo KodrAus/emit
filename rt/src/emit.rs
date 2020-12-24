@@ -1,7 +1,45 @@
-use crate::{source::Source, template::Template};
+use crate::{kvs::KeyValues, template::Template, std::{mem, cell::RefCell}};
+
+pub type Emitter = fn(&Record);
+
+#[cfg(not(feature = "std"))]
+static CURRENT: RefCell<Emitter> = RefCell::new(|_| {});
+
+#[cfg(feature = "std")]
+thread_local! {
+    static CURRENT: RefCell<Emitter> = RefCell::new(|_| {});
+}
+
+pub fn replace(emitter: Emitter) -> Emitter {
+    #[cfg(not(feature = "std"))]
+    {
+        mem::replace(&mut *CURRENT.borrow_mut(), emitter)
+    }
+
+    #[cfg(feature = "std")]
+    {
+        CURRENT.with(|current| {
+            mem::replace(&mut *current.borrow_mut(), emitter)
+        })
+    }
+}
+
+pub fn emit(record: &Record) {
+    #[cfg(not(feature = "std"))]
+    {
+        (*CURRENT.borrow())(record);
+    }
+
+    #[cfg(feature = "std")]
+    {
+        CURRENT.with(|current| {
+            (*current.borrow())(record);
+        })
+    }
+}
 
 pub struct Record<'a> {
-    pub source: Source<'a>,
+    pub kvs: KeyValues<'a>,
     pub template: Template<'a>,
 }
 
@@ -12,7 +50,7 @@ macro_rules! __private_forward {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        self::emit::__private_forward_console!($($input)*);
+        self::emit::__private_forward_emit!($($input)*);
         self::emit::__private_forward_tracing!($($input)*);
     }};
 }
@@ -24,23 +62,18 @@ macro_rules! __private_forward {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        self::emit::__private_forward_console!($($input)*);
+        self::emit::__private_forward_emit!($($input)*);
     }};
 }
 
 pub mod console {
     #[macro_export]
     #[doc(hidden)]
-    macro_rules! __private_forward_console {
-        ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+    macro_rules! __private_forward_emit {
+        ($target:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
             extern crate emit;
 
-            use self::emit::__private::TemplateRender;
-
-            println!("kvs (debug): {}", $record.source.render_debug());
-            println!("kvs (json):  {}", $record.source.render_json());
-            println!("msg:         {}", $record.template.render_template());
-            println!("template:    {}", $record.template.render_source($record.source));
+            self::emit::__private::emit($record)
         }};
     }
 }
@@ -50,7 +83,7 @@ pub mod tracing {
     #[macro_export]
     #[doc(hidden)]
     macro_rules! __private_forward_tracing {
-        ($logger:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+        ($target:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
             extern crate emit;
 
             use self::emit::__private::{
@@ -87,7 +120,7 @@ pub mod tracing {
                     let fields = meta.fields();
 
                     Event::dispatch(meta, &fields.value_set(&[
-                        (&fields.field("msg").unwrap(), Some(&field::display($record.template.render_source($record.source)) as &dyn Value)),
+                        (&fields.field("msg").unwrap(), Some(&field::display($record.template.render_kvs($record.kvs)) as &dyn Value)),
                         $(
                             (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
                         ),*

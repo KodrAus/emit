@@ -19,11 +19,11 @@ fn main() {
     emit!("There's no replacements here",
         a,
         b: 17,
-        #[debug]
+        #[with_debug]
         c,
         d: String::from("short lived!"),
         err: e,
-        #[sval]
+        #[with_sval]
         f,
     );
 }

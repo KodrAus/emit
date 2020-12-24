@@ -16,5 +16,5 @@ fn main() {
         map
     };
 
-    emit!("Text and {a} and {b: 17} and {#[debug] c} or {#[display] d: String::from(\"short lived!\")} and {err: e} and {#[sval] f}");
+    emit!("Text and {a} and {b: 17} and {#[with_debug] c} or {#[with_display] d: String::from(\"short lived!\")} and {err: e} and {#[with_sval] f}");
 }

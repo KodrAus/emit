@@ -31,7 +31,7 @@ pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]
-pub fn debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -45,7 +45,7 @@ pub fn debug(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
 Capture a key-value pair using its `Display` implementation.
 */
 #[proc_macro_attribute]
-pub fn display(
+pub fn with_display(
     _: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -62,7 +62,7 @@ pub fn display(
 Capture a key-value pair using its `sval::Value` implementation.
 */
 #[proc_macro_attribute]
-pub fn sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -76,7 +76,7 @@ pub fn sval(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_m
 Capture a key-value pair using its `serde::Serialize` implementation.
 */
 #[proc_macro_attribute]
-pub fn serde(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn with_serde(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -89,11 +89,11 @@ pub fn serde(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_
 /**
 Capture an Error.
 
-There should only be a single `#[error]` attribute per log statement.
-It must use `err` as the key name.
+There should only be a single `#[source]` attribute per log statement.
+It must use `source` as the key name.
 */
 #[proc_macro_attribute]
-pub fn error(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn source(_: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::rename_capture_tokens(
         capture::RenameCaptureTokens {
             expr: TokenStream::from(item),
@@ -109,7 +109,8 @@ pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStre
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |key| match key {
-            "err" => quote!(__private_capture_from_error),
+            // A value with `source` as the key will be treated as the error by default
+            "source" => quote!(__private_capture_from_error),
             _ => quote!(__private_capture_with_default),
         },
     }))
@@ -157,8 +158,8 @@ pub fn __private_capture_from_error(item: proc_macro::TokenStream) -> proc_macro
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |key| {
-            if key != "err" {
-                panic!("the #[error] attribute must use `err` as the key name")
+            if key != "source" {
+                panic!("the #[source] attribute must use `source` as the key name")
             }
 
             quote!(__private_capture_from_error)

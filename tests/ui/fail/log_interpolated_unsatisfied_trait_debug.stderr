@@ -1,8 +1,8 @@
 error[E0277]: `Input` doesn't implement `Debug`
   --> $DIR/log_interpolated_unsatisfied_trait_debug.rs:10:26
    |
-10 |     emit!("Text \"and\" {#[debug] a: Input} and more");
-   |                          ^^^^^^^^^^^^^^^^^ `Input` cannot be formatted using `{:?}`
+10 |     emit!("Text \"and\" {#[with_debug] a: Input} and more");
+   |                          ^^^^^^^^^^^^^^^^^^^^^^ `Input` cannot be formatted using `{:?}`
    |
    = help: the trait `Debug` is not implemented for `Input`
    = note: add `#[derive(Debug)]` or manually implement `Debug`
