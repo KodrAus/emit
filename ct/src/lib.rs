@@ -1,5 +1,5 @@
 /*!
-Implementation details for log macro expansion.
+Implementation details for `emit!` macros.
 
 This crate is not intended to be consumed directly.
 */

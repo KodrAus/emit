@@ -4,12 +4,23 @@ use std::{error::Error, fmt, lazy::SyncOnceCell};
 
 use sval::value::{self, Value};
 
+mod emit;
+
+/**
+Macros for emitting log events.
+*/
 pub use emit_ct::{
     debug, emit, error, info, source, trace, warn, with_debug, with_display, with_serde, with_sval,
 };
 
+/**
+A type that receives and emits event records.
+*/
 pub type Emitter = fn(&Record);
 
+/**
+The global implicit emitter.
+*/
 static EMITTER: SyncOnceCell<Emitter> = SyncOnceCell::new();
 
 fn emit(record: &Record) {
@@ -62,23 +73,30 @@ impl<'a> Record<'a> {
     }
 }
 
+/**
+Private entrypoint for the `ct` crate.
+
+Code generation expects to find items at `emit::ct::__private`, not `emit_ct::__private`.
+*/
 #[doc(hidden)]
 pub use emit_ct as ct;
 
+/**
+Private entrypoint for the `rt` crate.
+
+Code generation expects to find items at `emit::rt::__private`, not `emit_rt::__private`.
+*/
 #[doc(hidden)]
 pub use emit_rt as rt;
 
+/**
+Private entrypoint for the `emit` crate.
+
+Code generation expects to find items at `emit::__private`.
+*/
 #[doc(hidden)]
 pub mod __private {
-    use crate::{Emitter, Record};
-
-    pub fn emit(record: &crate::rt::__private::Record) {
-        crate::emit(&Record(record))
-    }
-
-    pub fn emit_to(target: Emitter, record: &crate::rt::__private::Record) {
-        target(&Record(record))
-    }
+    pub use crate::emit::*;
 }
 
 #[cfg(test)]

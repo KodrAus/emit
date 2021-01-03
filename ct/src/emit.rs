@@ -1,3 +1,9 @@
+/*!
+Compile-time implementation of event emission.
+
+This module generates calls to `rt::emit`.
+*/
+
 use std::{collections::BTreeMap, mem};
 
 use proc_macro2::TokenStream;

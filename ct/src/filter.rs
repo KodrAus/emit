@@ -1,3 +1,7 @@
+/*!
+Compile-time log filtering.
+*/
+
 use std::env;
 
 pub(super) fn matches_build_filter() -> bool {

@@ -1,3 +1,9 @@
+/*!
+Compile-time implementation of value capturing.
+
+This module generates calls to `rt::capture`.
+*/
+
 use std::fmt::Write;
 
 use proc_macro2::{Ident, TokenStream};

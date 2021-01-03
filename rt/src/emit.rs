@@ -1,3 +1,9 @@
+/*!
+Private runtime implementation of event emission.
+
+This module generates calls to `emit`.
+*/
+
 #[macro_export]
 #[doc(hidden)]
 #[cfg(feature = "tracing")]
