@@ -30,14 +30,24 @@ macro_rules! __private_forward {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __private_forward_emit {
-    (None, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+    ({
+        target: None,
+        key_value_cfgs: [$(#$cfg:tt),*],
+        keys: [$($key:expr),*],
+        values: [$($value:expr),*],
+        record: $record:expr,
+    }) => {{
         extern crate emit;
-
         self::emit::__private::emit($record)
     }};
-    (Some($target:expr), [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+    ({
+        target: Some($target:expr),
+        key_value_cfgs: [$(#$cfg:tt),*],
+        keys: [$($key:expr),*],
+        values: [$($value:expr),*],
+        record: $record:expr,
+    }) => {{
         extern crate emit;
-
         self::emit::__private::emit_to($target, $record)
     }};
 }
@@ -47,7 +57,13 @@ pub mod tracing {
     #[macro_export]
     #[doc(hidden)]
     macro_rules! __private_forward_tracing {
-        ($target:expr, [$($key:expr),*], [$($value:expr),*], $record:expr) => {{
+        ({
+            target: $target:expr,
+            key_value_cfgs: [$(#$cfg:tt),*],
+            keys: [$($key:expr),*],
+            values: [$($value:expr),*],
+            record: $record:expr,
+        }) => {{
             extern crate emit;
 
             use self::emit::rt::__private::{
@@ -85,6 +101,7 @@ pub mod tracing {
                     Event::dispatch(meta, &fields.value_set(&[
                         (&fields.field("msg").unwrap(), Some(&field::display($record.render_msg()) as &dyn Value)),
                         $(
+                            #$cfg
                             (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
                         ),*
                     ]));

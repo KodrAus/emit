@@ -10,14 +10,14 @@ std = ["value-bag/std", "value-bag/error", "sval/std"]
 serde = ["serde_lib", "value-bag/serde"]
 
 [dependencies.value-bag]
-version = "1.0.0-alpha.5"
+git = "https://github.com/sval-rs/value-bag"
 features = ["sval"]
 
 [dependencies.fv-template]
 git = "https://github.com/sval-rs/fv-template"
 
 [dependencies.sval]
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 
 [dependencies.serde_lib]
 version = "1"

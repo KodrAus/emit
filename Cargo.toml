@@ -10,6 +10,9 @@ version = "0.0.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2018"
 
+[features]
+tracing = ["emit_rt/tracing"]
+
 [dependencies.emit_rt]
 path = "rt"
 features = ["std"]
@@ -18,7 +21,7 @@ features = ["std"]
 path = "ct"
 
 [dependencies.sval]
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 
 [dev-dependencies.serde]
 version = "1"
@@ -27,7 +30,7 @@ version = "1"
 version = "1"
 
 [dev-dependencies.sval_json]
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 features = ["std"]
 
 [dev-dependencies.uuid]
@@ -40,9 +43,6 @@ features = ["std", "tracing", "serde"]
 
 [dev-dependencies.trybuild]
 version = "1"
-
-[dev-dependencies.tracing]
-version = "0.1"
 
 [dev-dependencies.tracing-subscriber]
 version = "0.2"

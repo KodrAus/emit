@@ -4,8 +4,6 @@ use std::{error::Error, fmt, lazy::SyncOnceCell};
 
 use sval::value::{self, Value};
 
-mod emit;
-
 /**
 Macros for emitting log events.
 */
@@ -69,7 +67,7 @@ impl<'a> Record<'a> {
         self.0
             .kvs
             .get("source")
-            .and_then(|source| source.to_error())
+            .and_then(|source| source.to_borrowed_error())
     }
 }
 
@@ -88,6 +86,8 @@ Code generation expects to find items at `emit::rt::__private`, not `emit_rt::__
 */
 #[doc(hidden)]
 pub use emit_rt as rt;
+
+mod emit;
 
 /**
 Private entrypoint for the `emit` crate.

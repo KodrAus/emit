@@ -133,7 +133,7 @@ mod tests {
                 quote!(__private_capture_with_default),
                 quote!({
                     extern crate emit;
-                    use emit::rt::__private::__PrivateCapture;
+                    use self::emit::rt::__private::__PrivateCapture;
                     ("a", (a).__private_capture_with_default())
                 }),
             ),
@@ -142,7 +142,7 @@ mod tests {
                 quote!(__private_capture_with_default),
                 quote!({
                     extern crate emit;
-                    use emit::rt::__private::__PrivateCapture;
+                    use self::emit::rt::__private::__PrivateCapture;
                     ("a", (42).__private_capture_with_default())
                 }),
             ),
