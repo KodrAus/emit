@@ -16,5 +16,5 @@ fn main() {
         map
     };
 
-    info!("Text and {a} and {b: 17} and {#[with_debug] c} or {#[with_display] d: String::from(\"short lived!\")} and {err: e} and {#[with_sval] f}");
+    info!("Text and {a} and {b: 17} and {#[as_debug] c} or {#[as_display] d: String::from(\"short lived!\")} and {err: e} and {#[as_sval] f}");
 }

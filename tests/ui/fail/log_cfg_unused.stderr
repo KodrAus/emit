@@ -1,11 +1,11 @@
 error: unused variable: `c`
- --> $DIR/log_cfg_unused.rs:9:9
-  |
-9 |     let c = 42;
-  |         ^ help: if this is intentional, prefix it with an underscore: `_c`
-  |
+  --> $DIR/log_cfg_unused.rs:11:9
+   |
+11 |     let c = 42;
+   |         ^ help: if this is intentional, prefix it with an underscore: `_c`
+   |
 note: the lint level is defined here
- --> $DIR/log_cfg_unused.rs:2:9
-  |
-2 | #![deny(unused_variables)]
-  |         ^^^^^^^^^^^^^^^^
+  --> $DIR/log_cfg_unused.rs:2:9
+   |
+2  | #![deny(unused_variables)]
+   |         ^^^^^^^^^^^^^^^^

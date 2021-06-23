@@ -25,7 +25,7 @@ fn main() {
         size: 1024,
     };
 
-    emit::info!(target: |r| println!("{}", r.msg()), "scheduling background work {description: work.description} ({id: work.id})", #[emit::with_serde] work);
+    emit::info!(target: |r| println!("{}", r.msg()), "scheduling background work {description: work.description} ({id: work.id})", #[emit::as_serde] work);
 
     work.complete();
 }

@@ -13,7 +13,7 @@ It's just a proof-of-concept that will need a lot more work to be polished into 
 Given a macro input like:
 
 ```rust
-info!("scheduling background work {description: work.description} ({id: work.id})", #[serde] work);
+emit::info!("scheduling background work {description: work.description} ({id: work.id})", #[emit::as_serde] work);
 ```
 
 the following output will be produced:

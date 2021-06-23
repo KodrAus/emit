@@ -7,5 +7,5 @@ extern crate emit;
 struct Input;
 
 fn main() {
-    info!("Text \"and\" {#[with_debug] a: Input} and more");
+    info!("Text \"and\" {#[as_debug] a: Input} and more");
 }

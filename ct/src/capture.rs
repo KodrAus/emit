@@ -130,20 +130,20 @@ mod tests {
         let cases = vec![
             (
                 quote!(a),
-                quote!(__private_capture_with_default),
+                quote!(__private_capture_as_default),
                 quote!({
                     extern crate emit;
                     use self::emit::rt::__private::__PrivateCapture;
-                    ("a", (a).__private_capture_with_default())
+                    ("a", (a).__private_capture_as_default())
                 }),
             ),
             (
                 quote!(a: 42),
-                quote!(__private_capture_with_default),
+                quote!(__private_capture_as_default),
                 quote!({
                     extern crate emit;
                     use self::emit::rt::__private::__PrivateCapture;
-                    ("a", (42).__private_capture_with_default())
+                    ("a", (42).__private_capture_as_default())
                 }),
             ),
         ];
@@ -164,16 +164,16 @@ mod tests {
             (
                 (
                     quote!(__private_capture!(a)),
-                    quote!(__private_capture_from_debug),
+                    quote!(__private_capture_as_debug),
                 ),
-                quote!(__private_capture_from_debug!(a)),
+                quote!(__private_capture_as_debug!(a)),
             ),
             (
                 (
                     quote!(log::__private_capture!(a: 42)),
-                    quote!(__private_capture_from_debug),
+                    quote!(__private_capture_as_debug),
                 ),
-                quote!(log::__private_capture_from_debug!(a: 42)),
+                quote!(log::__private_capture_as_debug!(a: 42)),
             ),
         ];
 

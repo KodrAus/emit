@@ -12,7 +12,7 @@ fn main() {
 
     info!("A log with cfgs {#[cfg(disabled)] b: 17}",
         a,
-        #[with_debug]
+        #[as_debug]
         #[cfg(disabled)]
         c,
         d: String::from("short lived!"),

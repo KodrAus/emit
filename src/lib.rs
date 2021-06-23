@@ -8,7 +8,7 @@ use sval::value::{self, Value};
 Macros for emitting log events.
 */
 pub use emit_ct::{
-    debug, emit, error, info, source, trace, warn, with_debug, with_display, with_serde, with_sval,
+    debug, emit, error, info, source, trace, warn, as_debug, as_display, as_serde, as_sval,
 };
 
 /**

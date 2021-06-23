@@ -6,8 +6,8 @@ This module generates calls to `rt::emit`.
 
 use std::{collections::BTreeMap, mem};
 
-use proc_macro2::TokenStream;
-use syn::{spanned::Spanned, Attribute, Expr, ExprPath, FieldValue, Ident};
+use proc_macro2::{Span, TokenStream};
+use syn::{spanned::Spanned, Attribute, Expr, ExprPath, FieldValue, Ident, Meta};
 
 use fv_template::ct::Template;
 
@@ -23,63 +23,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         .map(|fv| (fv.key_name().expect("expected a string key"), fv))
         .collect();
 
-    // The key-value expressions. These are extracted through a `match` expression
-    let mut field_values = Vec::new();
-    // The identifiers to bind key-values to. These are in the same order as `field_values`
-    let mut field_bindings = Vec::new();
-    // The identifiers key-values are bound to, sorted by the key so they can be binary searched
-    let mut sorted_field_bindings = BTreeMap::new();
-    // A shared counter used to generate unique idents
-    let mut field_index = 0usize;
-
-    let mut push_field_value = |k: String, mut fv: FieldValue| {
-        let mut attrs = vec![];
-        let mut cfg_attr = None;
-
-        for attr in mem::take(&mut fv.attrs) {
-            if attr.is_cfg() {
-                assert!(
-                    cfg_attr.is_none(),
-                    "only a single #[cfg] is supported on fields"
-                );
-                cfg_attr = Some(attr);
-            } else {
-                attrs.push(attr);
-            }
-        }
-
-        let v = Ident::new(&format!("__tmp{}", field_index), fv.span());
-
-        field_values.push(
-            quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::ct::__private_capture!(#fv) }),
-        );
-
-        // If there's a #[cfg] then also push its reverse
-        // This is to give a dummy value to the pattern binding since they don't support attributes
-        if let Some(cfg_attr) = &cfg_attr {
-            let cfg_attr = cfg_attr.invert_cfg().expect("attribute is not a #[cfg]");
-
-            field_values.push(quote_spanned!(fv.span()=> #cfg_attr ()));
-        }
-
-        field_bindings.push(v.clone());
-
-        // Make sure keys aren't duplicated
-        let previous = sorted_field_bindings.insert(
-            k.clone(),
-            (
-                quote_spanned!(fv.span()=> #cfg_attr #k),
-                quote_spanned!(fv.span()=> #cfg_attr #v.clone()),
-                quote_spanned!(fv.span()=> #cfg_attr &#v),
-                cfg_attr,
-            ),
-        );
-        if previous.is_some() {
-            panic!("keys cannot be duplicated");
-        }
-
-        field_index += 1;
-    };
+    let mut fields = Fields::default();
 
     // Push the field-values that appear in the template
     for fv in template.template_field_values() {
@@ -108,12 +52,13 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
             None => fv,
         };
 
-        push_field_value(k, fv.clone());
+        fields.push(k, fv.clone());
     }
 
     // Push any remaining extra field-values
+    // This won't include any field values that also appear in the template
     for (k, fv) in extra_field_values {
-        push_field_value(k, fv.clone());
+        fields.push(k, fv.clone());
     }
 
     // The log target expression
@@ -132,55 +77,146 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens_with_visitor(
-        quote!(emit::rt::__private),
+        quote!(self::emit::rt::__private),
         CfgVisitor(|label: &str| {
-            sorted_field_bindings
+            fields.sorted_fields
                 .get(label)
-                .and_then(|(_, _, _, cfg_attr)| cfg_attr.as_ref())
+                .and_then(|field| field.cfg_attr.as_ref())
         }),
     );
 
-    let field_value_tokens = field_values.iter();
-    let field_binding_tokens = field_bindings.iter();
+    let field_match_value_tokens = fields.match_value_tokens();
+    let field_match_binding_tokens = fields.match_binding_tokens();
 
-    let sorted_field_binding_tokens = sorted_field_bindings.values().map(|(_, value, _, _)| value);
-    let sorted_field_key_tokens = sorted_field_bindings.values().map(|(key, _, _, _)| key);
-    let sorted_field_accessor_tokens = sorted_field_bindings.values().map(|(_, _, value, _)| value);
-    let sorted_field_cfg_tokens = sorted_field_bindings.values().map(|(_, _, _, cfg_attr)| {
-        if let Some(cfg_attr) = cfg_attr {
-            quote!(#cfg_attr)
-        }
-        // If there isn't a cfg attribute then generate a dummy one
-        // This attribute is always truthy so is ignored
-        else {
-            quote!(#[cfg(not(emit_rt__private_false))])
-        }
-    });
+    let field_record_tokens = fields.sorted_field_record_tokens();
+    let field_cfg_tokens = fields.sorted_field_cfg_tokens();
+    let field_key_tokens = fields.sorted_field_key_tokens();
+    let field_value_tokens = fields.sorted_field_value_tokens();
 
     quote!({
-        match (#(#field_value_tokens),*) {
-            (#(#field_binding_tokens),*) => {
-                let kvs = emit::rt::__private::KeyValues {
-                    sorted_key_values: &[#(#sorted_field_binding_tokens),*]
+        extern crate emit;
+
+        match (#(#field_match_value_tokens),*) {
+            (#(#field_match_binding_tokens),*) => {
+                let kvs = self::emit::rt::__private::KeyValues {
+                    sorted_key_values: &[#(#field_record_tokens),*]
                 };
 
                 let template = #template_tokens;
 
-                let #record_ident = emit::rt::__private::Record {
+                let #record_ident = self::emit::rt::__private::Record {
                     kvs,
                     template,
                 };
 
-                emit::rt::__private_forward!({
+                self::emit::rt::__private_forward!({
                     target: #target_tokens,
-                    key_value_cfgs: [#(#sorted_field_cfg_tokens),*],
-                    keys: [#(#sorted_field_key_tokens),*],
-                    values: [#(#sorted_field_accessor_tokens),*],
+                    key_value_cfgs: [#(#field_cfg_tokens),*],
+                    keys: [#(#field_key_tokens),*],
+                    values: [#(#field_value_tokens),*],
                     record: &record,
                 });
             }
         }
     })
+}
+
+#[derive(Default)]
+struct Fields {
+    match_value_tokens: Vec<TokenStream>,
+    match_binding_tokens: Vec<TokenStream>,
+    sorted_fields: BTreeMap<String, SortedField>,
+    field_index: usize,
+}
+
+struct SortedField {
+    field_key_tokens: TokenStream,
+    field_record_tokens: TokenStream,
+    field_value_tokens: TokenStream,
+    cfg_attr: Option<Attribute>,
+}
+
+impl Fields {
+    fn match_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+        self.match_value_tokens.iter()
+    }
+
+    fn match_binding_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+        self.match_binding_tokens.iter()
+    }
+
+    fn sorted_field_key_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+        self.sorted_fields.values().map(|field| &field.field_key_tokens)
+    }
+
+    fn sorted_field_record_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+        self.sorted_fields.values().map(|field| &field.field_record_tokens)
+    }
+
+    fn sorted_field_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+        self.sorted_fields.values().map(|field| &field.field_value_tokens)
+    }
+
+    fn sorted_field_cfg_tokens(&'_ self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.sorted_fields.values().map(|field| field
+            .cfg_attr
+            .as_ref()
+            .map(|cfg_attr| quote!(#cfg_attr))
+            .unwrap_or_else(|| quote!(#[cfg(not(emit_rt__private_false))])))
+    }
+
+    fn next_ident(&mut self, span: Span) -> Ident {
+        let i = Ident::new(&format!("__tmp{}", self.field_index), span);
+        self.field_index += 1;
+
+        i
+    }
+
+    fn push(&mut self, label: String, mut fv: FieldValue) {
+        let mut attrs = vec![];
+        let mut cfg_attr = None;
+
+        for attr in mem::take(&mut fv.attrs) {
+            if attr.is_cfg() {
+                assert!(
+                    cfg_attr.is_none(),
+                    "only a single #[cfg] is supported on fields"
+                );
+                cfg_attr = Some(attr);
+            } else {
+                attrs.push(attr);
+            }
+        }
+
+        let v = self.next_ident(fv.span());
+
+        self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* self::emit::ct::__private_capture!(#fv) }));
+
+        // If there's a #[cfg] then also push its reverse
+        // This is to give a dummy value to the pattern binding since they don't support attributes
+        if let Some(cfg_attr) = &cfg_attr {
+            let cfg_attr = cfg_attr.invert_cfg().expect("attribute is not a #[cfg]");
+
+            self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr ()));
+        }
+
+        self.match_binding_tokens.push(quote!(#v));
+
+        // Make sure keys aren't duplicated
+        let previous = self.sorted_fields.insert(
+            label.clone(),
+            SortedField {
+                field_key_tokens: quote_spanned!(fv.span()=> #cfg_attr #label),
+                field_record_tokens: quote_spanned!(fv.span()=> #cfg_attr #v.clone()),
+                field_value_tokens: quote_spanned!(fv.span()=> #cfg_attr &#v),
+                cfg_attr,
+            }
+        );
+
+        if previous.is_some() {
+            panic!("keys cannot be duplicated");
+        }
+    }
 }
 
 struct CfgVisitor<F>(F);
@@ -216,7 +252,7 @@ impl AttributeExt for Attribute {
     fn invert_cfg(&self) -> Option<Attribute> {
         match self.path.get_ident() {
             Some(ident) if ident == "cfg" => match self.parse_meta() {
-                Ok(syn::Meta::List(list)) => {
+                Ok(Meta::List(list)) => {
                     let inner = list.nested;
 
                     Some(Attribute {
@@ -243,23 +279,25 @@ mod tests {
     fn expand_emit() {
         let cases = vec![
             (
-                quote!("Text and {b: 17} and {a} and {#[with_debug] c} and {d: String::from(\"short lived\")} and {#[cfg(disabled)] e}"),
+                quote!("Text and {b: 17} and {a} and {#[as_debug] c} and {d: String::from(\"short lived\")} and {#[cfg(disabled)] e}"),
                 quote!({
+                    extern crate emit;
+
                     match (
-                        {emit::ct::__private_capture!(b: 17) },
-                        {emit::ct::__private_capture!(a) },
+                        {self::emit::ct::__private_capture!(b: 17) },
+                        {self::emit::ct::__private_capture!(a) },
                         {
-                            #[with_debug]
-                            emit::ct::__private_capture!(c)
+                            #[as_debug]
+                            self::emit::ct::__private_capture!(c)
                         },
-                        {emit::ct::__private_capture!(d: String::from("short lived")) },
+                        {self::emit::ct::__private_capture!(d: String::from("short lived")) },
                         #[cfg(disabled)]
-                        {emit::ct::__private_capture!(e) },
+                        {self::emit::ct::__private_capture!(e) },
                         #[cfg(not(disabled))]
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let kvs = emit::rt::__private::KeyValues {
+                            let kvs = self::emit::rt::__private::KeyValues {
                                 sorted_key_values: &[
                                     __tmp1.clone(),
                                     __tmp0.clone(),
@@ -270,26 +308,26 @@ mod tests {
                                 ]
                             };
 
-                            let template = emit::rt::__private::template(&[
-                                emit::rt::__private::Part::Text("Text and "),
-                                emit::rt::__private::Part::Hole ( "b"),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "a"),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "c" ),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "d" ),
-                                emit::rt::__private::Part::Text(" and "),
+                            let template = self::emit::rt::__private::template(&[
+                                self::emit::rt::__private::Part::Text("Text and "),
+                                self::emit::rt::__private::Part::Hole ( "b"),
+                                self::emit::rt::__private::Part::Text(" and "),
+                                self::emit::rt::__private::Part::Hole ( "a"),
+                                self::emit::rt::__private::Part::Text(" and "),
+                                self::emit::rt::__private::Part::Hole ( "c" ),
+                                self::emit::rt::__private::Part::Text(" and "),
+                                self::emit::rt::__private::Part::Hole ( "d" ),
+                                self::emit::rt::__private::Part::Text(" and "),
                                 #[cfg(disabled)]
-                                emit::rt::__private::Part::Hole ( "e" )
+                                self::emit::rt::__private::Part::Hole ( "e" )
                             ]);
 
-                            let record = emit::rt::__private::Record {
+                            let record = self::emit::rt::__private::Record {
                                 kvs,
                                 template,
                             };
 
-                            emit::rt::__private_forward!({
+                            self::emit::rt::__private_forward!({
                                 target: None,
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))],
@@ -309,25 +347,27 @@ mod tests {
             (
                 quote!(target: log, "Text and {a}", a: 42),
                 quote!({
+                    extern crate emit;
+
                     match (
-                        { emit::ct::__private_capture!(a: 42) }
+                        { self::emit::ct::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let kvs = emit::rt::__private::KeyValues {
+                            let kvs = self::emit::rt::__private::KeyValues {
                                 sorted_key_values: &[__tmp0.clone()]
                             };
 
-                            let template = emit::rt::__private::template(&[
-                                emit::rt::__private::Part::Text("Text and "),
-                                emit::rt::__private::Part::Hole ( "a")
+                            let template = self::emit::rt::__private::template(&[
+                                self::emit::rt::__private::Part::Text("Text and "),
+                                self::emit::rt::__private::Part::Hole ( "a")
                             ]);
 
-                            let record = emit::rt::__private::Record {
+                            let record = self::emit::rt::__private::Record {
                                 kvs,
                                 template,
                             };
 
-                            emit::rt::__private_forward!({
+                            self::emit::rt::__private_forward!({
                                 target: Some(log),
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))]

@@ -19,11 +19,11 @@ fn main() {
     info!("There's no replacements here",
         a,
         b: 17,
-        #[with_debug]
+        #[as_debug]
         c,
         d: String::from("short lived!"),
         err: e,
-        #[with_sval]
+        #[as_sval]
         f,
     );
 }

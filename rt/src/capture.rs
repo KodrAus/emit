@@ -123,42 +123,42 @@ so that when a bound isn't satisfied we get a more accurate type error.
 contexts. (We're expecting non-hygeinic spans to support value interpolation).
 */
 pub trait __PrivateCapture {
-    fn __private_capture_with_default(&self) -> ValueBag
+    fn __private_capture_as_default(&self) -> ValueBag
     where
         Self: Capture<WithDefault>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_from_display(&self) -> ValueBag
+    fn __private_capture_as_display(&self) -> ValueBag
     where
         Self: Capture<CaptureDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_from_debug(&self) -> ValueBag
+    fn __private_capture_as_debug(&self) -> ValueBag
     where
         Self: Capture<CaptureDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_from_sval(&self) -> ValueBag
+    fn __private_capture_as_sval(&self) -> ValueBag
     where
         Self: Capture<CaptureSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_from_serde(&self) -> ValueBag
+    fn __private_capture_as_serde(&self) -> ValueBag
     where
         Self: Capture<CaptureSerde>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_from_error(&self) -> ValueBag
+    fn __private_capture_as_error(&self) -> ValueBag
     where
         Self: Capture<CaptureError>,
     {
@@ -184,26 +184,26 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_with_default();
+        let _ = SomeType.__private_capture_as_default();
 
         // Capture a structured number
-        assert_eq!(Some(42u64), 42u64.__private_capture_with_default().to_u64());
+        assert_eq!(Some(42u64), 42u64.__private_capture_as_default().to_u64());
 
         // Capture a borrowed (non-static) string
         let v: &str = &String::from("a string");
         assert_eq!(
             Some("a string"),
-            v.__private_capture_with_default().to_borrowed_str()
+            v.__private_capture_as_default().to_borrowed_str()
         );
 
         // Capture a value with parens
-        let _ = (SomeType).__private_capture_with_default();
+        let _ = (SomeType).__private_capture_as_default();
 
         // Capture and borrow a string as an expression
         let v = SomeType;
         match (
-            (v).__private_capture_with_default(),
-            (String::from("a string")).__private_capture_with_default(),
+            (v).__private_capture_as_default(),
+            (String::from("a string")).__private_capture_as_default(),
         ) {
             (a, b) => {
                 let _ = a;
@@ -224,11 +224,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_from_display();
+        let _ = SomeType.__private_capture_as_display();
 
         // Capture a `&dyn Display`
         let v: &dyn fmt::Display = &SomeType;
-        let _ = v.__private_capture_from_display();
+        let _ = v.__private_capture_as_display();
     }
 
     #[test]
@@ -242,11 +242,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Debug`
-        let _ = SomeType.__private_capture_from_debug();
+        let _ = SomeType.__private_capture_as_debug();
 
         // Capture a `&dyn Debug`
         let v: &dyn fmt::Debug = &SomeType;
-        let _ = v.__private_capture_from_debug();
+        let _ = v.__private_capture_as_debug();
     }
 
     #[test]
@@ -273,11 +273,11 @@ mod tests {
         let map = Map;
 
         // Capture an arbitrary `Value`
-        let _ = map.__private_capture_from_sval();
+        let _ = map.__private_capture_as_sval();
 
         // Capture a `&dyn Value`
         let v: &dyn Value = &map;
-        let _ = v.__private_capture_from_sval();
+        let _ = v.__private_capture_as_sval();
     }
 
     #[test]
@@ -285,7 +285,7 @@ mod tests {
     fn capture_serde() {
         let tuple = (1, 2, 3, 4, 5);
 
-        let _ = tuple.__private_capture_from_serde();
+        let _ = tuple.__private_capture_as_serde();
     }
 
     #[test]
@@ -295,10 +295,10 @@ mod tests {
 
         // Capture an arbitrary `Error`
         let err = io::Error::from(io::ErrorKind::Other);
-        assert!(err.__private_capture_from_error().to_error().is_some());
+        assert!(err.__private_capture_as_error().to_borrowed_error().is_some());
 
         // Capture a `&dyn Error`
         let err: &dyn Error = &err;
-        assert!(err.__private_capture_from_error().to_error().is_some());
+        assert!(err.__private_capture_as_error().to_borrowed_error().is_some());
     }
 }
