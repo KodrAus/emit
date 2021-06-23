@@ -36,7 +36,7 @@ fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
         {
             extern crate emit;
             use emit::rt::__private::__PrivateCapture;
-            (#key_expr, (#expr).#fn_name())
+            (#key_expr, (&#expr).#fn_name())
         }
     )
 }

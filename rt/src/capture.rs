@@ -23,89 +23,56 @@ The default capturing method is with the `Value::capture_display` method.
 */
 pub type WithDefault = CaptureDisplay;
 
-extern "C" {
-    pub type CaptureDisplay;
-    pub type CaptureDebug;
-    pub type CaptureSval;
-    pub type CaptureSerde;
-    pub type CaptureError;
-}
+pub enum CaptureDisplay {}
+pub enum CaptureDebug {}
+pub enum CaptureSval {}
+pub enum CaptureSerde {}
+pub enum CaptureError {}
 
-impl<T> Capture<CaptureDisplay> for T
+impl<'a, T> Capture<CaptureDisplay> for &'a T
 where
-    T: fmt::Display + 'static,
+    T: fmt::Display + ?Sized + 'static,
 {
-    default fn capture(&self) -> ValueBag {
-        ValueBag::capture_display(self)
-    }
-}
-
-impl Capture<CaptureDisplay> for dyn fmt::Display {
     fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_display(self)
+        ValueBag::capture_dyn_display(self)
     }
 }
 
-impl<T> Capture<CaptureDebug> for T
+impl<'a, T> Capture<CaptureDebug> for &'a T
 where
-    T: fmt::Debug + 'static,
+    T: fmt::Debug + ?Sized + 'static,
 {
-    default fn capture(&self) -> ValueBag {
-        ValueBag::capture_debug(self)
-    }
-}
-
-impl Capture<CaptureDebug> for dyn fmt::Debug {
     fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_debug(self)
+        ValueBag::capture_dyn_debug(self)
     }
 }
 
-impl<T> Capture<CaptureSval> for T
+impl<'a, T> Capture<CaptureSval> for &'a T
 where
-    T: Value + 'static,
+    T: Value + ?Sized + 'static,
 {
-    default fn capture(&self) -> ValueBag {
-        ValueBag::capture_sval1(self)
-    }
-}
-
-impl Capture<CaptureSval> for dyn Value {
     fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_sval1(self)
+        ValueBag::capture_dyn_sval1(self)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<T> Capture<CaptureSerde> for T
+impl<'a, T> Capture<CaptureSerde> for &'a T
 where
     T: Serialize + 'static,
 {
-    default fn capture(&self) -> ValueBag {
-        ValueBag::capture_serde1(self)
+    fn capture(&self) -> ValueBag {
+        ValueBag::capture_serde1(*self)
     }
 }
 
 #[cfg(feature = "std")]
-impl<T> Capture<CaptureError> for T
+impl<'a, T> Capture<CaptureError> for &'a T
 where
     T: Error + 'static,
 {
-    default fn capture(&self) -> ValueBag {
-        ValueBag::capture_error(self)
-    }
-}
-
-#[cfg(feature = "std")]
-impl Capture<CaptureError> for dyn Error {
     fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_error(self)
-    }
-}
-
-impl<T: ?Sized> Capture<T> for str {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+        ValueBag::from_dyn_error(*self)
     }
 }
 
@@ -166,7 +133,7 @@ pub trait __PrivateCapture {
     }
 }
 
-impl<T: ?Sized> __PrivateCapture for T {}
+impl<'a, T: ?Sized> __PrivateCapture for &'a T {}
 
 #[cfg(test)]
 mod tests {
@@ -184,26 +151,26 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_as_default();
+        let _ = (&SomeType).__private_capture_as_default();
 
         // Capture a structured number
-        assert_eq!(Some(42u64), 42u64.__private_capture_as_default().to_u64());
+        assert_eq!(Some(42u64), (&42u64).__private_capture_as_default().to_u64());
 
         // Capture a borrowed (non-static) string
         let v: &str = &String::from("a string");
         assert_eq!(
             Some("a string"),
-            v.__private_capture_as_default().to_borrowed_str()
+            (&v).__private_capture_as_default().to_borrowed_str()
         );
 
         // Capture a value with parens
-        let _ = (SomeType).__private_capture_as_default();
+        let _ = (&(SomeType)).__private_capture_as_default();
 
         // Capture and borrow a string as an expression
         let v = SomeType;
         match (
-            (v).__private_capture_as_default(),
-            (String::from("a string")).__private_capture_as_default(),
+            (&v).__private_capture_as_default(),
+            (&String::from("a string")).__private_capture_as_default(),
         ) {
             (a, b) => {
                 let _ = a;
@@ -224,11 +191,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_as_display();
+        let _ = (&SomeType).__private_capture_as_display();
 
         // Capture a `&dyn Display`
         let v: &dyn fmt::Display = &SomeType;
-        let _ = v.__private_capture_as_display();
+        let _ = (&v).__private_capture_as_display();
     }
 
     #[test]
@@ -242,11 +209,11 @@ mod tests {
         }
 
         // Capture an arbitrary `Debug`
-        let _ = SomeType.__private_capture_as_debug();
+        let _ = (&SomeType).__private_capture_as_debug();
 
         // Capture a `&dyn Debug`
         let v: &dyn fmt::Debug = &SomeType;
-        let _ = v.__private_capture_as_debug();
+        let _ = (&v).__private_capture_as_debug();
     }
 
     #[test]
@@ -273,11 +240,11 @@ mod tests {
         let map = Map;
 
         // Capture an arbitrary `Value`
-        let _ = map.__private_capture_as_sval();
+        let _ = (&map).__private_capture_as_sval();
 
         // Capture a `&dyn Value`
         let v: &dyn Value = &map;
-        let _ = v.__private_capture_as_sval();
+        let _ = (&v).__private_capture_as_sval();
     }
 
     #[test]
@@ -285,7 +252,7 @@ mod tests {
     fn capture_serde() {
         let tuple = (1, 2, 3, 4, 5);
 
-        let _ = tuple.__private_capture_as_serde();
+        let _ = (&tuple).__private_capture_as_serde();
     }
 
     #[test]
@@ -295,10 +262,10 @@ mod tests {
 
         // Capture an arbitrary `Error`
         let err = io::Error::from(io::ErrorKind::Other);
-        assert!(err.__private_capture_as_error().to_borrowed_error().is_some());
+        assert!((&err).__private_capture_as_error().to_borrowed_error().is_some());
 
         // Capture a `&dyn Error`
         let err: &dyn Error = &err;
-        assert!(err.__private_capture_as_error().to_borrowed_error().is_some());
+        assert!((&err).__private_capture_as_error().to_borrowed_error().is_some());
     }
 }
