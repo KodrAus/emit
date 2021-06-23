@@ -77,7 +77,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens_with_visitor(
-        quote!(self::emit::rt::__private),
+        quote!(emit::rt::__private),
         CfgVisitor(|label: &str| {
             fields.sorted_fields
                 .get(label)
@@ -98,18 +98,18 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
 
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
-                let kvs = self::emit::rt::__private::KeyValues {
+                let kvs = emit::rt::__private::KeyValues {
                     sorted_key_values: &[#(#field_record_tokens),*]
                 };
 
                 let template = #template_tokens;
 
-                let #record_ident = self::emit::rt::__private::Record {
+                let #record_ident = emit::rt::__private::Record {
                     kvs,
                     template,
                 };
 
-                self::emit::rt::__private_forward!({
+                emit::rt::__private_forward!({
                     target: #target_tokens,
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
@@ -190,7 +190,8 @@ impl Fields {
 
         let v = self.next_ident(fv.span());
 
-        self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* self::emit::ct::__private_capture!(#fv) }));
+        // NOTE: We intentionally wrap the expression in layers of blocks
+        self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::ct::__private_capture!(#fv) }));
 
         // If there's a #[cfg] then also push its reverse
         // This is to give a dummy value to the pattern binding since they don't support attributes
@@ -284,20 +285,20 @@ mod tests {
                     extern crate emit;
 
                     match (
-                        {self::emit::ct::__private_capture!(b: 17) },
-                        {self::emit::ct::__private_capture!(a) },
+                        {emit::ct::__private_capture!(b: 17) },
+                        {emit::ct::__private_capture!(a) },
                         {
                             #[as_debug]
-                            self::emit::ct::__private_capture!(c)
+                            emit::ct::__private_capture!(c)
                         },
-                        {self::emit::ct::__private_capture!(d: String::from("short lived")) },
+                        {emit::ct::__private_capture!(d: String::from("short lived")) },
                         #[cfg(disabled)]
-                        {self::emit::ct::__private_capture!(e) },
+                        {emit::ct::__private_capture!(e) },
                         #[cfg(not(disabled))]
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let kvs = self::emit::rt::__private::KeyValues {
+                            let kvs = emit::rt::__private::KeyValues {
                                 sorted_key_values: &[
                                     __tmp1.clone(),
                                     __tmp0.clone(),
@@ -308,26 +309,26 @@ mod tests {
                                 ]
                             };
 
-                            let template = self::emit::rt::__private::template(&[
-                                self::emit::rt::__private::Part::Text("Text and "),
-                                self::emit::rt::__private::Part::Hole ( "b"),
-                                self::emit::rt::__private::Part::Text(" and "),
-                                self::emit::rt::__private::Part::Hole ( "a"),
-                                self::emit::rt::__private::Part::Text(" and "),
-                                self::emit::rt::__private::Part::Hole ( "c" ),
-                                self::emit::rt::__private::Part::Text(" and "),
-                                self::emit::rt::__private::Part::Hole ( "d" ),
-                                self::emit::rt::__private::Part::Text(" and "),
+                            let template = emit::rt::__private::template(&[
+                                emit::rt::__private::Part::Text("Text and "),
+                                emit::rt::__private::Part::Hole ( "b"),
+                                emit::rt::__private::Part::Text(" and "),
+                                emit::rt::__private::Part::Hole ( "a"),
+                                emit::rt::__private::Part::Text(" and "),
+                                emit::rt::__private::Part::Hole ( "c" ),
+                                emit::rt::__private::Part::Text(" and "),
+                                emit::rt::__private::Part::Hole ( "d" ),
+                                emit::rt::__private::Part::Text(" and "),
                                 #[cfg(disabled)]
-                                self::emit::rt::__private::Part::Hole ( "e" )
+                                emit::rt::__private::Part::Hole ( "e" )
                             ]);
 
-                            let record = self::emit::rt::__private::Record {
+                            let record = emit::rt::__private::Record {
                                 kvs,
                                 template,
                             };
 
-                            self::emit::rt::__private_forward!({
+                            emit::rt::__private_forward!({
                                 target: None,
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))],
@@ -350,24 +351,24 @@ mod tests {
                     extern crate emit;
 
                     match (
-                        { self::emit::ct::__private_capture!(a: 42) }
+                        { emit::ct::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let kvs = self::emit::rt::__private::KeyValues {
+                            let kvs = emit::rt::__private::KeyValues {
                                 sorted_key_values: &[__tmp0.clone()]
                             };
 
-                            let template = self::emit::rt::__private::template(&[
-                                self::emit::rt::__private::Part::Text("Text and "),
-                                self::emit::rt::__private::Part::Hole ( "a")
+                            let template = emit::rt::__private::template(&[
+                                emit::rt::__private::Part::Text("Text and "),
+                                emit::rt::__private::Part::Hole ( "a")
                             ]);
 
-                            let record = self::emit::rt::__private::Record {
+                            let record = emit::rt::__private::Record {
                                 kvs,
                                 template,
                             };
 
-                            self::emit::rt::__private_forward!({
+                            emit::rt::__private_forward!({
                                 target: Some(log),
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))]

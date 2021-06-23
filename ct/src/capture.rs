@@ -35,7 +35,7 @@ fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
     quote!(
         {
             extern crate emit;
-            use self::emit::rt::__private::__PrivateCapture;
+            use emit::rt::__private::__PrivateCapture;
             (#key_expr, (#expr).#fn_name())
         }
     )
@@ -133,7 +133,7 @@ mod tests {
                 quote!(__private_capture_as_default),
                 quote!({
                     extern crate emit;
-                    use self::emit::rt::__private::__PrivateCapture;
+                    use emit::rt::__private::__PrivateCapture;
                     ("a", (a).__private_capture_as_default())
                 }),
             ),
@@ -142,7 +142,7 @@ mod tests {
                 quote!(__private_capture_as_default),
                 quote!({
                     extern crate emit;
-                    use self::emit::rt::__private::__PrivateCapture;
+                    use emit::rt::__private::__PrivateCapture;
                     ("a", (42).__private_capture_as_default())
                 }),
             ),

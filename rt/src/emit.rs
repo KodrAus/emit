@@ -11,8 +11,8 @@ macro_rules! __private_forward {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        self::emit::rt::__private_forward_emit!($($input)*);
-        self::emit::rt::__private_forward_tracing!($($input)*);
+        emit::rt::__private_forward_emit!($($input)*);
+        emit::rt::__private_forward_tracing!($($input)*);
     }};
 }
 
@@ -23,7 +23,7 @@ macro_rules! __private_forward {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        self::emit::rt::__private_forward_emit!($($input)*);
+        emit::rt::__private_forward_emit!($($input)*);
     }};
 }
 
@@ -38,7 +38,7 @@ macro_rules! __private_forward_emit {
         record: $record:expr,
     }) => {{
         extern crate emit;
-        self::emit::__private::emit($record)
+        emit::__private::emit($record)
     }};
     ({
         target: Some($target:expr),
@@ -48,7 +48,7 @@ macro_rules! __private_forward_emit {
         record: $record:expr,
     }) => {{
         extern crate emit;
-        self::emit::__private::emit_to($target, $record)
+        emit::__private::emit_to($target, $record)
     }};
 }
 
@@ -66,7 +66,7 @@ pub mod tracing {
         }) => {{
             extern crate emit;
 
-            use self::emit::rt::__private::{
+            use emit::rt::__private::{
                 ValueBag,
                 tracing::{
                     Callsite,

@@ -1,7 +1,5 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
-extern crate emit;
-
 #[macro_use]
 extern crate serde_derive;
 

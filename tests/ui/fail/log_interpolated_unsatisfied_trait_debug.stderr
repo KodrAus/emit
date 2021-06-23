@@ -7,4 +7,4 @@ error[E0277]: `Input` doesn't implement `Debug`
    = help: the trait `Debug` is not implemented for `Input`
    = note: add `#[derive(Debug)]` or manually implement `Debug`
    = note: required because of the requirements on the impl of `emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureDebug>` for `Input`
-   = note: this error originates in the macro `self::emit::ct::__private_capture_as_debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `emit::ct::__private_capture_as_debug` (in Nightly builds, run with -Z macro-backtrace for more info)
