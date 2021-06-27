@@ -217,7 +217,6 @@ mod tests {
     }
 
     #[test]
-
     fn capture_sval() {
         use sval::value::{self, Value};
 
