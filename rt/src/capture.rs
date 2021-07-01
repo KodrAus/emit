@@ -34,7 +34,7 @@ where
     T: fmt::Display + ?Sized + 'static,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::capture_dyn_display(self)
+        ValueBag::try_capture(*self).unwrap_or_else(|| ValueBag::from_display(self))
     }
 }
 
@@ -43,7 +43,7 @@ where
     T: fmt::Debug + ?Sized + 'static,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::capture_dyn_debug(self)
+        ValueBag::try_capture(*self).unwrap_or_else(|| ValueBag::from_debug(self))
     }
 }
 
@@ -52,7 +52,7 @@ where
     T: Value + ?Sized + 'static,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::capture_dyn_sval1(self)
+        ValueBag::try_capture(*self).unwrap_or_else(|| ValueBag::from_sval1(self))
     }
 }
 
@@ -62,7 +62,7 @@ where
     T: Serialize + 'static,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::capture_serde1(*self)
+        ValueBag::try_capture(self).unwrap_or_else(|| ValueBag::from_serde1(self))
     }
 }
 
