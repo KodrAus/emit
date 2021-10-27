@@ -35,9 +35,64 @@ Aug 31 16:07:39.358  INFO trybuild003: msg=scheduling background work upload all
 
 The API is built around procedural macros that explicitly don't try to be backwards compatible with `format_args`. This is really just to keep the design space open.
 
-`info!` is implemented as a series of procedural macros. `emit!` itself is a function-like macro, and capturing modifiers like `#[debug]`, `#[display]`, `#[error]`, `#[sval]`, and `#[serde]` are implemented as attribute-like macros.
+### `tracing` integration
 
-The macro uses auto-ref to ensure owned and borrowed values are captured using the same syntax. It also expands to the same `match`-based expression as `format_args` so that short-lived inputs can still be captured.
+The `tracing` ecosystem has a lot of infrastructure supporting runtime logging, so it makes a lot of sense to make these front-end macros hook into `tracing`.
+
+### Structure preserving field-value templates
+
+The input to macros is a [field-value template](https://github.com/sval-rs/fv-template), which is a set of field-value pairs and a template literal, which can also contain field-value pairs between braces. Let's compare a simple example of a field-value template with a standard Rust format:
+
+```rust
+// field-value template
+emit::info!("scheduling background work {description: work.description} ({id: work.id})", #[emit::as_serde] work);
+
+// format args
+format_args!("scheduling background work {} ({})", work.description, work.id);
+```
+
+We can't pass the `work` parameter in the format args version because it doesn't have a place in the template to get replaced into. This makes sense for format args, because its consumers are trying to produce a stream of text. If there were arguments to format that didn't have a place in the template then you wouldn't know how to include them in the text you're writing.
+
+The other difference that jumps out is that field-value templates can interpolate expressions. That's a capability that format args [are also getting in a limited form](https://rust-lang.github.io/rfcs/2795-format-args-implicit-identifiers.html) though, so we could also write:
+
+```rust
+let description = work.description;
+let id = work.id;
+
+// field-value template
+emit::info!("scheduling background work {description} ({id})");
+
+// format args
+format_args!("scheduling background work {description} ({id})");
+```
+
+Field-value templates stick to standard Rust syntax for defining what and how to interpolate so they use attributes instead of format flags. Let's say we want to capture using `Debug` instead of `Display`:
+
+```rust
+// field-value template
+emit::info!("scheduling background work {#[emit::as_debug] my_value}");
+
+// format args
+format_args!("scheduling background work {my_value:?}");
+```
+
+The format flags are nicely compact, but can become difficult to read when you start to combine a lot of them (I can never remember how to left-pad a number with n `0`s). Field-value templates can use more field-values in attributes to tweak them further:
+
+```rust
+emit::info!("scheduling background work {#[emit::as_debug(capture: false)] my_value}");
+```
+
+If that starts to get a bit noisy in the template then they can be moved outside of it:
+
+```rust
+emit::info!("scheduling background work {my_value}", #[emit::as_debug(capture: false)] my_value);
+```
+
+Something that's more subtle is that format args capture their inputs using one of the `std::fmt` traits, like `Debug` or `Display`. These are focused on text formatting so aren't structure preserving. Field-value templates [capture a `ValueBag`](https://github.com/sval-rs/value-bag) that preserves its structure without any new traits that libraries need to implement.
+
+That's the gist of it! Field-value templates lean on field-value syntax everywhere. Since nothing is position-dependent that means we can add new capabilities without affecting any existing users.
+
+### Compile-time filtering
 
 There's also an environment variable, `EMIT_FILTER` that's used for compile-time filtering. This is different from `log` and `tracing`'s use of Cargo features for setting max levels, which interacts poorly with the way Cargo features are intended to be used. Setting a filter like:
 
@@ -45,7 +100,7 @@ There's also an environment variable, `EMIT_FILTER` that's used for compile-time
 EMIT_FILTER=my_crate
 ```
 
-will compile `emit!` calls in any crate that isn't `my_crate` into no-ops. The implementation is _very_ simplistic, but enough to build a proper compile-time filtering implementation on top of.
+will compile `emit` calls in any crate that isn't `my_crate` into no-ops. The implementation is _very_ simplistic, but enough to build a proper compile-time filtering implementation on top of.
 
 ## What's next?
 
