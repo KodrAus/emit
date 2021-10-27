@@ -1,0 +1,7 @@
+error: custom attribute panicked
+ --> $DIR/log_misplaced_attr.rs:8:37
+  |
+8 |     emit::info!("Some text", value: #[emit::as_display] a);
+  |                                     ^^^^^^^^^^^^^^^^^^^
+  |
+  = help: message: the emit attribute macros can only be placed on the outside of a field-value expression

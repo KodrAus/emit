@@ -79,7 +79,8 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let template_tokens = template.to_rt_tokens_with_visitor(
         quote!(emit::rt::__private),
         CfgVisitor(|label: &str| {
-            fields.sorted_fields
+            fields
+                .sorted_fields
                 .get(label)
                 .and_then(|field| field.cfg_attr.as_ref())
         }),
@@ -146,23 +147,31 @@ impl Fields {
     }
 
     fn sorted_field_key_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields.values().map(|field| &field.field_key_tokens)
+        self.sorted_fields
+            .values()
+            .map(|field| &field.field_key_tokens)
     }
 
     fn sorted_field_record_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields.values().map(|field| &field.field_record_tokens)
+        self.sorted_fields
+            .values()
+            .map(|field| &field.field_record_tokens)
     }
 
     fn sorted_field_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields.values().map(|field| &field.field_value_tokens)
+        self.sorted_fields
+            .values()
+            .map(|field| &field.field_value_tokens)
     }
 
     fn sorted_field_cfg_tokens(&'_ self) -> impl Iterator<Item = TokenStream> + '_ {
-        self.sorted_fields.values().map(|field| field
-            .cfg_attr
-            .as_ref()
-            .map(|cfg_attr| quote!(#cfg_attr))
-            .unwrap_or_else(|| quote!(#[cfg(not(emit_rt__private_false))])))
+        self.sorted_fields.values().map(|field| {
+            field
+                .cfg_attr
+                .as_ref()
+                .map(|cfg_attr| quote!(#cfg_attr))
+                .unwrap_or_else(|| quote!(#[cfg(not(emit_rt__private_false))]))
+        })
     }
 
     fn next_ident(&mut self, span: Span) -> Ident {
@@ -191,14 +200,17 @@ impl Fields {
         let v = self.next_ident(fv.span());
 
         // NOTE: We intentionally wrap the expression in layers of blocks
-        self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::ct::__private_capture!(#fv) }));
+        self.match_value_tokens.push(
+            quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::ct::__private_capture!(#fv) }),
+        );
 
         // If there's a #[cfg] then also push its reverse
         // This is to give a dummy value to the pattern binding since they don't support attributes
         if let Some(cfg_attr) = &cfg_attr {
             let cfg_attr = cfg_attr.invert_cfg().expect("attribute is not a #[cfg]");
 
-            self.match_value_tokens.push(quote_spanned!(fv.span()=> #cfg_attr ()));
+            self.match_value_tokens
+                .push(quote_spanned!(fv.span()=> #cfg_attr ()));
         }
 
         self.match_binding_tokens.push(quote!(#v));
@@ -211,7 +223,7 @@ impl Fields {
                 field_record_tokens: quote_spanned!(fv.span()=> #cfg_attr #v.clone()),
                 field_value_tokens: quote_spanned!(fv.span()=> #cfg_attr &#v),
                 cfg_attr,
-            }
+            },
         );
 
         if previous.is_some() {

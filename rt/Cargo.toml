@@ -10,8 +10,7 @@ std = ["value-bag/std", "value-bag/error", "sval/std"]
 serde = ["serde_lib", "value-bag/serde"]
 
 [dependencies.value-bag]
-git = "https://github.com/sval-rs/value-bag"
-branch = "feat/str-capturing"
+version = "1.0.0-alpha.8"
 features = ["sval"]
 
 [dependencies.fv-template]

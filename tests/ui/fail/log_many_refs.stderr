@@ -1,0 +1,7 @@
+error[E0621]: explicit lifetime required in the type of `v`
+ --> $DIR/log_many_refs.rs:7:52
+  |
+7 |         emit::info!("Logging with a deeply nested {value: v}");
+  |                                                    ^^^^^^^^ lifetime `'static` required
+  |
+  = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)

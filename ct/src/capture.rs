@@ -9,6 +9,8 @@ use std::fmt::Write;
 use proc_macro2::{Ident, TokenStream};
 use quote::ToTokens;
 use syn::{
+    parse::{self, Parse, ParseStream},
+    punctuated::Punctuated,
     visit_mut::{self, VisitMut},
     Expr, ExprLit, ExprMacro, FieldValue, Lit, LitStr, Member,
 };
@@ -41,17 +43,62 @@ fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
     )
 }
 
-pub(super) struct RenameCaptureTokens<F: Fn(&str) -> bool> {
+pub(super) struct RenameCaptureTokens<F: Fn(&str) -> bool, T: FnOnce(&Args) -> TokenStream> {
+    pub(super) args: TokenStream,
     pub(super) expr: TokenStream,
     pub(super) predicate: F,
-    pub(super) to: TokenStream,
+    pub(super) to: T,
+}
+
+struct RawArgs {
+    fields: Punctuated<FieldValue, Token![,]>,
+}
+
+impl Parse for RawArgs {
+    fn parse(input: ParseStream) -> parse::Result<Self> {
+        Ok(RawArgs {
+            fields: input.parse_terminated(FieldValue::parse)?,
+        })
+    }
+}
+
+impl From<RawArgs> for Args {
+    fn from(args: RawArgs) -> Self {
+        let capture = args
+            .fields
+            .iter()
+            .find(|fv| {
+                fv.key_name()
+                    .map(|k| k.as_str() == "capture")
+                    .unwrap_or(false)
+            })
+            .map(|fv| match &fv.expr {
+                Expr::Lit(ExprLit {
+                    lit: Lit::Bool(lit),
+                    ..
+                }) => lit.value,
+                _ => panic!("the value of the `capture` argument must be a literal `bool`"),
+            })
+            .unwrap_or(true);
+
+        Args { capture }
+    }
+}
+
+pub(super) struct Args {
+    pub(super) capture: bool,
 }
 
 pub(super) fn rename_capture_tokens(
-    opts: RenameCaptureTokens<impl Fn(&str) -> bool>,
+    opts: RenameCaptureTokens<impl Fn(&str) -> bool, impl FnOnce(&Args) -> TokenStream>,
 ) -> TokenStream {
+    let args = syn::parse2::<RawArgs>(opts.args).expect("failed to parse args");
     let expr = syn::parse2::<Expr>(opts.expr).expect("failed to parse expr");
-    let to = syn::parse2::<Ident>(opts.to).expect("failed to parse ident");
+    let to = syn::parse2::<Ident>((opts.to)(&Args::from(args))).expect("failed to parse ident");
+
+    if !matches!(expr, Expr::Macro(..)) {
+        panic!("the emit attribute macros can only be placed on the outside of a field-value expression");
+    }
 
     rename_capture(expr, opts.predicate, to)
 }
@@ -134,7 +181,7 @@ mod tests {
                 quote!({
                     extern crate emit;
                     use emit::rt::__private::__PrivateCapture;
-                    ("a", (a).__private_capture_as_default())
+                    ("a", (&a).__private_capture_as_default())
                 }),
             ),
             (
@@ -143,7 +190,7 @@ mod tests {
                 quote!({
                     extern crate emit;
                     use emit::rt::__private::__PrivateCapture;
-                    ("a", (42).__private_capture_as_default())
+                    ("a", (&42).__private_capture_as_default())
                 }),
             ),
         ];
@@ -179,9 +226,10 @@ mod tests {
 
         for ((expr, to), expected) in cases {
             let actual = rename_capture_tokens(RenameCaptureTokens {
+                args: quote!(),
                 expr,
                 predicate: |ident| ident.starts_with("__private"),
-                to,
+                to: |_| to,
             });
 
             assert_eq!(expected.to_string(), actual.to_string());
