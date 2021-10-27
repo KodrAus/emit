@@ -1,8 +1,5 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
-#[macro_use]
-extern crate emit;
-
 fn main() {
     tracing_subscriber::fmt().init();
 
@@ -16,12 +13,12 @@ fn main() {
         map
     };
 
-    info!("Text and {a} and {b} and {#[as_debug] c} or {d}",
+    emit::info!("Text and {a} and {b} and {#[emit::as_debug] c} or {d}",
         b: 17,
-        #[as_debug]
+        #[emit::as_debug]
         d: String::from("short lived!"),
         err,
-        #[as_sval]
+        #[emit::as_sval]
         f,
     );
 }

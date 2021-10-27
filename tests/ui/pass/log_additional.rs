@@ -1,8 +1,5 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
-#[macro_use]
-extern crate emit;
-
 fn main() {
     tracing_subscriber::fmt().init();
 
@@ -16,14 +13,14 @@ fn main() {
         map
     };
 
-    info!("There's no replacements here",
+    emit::info!("There's no replacements here",
         a,
         b: 17,
-        #[as_debug]
+        #[emit::as_debug]
         c,
         d: String::from("short lived!"),
         err: e,
-        #[as_sval]
+        #[emit::as_sval]
         f,
     );
 }

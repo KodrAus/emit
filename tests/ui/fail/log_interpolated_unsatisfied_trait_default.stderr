@@ -1,10 +1,10 @@
 error[E0277]: `Input` doesn't implement `std::fmt::Display`
-  --> $DIR/log_interpolated_unsatisfied_trait_default.rs:10:26
-   |
-10 |     info!("Text \"and\" {a: Input} and more");
-   |                          ^^^^^^^^ `Input` cannot be formatted with the default formatter
-   |
-   = help: the trait `std::fmt::Display` is not implemented for `Input`
-   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
-   = note: required because of the requirements on the impl of `emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureDisplay>` for `Input`
-   = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)
+ --> $DIR/log_interpolated_unsatisfied_trait_default.rs:7:32
+  |
+7 |     emit::info!("Text \"and\" {a: Input} and more");
+  |                                ^^^^^^^^ `Input` cannot be formatted with the default formatter
+  |
+  = help: the trait `std::fmt::Display` is not implemented for `Input`
+  = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+  = note: required because of the requirements on the impl of `main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDisplay>` for `&Input`
+  = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)

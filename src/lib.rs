@@ -2,13 +2,13 @@
 
 use std::{error::Error, fmt, lazy::SyncOnceCell};
 
-use sval::value::{self, Value};
+use sval::value;
 
 /**
 Macros for emitting log events.
 */
 pub use emit_ct::{
-    debug, emit, error, info, source, trace, warn, as_debug, as_display, as_serde, as_sval,
+    as_debug, as_display, as_serde, as_sval, debug, emit, error, info, source, trace, warn,
 };
 
 /**
@@ -39,7 +39,18 @@ An emitted record.
 */
 pub struct Record<'a>(&'a rt::__private::Record<'a>);
 
-impl<'a> Value for Record<'a> {
+/**
+An emitted value.
+*/
+pub struct Value<'a>(rt::__private::ValueBag<'a>);
+
+impl<'a> Value<'a> {
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref::<T>()
+    }
+}
+
+impl<'a> value::Value for Record<'a> {
     fn stream(&self, stream: &mut value::Stream) -> value::Result {
         self.0.stream(stream)
     }
@@ -68,6 +79,13 @@ impl<'a> Record<'a> {
             .kvs
             .get("source")
             .and_then(|source| source.to_borrowed_error())
+    }
+
+    /**
+    Get a key-value.
+    */
+    pub fn get(&self, k: impl AsRef<str>) -> Option<Value> {
+        self.0.kvs.get(k.as_ref()).map(|v| Value(v.by_ref()))
     }
 }
 

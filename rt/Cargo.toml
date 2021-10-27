@@ -10,7 +10,7 @@ std = ["value-bag/std", "value-bag/error", "sval/std"]
 serde = ["serde_lib", "value-bag/serde"]
 
 [dependencies.value-bag]
-version = "1.0.0-alpha.7"
+version = "1.0.0-alpha.8"
 features = ["sval"]
 
 [dependencies.fv-template]

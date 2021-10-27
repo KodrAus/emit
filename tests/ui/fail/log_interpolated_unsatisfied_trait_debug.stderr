@@ -1,10 +1,10 @@
 error[E0277]: `Input` doesn't implement `Debug`
-  --> $DIR/log_interpolated_unsatisfied_trait_debug.rs:10:26
-   |
-10 |     info!("Text \"and\" {#[as_debug] a: Input} and more");
-   |                          ^^^^^^^^^^^^^^^^^^^^ `Input` cannot be formatted using `{:?}`
-   |
-   = help: the trait `Debug` is not implemented for `Input`
-   = note: add `#[derive(Debug)]` or manually implement `Debug`
-   = note: required because of the requirements on the impl of `emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureDebug>` for `Input`
-   = note: this error originates in the macro `emit::ct::__private_capture_as_debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+ --> $DIR/log_interpolated_unsatisfied_trait_debug.rs:7:32
+  |
+7 |     emit::info!("Text \"and\" {#[emit::as_debug] a: Input} and more");
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^ `Input` cannot be formatted using `{:?}`
+  |
+  = help: the trait `Debug` is not implemented for `Input`
+  = note: add `#[derive(Debug)]` to `Input` or manually `impl Debug for Input`
+  = note: required because of the requirements on the impl of `main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDebug>` for `&Input`
+  = note: this error originates in the macro `emit::ct::__private_capture_as_debug` (in Nightly builds, run with -Z macro-backtrace for more info)
