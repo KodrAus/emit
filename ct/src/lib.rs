@@ -211,6 +211,15 @@ pub fn __private_capture_as_debug(item: proc_macro::TokenStream) -> proc_macro::
 
 #[proc_macro]
 #[doc(hidden)]
+pub fn __private_capture_anon_as_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_capture_anon_as_debug),
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
 pub fn __private_capture_as_display(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
@@ -238,10 +247,28 @@ pub fn __private_capture_as_sval(item: proc_macro::TokenStream) -> proc_macro::T
 
 #[proc_macro]
 #[doc(hidden)]
+pub fn __private_capture_anon_as_sval(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_capture_anon_as_sval),
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
 pub fn __private_capture_as_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
         fn_name: |_| quote!(__private_capture_as_serde),
+    }))
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_capture_anon_as_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
+        expr: TokenStream::from(item),
+        fn_name: |_| quote!(__private_capture_anon_as_serde),
     }))
 }
 

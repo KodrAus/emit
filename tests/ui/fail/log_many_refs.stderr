@@ -1,7 +1,9 @@
-error[E0621]: explicit lifetime required in the type of `v`
- --> $DIR/log_many_refs.rs:7:52
+error[E0759]: `v` has an anonymous lifetime `'_` but it needs to satisfy a `'static` lifetime requirement
+ --> tests/ui/fail/log_many_refs.rs:7:52
   |
+6 |     fn call(v: &&&str) {
+  |                ------ this data with an anonymous lifetime `'_`...
 7 |         emit::info!("Logging with a deeply nested {value: v}");
-  |                                                    ^^^^^^^^ lifetime `'static` required
+  |                                                    ^^^^^^^^ ...is captured and required to live as long as `'static` here
   |
   = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)
