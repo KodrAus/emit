@@ -4,8 +4,6 @@ Implementation details for `emit!` macros.
 This crate is not intended to be consumed directly.
 */
 
-#![feature(min_specialization)] // required to accept `T: Sized + 'static || dyn Trait || str`
-#![feature(extern_types)] // could be replaced by empty enums
 #![no_std]
 
 #[cfg(any(feature = "std", test))]
