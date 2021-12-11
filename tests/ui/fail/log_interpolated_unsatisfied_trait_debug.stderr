@@ -6,7 +6,7 @@ error[E0277]: `Input` doesn't implement `Debug`
     |
     = help: the trait `Debug` is not implemented for `Input`
     = note: add `#[derive(Debug)]` to `Input` or manually `impl Debug for Input`
-    = note: required because of the requirements on the impl of `main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDebug>` for `&Input`
+    = note: required because of the requirements on the impl of `main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDebug>` for `Input`
 note: required by a bound in `__private_capture_as_debug`
    --> rt/src/capture.rs
     |
