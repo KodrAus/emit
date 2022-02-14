@@ -1,9 +1,30 @@
 error[E0759]: `v` has an anonymous lifetime `'_` but it needs to satisfy a `'static` lifetime requirement
- --> tests/ui/fail/log_many_refs.rs:7:52
-  |
-6 |     fn call(v: &&&str) {
-  |                ------ this data with an anonymous lifetime `'_`...
-7 |         emit::info!("Logging with a deeply nested {value: v}");
-  |                                                    ^^^^^^^^ ...is captured and required to live as long as `'static` here
-  |
-  = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)
+   --> tests/ui/fail/log_many_refs.rs:7:52
+    |
+6   |     fn call(v: &&&str) {
+    |                ------ this data with an anonymous lifetime `'_`...
+7   |         emit::info!("Logging with a deeply nested {value: v}");
+    |                                                    ^^^^^^^^ ...is used and required to live as long as `'static` here
+    |
+note: `'static` lifetime requirement introduced by this bound
+   --> rt/src/capture.rs
+    |
+    |         Self: Capture<WithDefault>,
+    |               ^^^^^^^^^^^^^^^^^^^^
+    = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0759]: `v` has an anonymous lifetime `'_` but it needs to satisfy a `'static` lifetime requirement
+   --> tests/ui/fail/log_many_refs.rs:8:52
+    |
+6   |     fn call(v: &&&str) {
+    |                ------ this data with an anonymous lifetime `'_`...
+7   |         emit::info!("Logging with a deeply nested {value: v}");
+8   |         emit::info!("Logging with a deeply nested {#[emit::as_display(inspect: true)] value: v}");
+    |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ...is used and required to live as long as `'static` here
+    |
+note: `'static` lifetime requirement introduced by this bound
+   --> rt/src/capture.rs
+    |
+    |     Self: Capture<CaptureDisplay>,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this error originates in the macro `emit::ct::__private_capture_as_display` (in Nightly builds, run with -Z macro-backtrace for more info)

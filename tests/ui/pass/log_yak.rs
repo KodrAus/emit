@@ -12,7 +12,7 @@ fn find_a_razor() -> Result<u32, std::io::Error> {
 }
 
 pub fn shave_the_yak(yak: &mut Yak) {
-    emit::info!("Commencing yak shaving for {#[emit::as_debug(capture: false)] yak}");
+    emit::info!("Commencing yak shaving for {#[emit::as_debug] yak}");
 
     loop {
         match find_a_razor() {

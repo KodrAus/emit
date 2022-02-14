@@ -5,6 +5,6 @@ fn main() {
 
     fn call(v: &&&str) {
         emit::info!("Logging with a deeply nested {value: ***v}");
-        emit::info!("Logging with a deeply nested {#[emit::as_display(capture: false)] value: v}");
+        emit::info!("Logging with a deeply nested {#[emit::as_display] value: v}");
     }
 }

@@ -62,31 +62,35 @@ impl Parse for RawArgs {
     }
 }
 
-impl From<RawArgs> for Args {
-    fn from(args: RawArgs) -> Self {
-        let capture = args
-            .fields
-            .iter()
-            .find(|fv| {
-                fv.key_name()
-                    .map(|k| k.as_str() == "capture")
-                    .unwrap_or(false)
-            })
-            .map(|fv| match &fv.expr {
-                Expr::Lit(ExprLit {
-                    lit: Lit::Bool(lit),
-                    ..
-                }) => lit.value,
-                _ => panic!("the value of the `capture` argument must be a literal `bool`"),
-            })
-            .unwrap_or(true);
+impl Args {
+    fn from_raw(args: RawArgs) -> Self {
+        let mut inspect = Default::default();
 
-        Args { capture }
+        // Don't accept any unrecognized field names
+        for fv in args.fields {
+            let name = fv.key_name();
+
+            match name.as_deref() {
+                Some("inspect") => {
+                    inspect = match &fv.expr {
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Bool(lit),
+                            ..
+                        }) => lit.value,
+                        _ => panic!("the value of the `inspect` argument must be a literal `bool`"),
+                    };
+                },
+                Some(unknown) => panic!("unexpected field `{}`", unknown),
+                None => panic!("unexpected field <unnamed>"),
+            }
+        }
+
+        Args { inspect }
     }
 }
 
 pub(super) struct Args {
-    pub(super) capture: bool,
+    pub(super) inspect: bool,
 }
 
 pub(super) fn rename_capture_tokens(
@@ -94,7 +98,7 @@ pub(super) fn rename_capture_tokens(
 ) -> TokenStream {
     let args = syn::parse2::<RawArgs>(opts.args).expect("failed to parse args");
     let expr = syn::parse2::<Expr>(opts.expr).expect("failed to parse expr");
-    let to = syn::parse2::<Ident>((opts.to)(&Args::from(args))).expect("failed to parse ident");
+    let to = syn::parse2::<Ident>((opts.to)(&Args::from_raw(args))).expect("failed to parse ident");
 
     if !matches!(expr, Expr::Macro(..)) {
         panic!("the emit attribute macros can only be placed on the outside of a field-value expression");

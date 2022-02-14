@@ -61,19 +61,8 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
         fields.push(k, fv.clone());
     }
 
-    // The log target expression
-    let target_tokens = template
-        .before_template_field_values()
-        .find(|fv| {
-            fv.key_name()
-                .map(|k| k.as_str() == "target")
-                .unwrap_or(false)
-        })
-        .map(|fv| {
-            let target = &fv.expr;
-            quote!(Some(#target))
-        })
-        .unwrap_or_else(|| quote!(None));
+    // Get the additional args to the log expression
+    let args = Args::from_raw(template.before_template_field_values());
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens_with_visitor(
@@ -93,6 +82,8 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
     let field_cfg_tokens = fields.sorted_field_cfg_tokens();
     let field_key_tokens = fields.sorted_field_key_tokens();
     let field_value_tokens = fields.sorted_field_value_tokens();
+
+    let target_tokens = args.target;
 
     quote!({
         extern crate emit;
@@ -280,6 +271,32 @@ impl AttributeExt for Attribute {
             },
             _ => None,
         }
+    }
+}
+
+struct Args {
+    target: TokenStream,
+}
+
+impl Args {
+    fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Self {
+        let mut target = quote!(None);
+
+        // Don't accept any unrecognized field names
+        for fv in args {
+            let name = fv.key_name();
+
+            match name.as_deref() {
+                Some("target") => {
+                    let expr = &fv.expr;
+                    target = quote!(Some(#expr));
+                },
+                Some(unknown) => panic!("unexpected field `{}`", unknown),
+                None => panic!("unexpected field <unnamed>"),
+            }
+        }
+
+        Args { target }
     }
 }
 

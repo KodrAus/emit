@@ -84,7 +84,7 @@ pub fn as_debug(
             expr: TokenStream::from(item),
             predicate: |ident| ident.starts_with("__private_capture"),
             to: |args| {
-                if args.capture {
+                if args.inspect {
                     quote!(__private_capture_as_debug)
                 } else {
                     quote!(__private_capture_anon_as_debug)
@@ -108,7 +108,7 @@ pub fn as_display(
             expr: TokenStream::from(item),
             predicate: |ident| ident.starts_with("__private_capture"),
             to: |args| {
-                if args.capture {
+                if args.inspect {
                     quote!(__private_capture_as_display)
                 } else {
                     quote!(__private_capture_anon_as_display)
@@ -132,7 +132,7 @@ pub fn as_sval(
             expr: TokenStream::from(item),
             predicate: |ident| ident.starts_with("__private_capture"),
             to: |args| {
-                if args.capture {
+                if args.inspect {
                     quote!(__private_capture_as_sval)
                 } else {
                     quote!(__private_capture_anon_as_sval)
@@ -156,7 +156,7 @@ pub fn as_serde(
             expr: TokenStream::from(item),
             predicate: |ident| ident.starts_with("__private_capture"),
             to: |args| {
-                if args.capture {
+                if args.inspect {
                     quote!(__private_capture_as_serde)
                 } else {
                     quote!(__private_capture_anon_as_serde)

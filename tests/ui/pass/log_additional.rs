@@ -8,7 +8,7 @@ fn main() {
     let e = std::io::Error::from(std::io::ErrorKind::Other);
     let f = {
         let mut map = std::collections::BTreeMap::new();
-        map.insert("a", 42);
+        map.insert("a", 42i32);
         map.insert("b", 17);
         map
     };
