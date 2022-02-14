@@ -1,0 +1,7 @@
+error: proc macro panicked
+  --> tests/ui/fail/log_path_expr.rs:14:5
+   |
+14 |     emit::info!("Logging with a deeply nested {data.a}");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: message: failed to parse: Error { reason: "failed to parse `data.a` as an expression", source: Some(Error("unexpected token")) }
