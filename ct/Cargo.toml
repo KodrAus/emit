@@ -8,6 +8,11 @@ build = "build.rs"
 [lib]
 proc-macro = true
 
+[features]
+std = []
+serde = []
+sval = []
+
 [dependencies.proc-macro2]
 version = "1"
 

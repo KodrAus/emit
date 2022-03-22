@@ -14,5 +14,5 @@ fn main() {
 
     let err = io::Error::from(io::ErrorKind::Other);
 
-    emit::info!("something went wrong ({source: err})");
+    emit::info!("something went wrong ({#[emit::source] source: err})");
 }

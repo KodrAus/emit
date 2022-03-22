@@ -126,20 +126,30 @@ pub fn as_sval(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_capture_tokens(
-        capture::RenameCaptureTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |args| {
-                if args.inspect {
-                    quote!(__private_capture_as_sval)
-                } else {
-                    quote!(__private_capture_anon_as_sval)
-                }
+    #[cfg(feature = "sval")]
+    {
+        proc_macro::TokenStream::from(capture::rename_capture_tokens(
+            capture::RenameCaptureTokens {
+                args: TokenStream::from(args),
+                expr: TokenStream::from(item),
+                predicate: |ident| ident.starts_with("__private_capture"),
+                to: |args| {
+                    if args.inspect {
+                        quote!(__private_capture_as_sval)
+                    } else {
+                        quote!(__private_capture_anon_as_sval)
+                    }
+                },
             },
-        },
-    ))
+        ))
+    }
+    #[cfg(not(feature = "sval"))]
+    {
+        let _ = args;
+        let _ = item;
+
+        panic!("capturing with `sval` is only possible when the `sval` Cargo feature is enabled")
+    }
 }
 
 /**
@@ -150,20 +160,30 @@ pub fn as_serde(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_capture_tokens(
-        capture::RenameCaptureTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |args| {
-                if args.inspect {
-                    quote!(__private_capture_as_serde)
-                } else {
-                    quote!(__private_capture_anon_as_serde)
-                }
+    #[cfg(feature = "serde")]
+    {
+        proc_macro::TokenStream::from(capture::rename_capture_tokens(
+            capture::RenameCaptureTokens {
+                args: TokenStream::from(args),
+                expr: TokenStream::from(item),
+                predicate: |ident| ident.starts_with("__private_capture"),
+                to: |args| {
+                    if args.inspect {
+                        quote!(__private_capture_as_serde)
+                    } else {
+                        quote!(__private_capture_anon_as_serde)
+                    }
+                },
             },
-        },
-    ))
+        ))
+    }
+    #[cfg(not(feature = "serde"))]
+    {
+        let _ = args;
+        let _ = item;
+
+        panic!("capturing with `serde` is only possible when the `serde` Cargo feature is enabled")
+    }
 }
 
 /**
@@ -177,14 +197,24 @@ pub fn source(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(capture::rename_capture_tokens(
-        capture::RenameCaptureTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |_| quote!(__private_capture_as_error),
-        },
-    ))
+    #[cfg(feature = "std")]
+    {
+        proc_macro::TokenStream::from(capture::rename_capture_tokens(
+            capture::RenameCaptureTokens {
+                args: TokenStream::from(args),
+                expr: TokenStream::from(item),
+                predicate: |ident| ident.starts_with("__private_capture"),
+                to: |_| quote!(__private_capture_as_error),
+            },
+        ))
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        let _ = args;
+        let _ = item;
+
+        panic!("capturing errors is only possible when the `std` Cargo feature is enabled")
+    }
 }
 
 #[proc_macro]
@@ -192,11 +222,7 @@ pub fn source(
 pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |key| match key {
-            // A value with `source` as the key will be treated as the error by default
-            "source" => quote!(__private_capture_as_error),
-            _ => quote!(__private_capture_as_default),
-        },
+        fn_name: |_| quote!(__private_capture_as_default),
     }))
 }
 

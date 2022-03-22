@@ -14,9 +14,9 @@ edition = "2021"
 
 [features]
 tracing = ["emit_rt/tracing"]
-std = ["emit_rt/std"]
-sval = ["emit_rt/sval", "sval_lib"]
-serde = ["emit_rt/serde", "serde_lib"]
+std = ["emit_rt/std", "emit_ct/std"]
+sval = ["emit_rt/sval", "emit_ct/sval", "sval_lib"]
+serde = ["emit_rt/serde", "emit_ct/serde", "serde_lib"]
 
 [dependencies.emit_rt]
 path = "rt"
