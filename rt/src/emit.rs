@@ -112,9 +112,9 @@ pub mod tracing {
 
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    pub use tracing_core as core;
+    pub use tracing_core_lib as core;
 
-    use tracing_core::{
+    use tracing_core_lib::{
         callsite, dispatcher, Callsite as TracingCallsite, Interest, Metadata, Once,
     };
 

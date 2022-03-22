@@ -1,0 +1,18 @@
+[package]
+name = "emit-smoke-test"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "emit-smoke-test"
+path = "main.rs"
+
+[features]
+std = ["emit/std"]
+tracing = ["emit/tracing"]
+sval = ["emit/sval"]
+serde = ["emit/serde"]
+
+[dependencies.emit]
+path = "../../"

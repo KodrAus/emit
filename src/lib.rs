@@ -1,8 +1,9 @@
 #![feature(once_cell)]
 
-use std::{error::Error, fmt, lazy::SyncOnceCell};
+use std::{fmt, lazy::SyncOnceCell};
 
-use sval::value;
+#[cfg(feature = "std")]
+use std::error::Error;
 
 /**
 Macros for emitting log events.
@@ -50,9 +51,17 @@ impl<'a> Value<'a> {
     }
 }
 
-impl<'a> value::Value for Record<'a> {
-    fn stream(&self, stream: &mut value::Stream) -> value::Result {
+#[cfg(feature = "sval")]
+impl<'a> sval_lib::value::Value for Record<'a> {
+    fn stream(&self, stream: &mut sval_lib::value::Stream) -> sval_lib::value::Result {
         self.0.stream(stream)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a> serde_lib::Serialize for Record<'a> {
+    fn serialize<S: serde_lib::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
     }
 }
 
@@ -74,6 +83,7 @@ impl<'a> Record<'a> {
     /**
     The source error associated with this record.
     */
+    #[cfg(feature = "std")]
     pub fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.0
             .kvs

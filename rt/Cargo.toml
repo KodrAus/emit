@@ -5,19 +5,21 @@ authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2021"
 
 [features]
-tracing = ["tracing-core"]
-std = ["value-bag/std", "value-bag/error", "sval/std"]
+tracing = ["tracing-core_lib"]
+std = ["value-bag/std", "value-bag/error", "sval_lib/std"]
 serde = ["serde_lib", "value-bag/serde"]
+sval = ["sval_lib", "value-bag/sval"]
 
 [dependencies.value-bag]
-version = "1.0.0-alpha.8"
-features = ["sval"]
+version = "1.0.0-alpha.9"
 
 [dependencies.fv-template]
 version = "0.1.0"
 
-[dependencies.sval]
+[dependencies.sval_lib]
 version = "1.0.0-alpha.5"
+optional = true
+package = "sval"
 
 [dependencies.serde_lib]
 version = "1"
@@ -25,7 +27,8 @@ default-features = false
 optional = true
 package = "serde"
 
-[dependencies.tracing-core]
+[dependencies.tracing-core_lib]
 version = "0.1"
 default-features = false
 optional = true
+package = "tracing-core"

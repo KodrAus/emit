@@ -6,7 +6,8 @@ use crate::std::error::Error;
 #[cfg(feature = "serde")]
 use serde_lib::Serialize;
 
-use sval::value::Value;
+#[cfg(feature = "sval")]
+use sval_lib::value::Value;
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -103,6 +104,7 @@ where
     }
 }
 
+#[cfg(feature = "sval")]
 impl<T> Capture<CaptureSval> for T
 where
     T: Value + Any,
@@ -112,12 +114,14 @@ where
     }
 }
 
+#[cfg(feature = "sval")]
 impl Capture<CaptureSval> for dyn Value {
     fn capture(&self) -> ValueBag {
         ValueBag::from_dyn_sval1(self)
     }
 }
 
+#[cfg(feature = "sval")]
 impl<T> Capture<CaptureAnonSval> for T
 where
     T: Value,
@@ -340,6 +344,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sval")]
     fn capture_sval() {
         use sval::value::{self, Value};
 

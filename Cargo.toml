@@ -2,6 +2,7 @@
 members = [
     "ct",
     "rt",
+    "tests/smoke-test",
 ]
 
 [package]
@@ -12,17 +13,25 @@ edition = "2021"
 
 [features]
 tracing = ["emit_rt/tracing"]
-serde = ["emit_rt/serde"]
+std = ["emit_rt/std"]
+sval = ["emit_rt/sval", "sval_lib"]
+serde = ["emit_rt/serde", "serde_lib"]
 
 [dependencies.emit_rt]
 path = "rt"
-features = ["std"]
 
 [dependencies.emit_ct]
 path = "ct"
 
-[dependencies.sval]
+[dependencies.sval_lib]
 version = "1.0.0-alpha.5"
+optional = true
+package = "sval"
+
+[dependencies.serde_lib]
+version = "1"
+optional = true
+package = "serde"
 
 [dev-dependencies.serde]
 version = "1"

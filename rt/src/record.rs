@@ -1,6 +1,7 @@
 use crate::{kvs::KeyValues, std::fmt, template::Template};
 
-use sval::value::{self, Value};
+#[cfg(feature = "sval")]
+use sval_lib::value::{self, Value};
 
 #[cfg(feature = "serde")]
 use serde_lib::ser::{Serialize, SerializeMap, Serializer};
@@ -32,6 +33,7 @@ impl<'a> fmt::Display for Record<'a> {
     }
 }
 
+#[cfg(feature = "sval")]
 impl<'a> Value for Record<'a> {
     fn stream(&self, stream: &mut value::Stream) -> value::Result {
         stream.map_begin(Some(self.kvs.sorted_key_values.len() + 2))?;
