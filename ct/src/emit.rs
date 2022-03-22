@@ -211,7 +211,7 @@ impl Fields {
             label.clone(),
             SortedField {
                 field_key_tokens: quote_spanned!(fv.span()=> #cfg_attr #label),
-                field_record_tokens: quote_spanned!(fv.span()=> #cfg_attr #v.clone()),
+                field_record_tokens: quote_spanned!(fv.span()=> #cfg_attr (#v.0, #v.1.by_ref())),
                 field_value_tokens: quote_spanned!(fv.span()=> #cfg_attr &#v),
                 cfg_attr,
             },
@@ -329,12 +329,12 @@ mod tests {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
                             let kvs = emit::rt::__private::KeyValues {
                                 sorted_key_values: &[
-                                    __tmp1.clone(),
-                                    __tmp0.clone(),
-                                    __tmp2.clone(),
-                                    __tmp3.clone(),
+                                    (__tmp1.0, __tmp1.1.by_ref()),
+                                    (__tmp0.0, __tmp0.1.by_ref()),
+                                    (__tmp2.0, __tmp2.1.by_ref()),
+                                    (__tmp3.0, __tmp3.1.by_ref()),
                                     #[cfg(disabled)]
-                                    __tmp4.clone()
+                                    (__tmp4.0, __tmp4.1.by_ref())
                                 ]
                             };
 
@@ -384,7 +384,7 @@ mod tests {
                     ) {
                         (__tmp0) => {
                             let kvs = emit::rt::__private::KeyValues {
-                                sorted_key_values: &[__tmp0.clone()]
+                                sorted_key_values: &[(__tmp0.0, __tmp0.1.by_ref())]
                             };
 
                             let template = emit::rt::__private::template(&[

@@ -25,6 +25,6 @@ error[E0759]: `v` has an anonymous lifetime `'_` but it needs to satisfy a `'sta
 note: `'static` lifetime requirement introduced by this bound
    --> $WORKSPACE/rt/src/capture.rs
     |
-    |     Self: Capture<CaptureDisplay>,
-    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |         Self: Capture<CaptureDisplay>,
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
     = note: this error originates in the macro `emit::ct::__private_capture_as_display` (in Nightly builds, run with -Z macro-backtrace for more info)
