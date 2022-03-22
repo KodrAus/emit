@@ -1,5 +1,5 @@
 error: proc macro panicked
- --> tests/ui/fail/log_unknown_arg.rs:8:5
+ --> fail/log_unknown_arg.rs:8:5
   |
 8 |     emit::info!(not_an_arg: false, "Logging with a deeply nested {value: v}");
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

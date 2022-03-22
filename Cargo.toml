@@ -2,6 +2,7 @@
 members = [
     "ct",
     "rt",
+    "tests/ui",
     "tests/smoke-test",
 ]
 
@@ -32,27 +33,3 @@ package = "sval"
 version = "1"
 optional = true
 package = "serde"
-
-[dev-dependencies.serde]
-version = "1"
-
-[dev-dependencies.serde_derive]
-version = "1"
-
-[dev-dependencies.sval_json]
-version = "1.0.0-alpha.5"
-features = ["std"]
-
-[dev-dependencies.uuid]
-version = "0.8"
-features = ["v4", "serde"]
-
-[dev-dependencies.emit_rt]
-path = "rt"
-features = ["std", "tracing", "serde"]
-
-[dev-dependencies.trybuild]
-version = "1"
-
-[dev-dependencies.tracing-subscriber]
-version = "0.2"

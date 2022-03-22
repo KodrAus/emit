@@ -126,13 +126,3 @@ Code generation expects to find items at `emit::__private`.
 pub mod __private {
     pub use crate::emit::*;
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn ui() {
-        let t = trybuild::TestCases::new();
-        t.pass("tests/ui/pass/*.rs");
-        t.compile_fail("tests/ui/fail/*.rs");
-    }
-}

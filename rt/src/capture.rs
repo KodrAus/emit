@@ -346,7 +346,7 @@ mod tests {
     #[test]
     #[cfg(feature = "sval")]
     fn capture_sval() {
-        use sval::value::{self, Value};
+        use sval_lib::value::{self, Value};
 
         struct Map;
 

@@ -1,5 +1,5 @@
 error: custom attribute panicked
- --> tests/ui/fail/log_unkown_attr_arg.rs:8:48
+ --> fail/log_unkown_attr_arg.rs:8:48
   |
 8 |     emit::info!("Logging with a deeply nested {#[emit::as_display(not_an_arg: false)] value: v}");
   |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
