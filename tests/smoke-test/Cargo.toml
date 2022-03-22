@@ -13,6 +13,12 @@ std = ["emit/std"]
 tracing = ["emit/tracing"]
 sval = ["emit/sval"]
 serde = ["emit/serde"]
+json = ["sval", "sval_json"]
 
 [dependencies.emit]
 path = "../../"
+
+[dependencies.sval_json]
+version = "1.0.0-alpha.5"
+features = ["std"]
+optional = true

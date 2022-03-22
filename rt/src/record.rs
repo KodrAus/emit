@@ -38,6 +38,12 @@ impl<'a> Value for Record<'a> {
     fn stream(&self, stream: &mut value::Stream) -> value::Result {
         stream.map_begin(Some(self.kvs.sorted_key_values.len() + 2))?;
 
+        stream.map_key("message")?;
+        stream.map_value(format_args!("{}", self.render_msg()))?;
+
+        stream.map_key("template")?;
+        stream.map_value(format_args!("{}", self.render_template()))?;
+
         for (k, v) in self.kvs.sorted_key_values {
             stream.map_key(k)?;
             stream.map_value(v)?;
@@ -54,6 +60,9 @@ impl<'a> Serialize for Record<'a> {
         S: Serializer,
     {
         let mut map = s.serialize_map(Some(self.kvs.sorted_key_values.len() + 2))?;
+
+        map.serialize_entry("message", format_args!("{}", self.render_msg()))?;
+        map.serialize_entry("template", format_args!("{}", self.render_template()))?;
 
         for (k, v) in self.kvs.sorted_key_values {
             map.serialize_entry(k, v)?;
