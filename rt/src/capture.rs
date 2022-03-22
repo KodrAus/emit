@@ -1,4 +1,7 @@
-use crate::{std::{any::Any, fmt}, value::ValueBag};
+use crate::{
+    std::{any::Any, fmt},
+    value::ValueBag,
+};
 
 #[cfg(feature = "std")]
 use crate::std::error::Error;
@@ -191,7 +194,7 @@ pub trait __PrivateCapture {
 
     fn __private_capture_as_display(&self) -> ValueBag
     where
-    Self: Capture<CaptureDisplay>,
+        Self: Capture<CaptureDisplay>,
     {
         Capture::capture(self)
     }
@@ -274,10 +277,7 @@ mod tests {
         let _ = SomeType.__private_capture_as_default();
 
         // Capture a structured number
-        assert_eq!(
-            Some(42u64),
-            42u64.__private_capture_as_default().to_u64()
-        );
+        assert_eq!(Some(42u64), 42u64.__private_capture_as_default().to_u64());
 
         // Capture a borrowed (non-static) string
         let v: &str = &String::from("a string");

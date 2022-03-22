@@ -290,7 +290,7 @@ impl Args {
                 Some("target") => {
                     let expr = &fv.expr;
                     target = quote!(Some(#expr));
-                },
+                }
                 Some(unknown) => panic!("unexpected field `{}`", unknown),
                 None => panic!("unexpected field <unnamed>"),
             }

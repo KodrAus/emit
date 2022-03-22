@@ -79,7 +79,7 @@ impl Args {
                         }) => lit.value,
                         _ => panic!("the value of the `inspect` argument must be a literal `bool`"),
                     };
-                },
+                }
                 Some(unknown) => panic!("unexpected field `{}`", unknown),
                 None => panic!("unexpected field <unnamed>"),
             }
