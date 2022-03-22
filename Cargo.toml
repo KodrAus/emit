@@ -12,6 +12,7 @@ edition = "2021"
 
 [features]
 tracing = ["emit_rt/tracing"]
+serde = ["emit_rt/serde"]
 
 [dependencies.emit_rt]
 path = "rt"
