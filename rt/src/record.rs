@@ -61,8 +61,8 @@ impl<'a> Serialize for Record<'a> {
     {
         let mut map = s.serialize_map(Some(self.kvs.sorted_key_values.len() + 2))?;
 
-        map.serialize_entry("message", format_args!("{}", self.render_msg()))?;
-        map.serialize_entry("template", format_args!("{}", self.render_template()))?;
+        map.serialize_entry("message", &format_args!("{}", self.render_msg()))?;
+        map.serialize_entry("template", &format_args!("{}", self.render_template()))?;
 
         for (k, v) in self.kvs.sorted_key_values {
             map.serialize_entry(k, v)?;

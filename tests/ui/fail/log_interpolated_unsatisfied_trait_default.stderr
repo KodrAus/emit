@@ -6,6 +6,12 @@ error[E0277]: `Input` doesn't implement `std::fmt::Display`
     |
     = help: the trait `std::fmt::Display` is not implemented for `Input`
     = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+    = help: the following other types implement trait `main::emit::emit_rt::capture::Capture<T>`:
+              <(dyn Debug + 'static) as main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDebug>>
+              <(dyn std::error::Error + 'static) as main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureError>>
+              <(dyn std::fmt::Display + 'static) as main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDisplay>>
+              <(dyn sval::value::Value + 'static) as main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureSval>>
+              <str as main::emit::emit_rt::capture::Capture<T>>
     = note: required because of the requirements on the impl of `main::emit::emit_rt::capture::Capture<main::emit::emit_rt::capture::CaptureDisplay>` for `Input`
 note: required by a bound in `__private_capture_as_default`
    --> $WORKSPACE/rt/src/capture.rs
