@@ -2,6 +2,7 @@
 members = [
     "ct",
     "rt",
+    "benches",
     "tests/ui",
     "tests/smoke-test",
 ]
