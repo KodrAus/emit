@@ -49,6 +49,26 @@ impl<'a> Value<'a> {
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
         self.0.downcast_ref::<T>()
     }
+
+    pub fn to_i64(&self) -> Option<i64> {
+        self.0.to_i64()
+    }
+
+    pub fn to_u64(&self) -> Option<u64> {
+        self.0.to_u64()
+    }
+
+    pub fn to_f64(&self) -> Option<f64> {
+        self.0.to_f64()
+    }
+
+    pub fn to_bool(&self) -> Option<bool> {
+        self.0.to_bool()
+    }
+
+    pub fn to_str(&self) -> Option<&str> {
+        self.0.to_borrowed_str()
+    }
 }
 
 #[cfg(feature = "sval")]
