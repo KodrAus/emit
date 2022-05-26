@@ -9,7 +9,7 @@ use std::error::Error;
 Macros for emitting log events.
 */
 pub use emit_ct::{
-    as_debug, as_display, as_serde, as_sval, debug, emit, error, info, source, trace, warn,
+    as_debug, as_display, as_serde, as_sval, debug, emit, error, info, source, trace, warn, format,
 };
 
 /**

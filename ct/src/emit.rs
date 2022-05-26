@@ -13,7 +13,7 @@ use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
 
-pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
+pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenStream {
     let record_ident = Ident::new(&"record", input.span());
     let template = Template::parse2(input).expect("failed to expand template");
 
@@ -101,13 +101,13 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
                     template,
                 };
 
-                emit::rt::__private_forward!({
+                emit::rt::#receiver!({
                     target: #target_tokens,
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
                     values: [#(#field_value_tokens),*],
                     record: &#record_ident,
-                });
+                })
             }
         }
     })
@@ -357,7 +357,7 @@ mod tests {
                                 template,
                             };
 
-                            emit::rt::__private_forward!({
+                            emit::rt::__private_emit!({
                                 target: None,
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))],
@@ -369,7 +369,7 @@ mod tests {
                                 keys: ["a", "b", "c", "d", #[cfg(disabled)] "e"],
                                 values: [&__tmp1, &__tmp0, &__tmp2, &__tmp3, #[cfg(disabled)] &__tmp4],
                                 record: &record,
-                            });
+                            })
                         }
                     }
                 }),
@@ -397,7 +397,7 @@ mod tests {
                                 template,
                             };
 
-                            emit::rt::__private_forward!({
+                            emit::rt::__private_emit!({
                                 target: Some(log),
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))]
@@ -405,7 +405,7 @@ mod tests {
                                 keys: ["a"],
                                 values: [&__tmp0],
                                 record: &record,
-                            });
+                            })
                         }
                     }
                 })
@@ -413,7 +413,7 @@ mod tests {
         ];
 
         for (expr, expected) in cases {
-            let actual = expand_tokens(expr);
+            let actual = expand_tokens(expr, quote!(__private_emit));
 
             assert_eq!(expected.to_string(), actual.to_string());
         }

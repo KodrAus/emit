@@ -64,10 +64,18 @@ Logging statements.
 #[proc_macro]
 pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
-        proc_macro::TokenStream::from(emit::expand_tokens(TokenStream::from(item)))
+        proc_macro::TokenStream::from(emit::expand_tokens(TokenStream::from(item), quote!(__private_emit)))
     } else {
         proc_macro::TokenStream::new()
     }
+}
+
+/**
+Format a template.
+ */
+#[proc_macro]
+pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(emit::expand_tokens(TokenStream::from(item), quote!(__private_format)))
 }
 
 /**

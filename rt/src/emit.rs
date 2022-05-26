@@ -7,29 +7,44 @@ This module generates calls to `emit`.
 #[macro_export]
 #[doc(hidden)]
 #[cfg(feature = "tracing")]
-macro_rules! __private_forward {
+macro_rules! __private_emit {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        emit::rt::__private_forward_emit!($($input)*);
-        emit::rt::__private_forward_tracing!($($input)*);
+        emit::rt::__private_emit_to_self!($($input)*);
+        emit::rt::__private_emit_to_tracing!($($input)*);
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __private_format {
+    ({
+        target: $target:expr,
+        key_value_cfgs: [$(#$cfg:tt),*],
+        keys: $keys:expr,
+        values: $values:expr,
+        record: $record:expr,
+    }) => {{
+        extern crate emit;
+        emit::__private::format($record)
     }};
 }
 
 #[macro_export]
 #[doc(hidden)]
 #[cfg(not(feature = "tracing"))]
-macro_rules! __private_forward {
+macro_rules! __private_emit {
     ($($input:tt)*) => {{
         extern crate emit;
 
-        emit::rt::__private_forward_emit!($($input)*);
+        emit::rt::__private_emit_to_self!($($input)*);
     }};
 }
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __private_forward_emit {
+macro_rules! __private_emit_to_self {
     ({
         target: None,
         key_value_cfgs: [$(#$cfg:tt),*],
@@ -56,7 +71,7 @@ macro_rules! __private_forward_emit {
 pub mod tracing {
     #[macro_export]
     #[doc(hidden)]
-    macro_rules! __private_forward_tracing {
+    macro_rules! __private_emit_to_tracing {
         ({
             target: $target:expr,
             key_value_cfgs: [$(#$cfg:tt),*],
