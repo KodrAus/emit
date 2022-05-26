@@ -106,7 +106,7 @@ pub(super) fn expand_tokens(input: TokenStream) -> TokenStream {
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
                     values: [#(#field_value_tokens),*],
-                    record: &record,
+                    record: &#record_ident,
                 });
             }
         }
