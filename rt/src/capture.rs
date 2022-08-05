@@ -181,8 +181,8 @@ in the private macro API:
 captured using the same `x.method()` syntax.
 - It uses `Self` bounds on each method, and is unconditionally implemented
 so that when a bound isn't satisfied we get a more accurate type error.
-- It uses clumsily uglified names that are unlikely to clash in non-hygeinic
-contexts. (We're expecting non-hygeinic spans to support value interpolation).
+- It uses clumsily uglified names that are unlikely to clash in non-hygienic
+contexts. (We're expecting non-hygienic spans to support value interpolation).
 */
 pub trait __PrivateCapture {
     fn __private_capture_as_default(&self) -> ValueBag

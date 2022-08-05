@@ -1,6 +1,14 @@
+/*!
+Emit structured events for programs and people.
+
+`emit` is a front-end for capturing diagnostic data in programs and emitting them to
+some outside observer. You can either configure `tracing` or your own function as the destination
+for events.
+*/
+
 #![feature(once_cell)]
 
-use std::{fmt, lazy::SyncOnceCell};
+use std::{fmt, sync::OnceLock};
 
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -9,7 +17,7 @@ use std::error::Error;
 Macros for emitting log events.
 */
 pub use emit_ct::{
-    as_debug, as_display, as_serde, as_sval, debug, emit, error, info, source, trace, warn, format,
+    as_debug, as_display, as_serde, as_sval, debug, emit, error, format, info, source, trace, warn,
 };
 
 /**
@@ -20,7 +28,7 @@ pub type Emitter = fn(&Record);
 /**
 The global implicit emitter.
 */
-static EMITTER: SyncOnceCell<Emitter> = SyncOnceCell::new();
+static EMITTER: OnceLock<Emitter> = OnceLock::new();
 
 fn emit(record: &Record) {
     if let Some(emitter) = EMITTER.get() {
@@ -80,6 +88,20 @@ impl<'a> sval_lib::value::Value for Record<'a> {
 
 #[cfg(feature = "serde")]
 impl<'a> serde_lib::Serialize for Record<'a> {
+    fn serialize<S: serde_lib::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'a> sval_lib::value::Value for Value<'a> {
+    fn stream(&self, stream: &mut sval_lib::value::Stream) -> sval_lib::value::Result {
+        self.0.stream(stream)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a> serde_lib::Serialize for Value<'a> {
     fn serialize<S: serde_lib::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
     }
