@@ -83,7 +83,7 @@ pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenS
     let field_key_tokens = fields.sorted_field_key_tokens();
     let field_value_tokens = fields.sorted_field_value_tokens();
 
-    let target_tokens = args.target;
+    let to_tokens = args.to;
 
     quote!({
         extern crate emit;
@@ -96,7 +96,7 @@ pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenS
                 };
 
                 emit::rt::#receiver!({
-                    target: #target_tokens,
+                    to: #to_tokens,
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
                     values: [#(#field_value_tokens),*],
@@ -269,28 +269,28 @@ impl AttributeExt for Attribute {
 }
 
 struct Args {
-    target: TokenStream,
+    to: TokenStream,
 }
 
 impl Args {
     fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Self {
-        let mut target = quote!(None);
+        let mut to = quote!(None);
 
         // Don't accept any unrecognized field names
         for fv in args {
             let name = fv.key_name();
 
             match name.as_deref() {
-                Some("target") => {
+                Some("to") => {
                     let expr = &fv.expr;
-                    target = quote!(Some(#expr));
+                    to = quote!(Some(#expr));
                 }
                 Some(unknown) => panic!("unexpected field `{}`", unknown),
                 None => panic!("unexpected field <unnamed>"),
             }
         }
 
-        Args { target }
+        Args { to }
     }
 }
 
@@ -346,7 +346,7 @@ mod tests {
                             };
 
                             emit::rt::__private_emit!({
-                                target: None,
+                                to: None,
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))],
                                     #[cfg(not(emit_rt__private_false))],
@@ -363,7 +363,7 @@ mod tests {
                 }),
             ),
             (
-                quote!(target: log, "Text and {a}", a: 42),
+                quote!(to: log, "Text and {a}", a: 42),
                 quote!({
                     extern crate emit;
 
@@ -380,7 +380,7 @@ mod tests {
                             };
 
                             emit::rt::__private_emit!({
-                                target: Some(log),
+                                to: Some(log),
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))]
                                 ],

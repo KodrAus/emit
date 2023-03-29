@@ -43,7 +43,7 @@ Code generation expects to find items at `emit::rt::__private`, not `emit_rt::__
 pub use emit_rt as rt;
 
 mod emit;
-mod record;
+mod event;
 
 #[cfg(feature = "std")]
 use crate::std::sync::OnceLock;
@@ -51,7 +51,7 @@ use crate::std::sync::OnceLock;
 /**
 A type that receives and emits event records.
 */
-pub type Emitter = fn(&Record);
+pub type Emitter = fn(&Event);
 
 /**
 The global implicit emitter.
@@ -63,12 +63,12 @@ static EMITTER: OnceLock<Emitter> = OnceLock::new();
 Set the default target to emit to.
 */
 #[cfg(feature = "std")]
-pub fn target(emitter: Emitter) {
+pub fn to(emitter: Emitter) {
     drop(EMITTER.set(emitter));
 }
 
 #[doc(inline)]
-pub use record::*;
+pub use event::*;
 
 /**
 Private entrypoint for the `emit` crate.

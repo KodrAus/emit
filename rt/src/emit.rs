@@ -14,7 +14,7 @@ macro_rules! __private_emit {
 #[doc(hidden)]
 macro_rules! __private_format {
     ({
-        target: $target:expr,
+        to: $to:expr,
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: $keys:expr,
         values: $values:expr,
@@ -40,7 +40,7 @@ macro_rules! __private_emit {
 #[doc(hidden)]
 macro_rules! __private_emit_to_self {
     ({
-        target: None,
+        to: None,
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: [$($key:expr),*],
         values: [$($value:expr),*],
@@ -50,14 +50,14 @@ macro_rules! __private_emit_to_self {
         emit::__private::emit($record)
     }};
     ({
-        target: Some($target:expr),
+        to: Some($to:expr),
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: [$($key:expr),*],
         values: [$($value:expr),*],
         record: $record:expr,
     }) => {{
         extern crate emit;
-        emit::__private::emit_to($target, $record)
+        emit::__private::emit_to($to, $record)
     }};
 }
 
@@ -67,7 +67,7 @@ pub mod tracing {
     #[doc(hidden)]
     macro_rules! __private_emit_to_tracing {
         ({
-            target: $target:expr,
+            to: $to:expr,
             key_value_cfgs: [$(#$cfg:tt),*],
             keys: [$($key:expr),*],
             values: [$($value:expr),*],
@@ -119,7 +119,7 @@ pub mod tracing {
         }};
     }
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use crate::std::sync::atomic::{AtomicUsize, Ordering};
 
     pub use tracing_core as core;
 

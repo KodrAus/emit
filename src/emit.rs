@@ -4,13 +4,13 @@ use crate::{
     Emitter, EMITTER,
 };
 
-use crate::Record;
+use crate::Event;
 
 pub fn emit(record: &crate::rt::__private::Record) {
     #[cfg(feature = "std")]
     {
         if let Some(emitter) = EMITTER.get() {
-            emitter(&Record(record))
+            emitter(&Event(record))
         }
     }
     #[cfg(not(feature = "std"))]
@@ -20,7 +20,7 @@ pub fn emit(record: &crate::rt::__private::Record) {
 }
 
 pub fn emit_to(target: Emitter, record: &crate::rt::__private::Record) {
-    target(&Record(record))
+    target(&Event(record))
 }
 
 #[cfg(feature = "std")]

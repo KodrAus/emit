@@ -3,17 +3,22 @@ use crate::std::fmt;
 use fv_template::rt::Context;
 pub use value_bag::ValueBag;
 
-pub struct Record<'a>(pub(crate) &'a crate::rt::__private::Record<'a>);
+pub struct Event<'a>(pub(crate) &'a crate::rt::__private::Record<'a>);
 
-impl<'a> Record<'a> {
-    pub fn message<'b>(&'b self) -> Message<'b> {
-        Message { record: self.0 }
+impl<'a> Event<'a> {
+    pub fn timestamp(&self) -> Timestamp {
+        Timestamp
+    }
+
+    pub fn message<'b>(&'b self) -> Template<'b> {
+        self.template().message()
     }
 
     pub fn template<'b>(&'b self) -> Template<'b> {
         Template {
             record: self.0,
             style: Default::default(),
+            properties: Default::default(),
         }
     }
 
@@ -21,6 +26,8 @@ impl<'a> Record<'a> {
         Properties { record: self.0 }
     }
 }
+
+pub struct Timestamp;
 
 pub struct Properties<'a> {
     record: &'a crate::rt::__private::Record<'a>,
@@ -36,19 +43,10 @@ impl<'a> Properties<'a> {
     }
 }
 
-pub struct Message<'a> {
-    record: &'a crate::rt::__private::Record<'a>,
-}
-
-impl<'a> fmt::Display for Message<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self.record, f)
-    }
-}
-
 pub struct Template<'a> {
     record: &'a crate::rt::__private::Record<'a>,
     style: TemplateStyle,
+    properties: bool,
 }
 
 enum TemplateStyle {
@@ -63,9 +61,18 @@ impl Default for TemplateStyle {
 }
 
 impl<'a> Template<'a> {
+    pub fn message(self) -> Self {
+        Template {
+            record: self.record,
+            style: self.style,
+            properties: true,
+        }
+    }
+
     pub fn braced(self) -> Self {
         Template {
             record: self.record,
+            properties: self.properties,
             style: TemplateStyle::Braced,
         }
     }
@@ -73,15 +80,20 @@ impl<'a> Template<'a> {
 
 impl<'a> fmt::Display for Template<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ctxt = Context::new().fill(|f, label| {
+            self.properties
+                .then(|| self.record.get(label))
+                .and_then(|value| value)
+                .map(|value| fmt::Display::fmt(value, f))
+        });
+
         match self.style {
-            TemplateStyle::Tilde => {
-                fmt::Display::fmt(&self.record.template.render(Default::default()), f)
-            }
+            TemplateStyle::Tilde => fmt::Display::fmt(&self.record.template.render(ctxt), f),
             TemplateStyle::Braced => fmt::Display::fmt(
                 &self
                     .record
                     .template
-                    .render(Context::new().missing(|f, label| write!(f, "{{{}}}", label))),
+                    .render(ctxt.missing(|f, label| write!(f, "{{{}}}", label))),
                 f,
             ),
         }
