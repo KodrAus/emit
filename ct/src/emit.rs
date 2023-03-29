@@ -90,15 +90,9 @@ pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenS
 
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
-                let kvs = emit::rt::__private::KeyValues {
-                    sorted_key_values: &[#(#field_record_tokens),*]
-                };
-
-                let template = #template_tokens;
-
                 let #record_ident = emit::rt::__private::Record {
-                    kvs,
-                    template,
+                    kvs: &[#(#field_record_tokens),*],
+                    template: #template_tokens,
                 };
 
                 emit::rt::#receiver!({
@@ -327,34 +321,28 @@ mod tests {
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let kvs = emit::rt::__private::KeyValues {
-                                sorted_key_values: &[
+                            let record = emit::rt::__private::Record {
+                                kvs: &[
                                     (__tmp1.0, __tmp1.1.by_ref()),
                                     (__tmp0.0, __tmp0.1.by_ref()),
                                     (__tmp2.0, __tmp2.1.by_ref()),
                                     (__tmp3.0, __tmp3.1.by_ref()),
                                     #[cfg(disabled)]
                                     (__tmp4.0, __tmp4.1.by_ref())
-                                ]
-                            };
-
-                            let template = emit::rt::__private::template(&[
-                                emit::rt::__private::Part::Text("Text and "),
-                                emit::rt::__private::Part::Hole ( "b"),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "a"),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "c" ),
-                                emit::rt::__private::Part::Text(" and "),
-                                emit::rt::__private::Part::Hole ( "d" ),
-                                emit::rt::__private::Part::Text(" and "),
-                                #[cfg(disabled)]
-                                emit::rt::__private::Part::Hole ( "e" )
-                            ]);
-
-                            let record = emit::rt::__private::Record {
-                                kvs,
-                                template,
+                                ],
+                                template: emit::rt::__private::template(&[
+                                    emit::rt::__private::Part::Text("Text and "),
+                                    emit::rt::__private::Part::Hole ( "b"),
+                                    emit::rt::__private::Part::Text(" and "),
+                                    emit::rt::__private::Part::Hole ( "a"),
+                                    emit::rt::__private::Part::Text(" and "),
+                                    emit::rt::__private::Part::Hole ( "c" ),
+                                    emit::rt::__private::Part::Text(" and "),
+                                    emit::rt::__private::Part::Hole ( "d" ),
+                                    emit::rt::__private::Part::Text(" and "),
+                                    #[cfg(disabled)]
+                                    emit::rt::__private::Part::Hole ( "e" )
+                                ]),
                             };
 
                             emit::rt::__private_emit!({
@@ -383,18 +371,12 @@ mod tests {
                         { emit::ct::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let kvs = emit::rt::__private::KeyValues {
-                                sorted_key_values: &[(__tmp0.0, __tmp0.1.by_ref())]
-                            };
-
-                            let template = emit::rt::__private::template(&[
-                                emit::rt::__private::Part::Text("Text and "),
-                                emit::rt::__private::Part::Hole ( "a")
-                            ]);
-
                             let record = emit::rt::__private::Record {
-                                kvs,
-                                template,
+                                kvs: &[(__tmp0.0, __tmp0.1.by_ref())],
+                                template: emit::rt::__private::template(&[
+                                    emit::rt::__private::Part::Text("Text and "),
+                                    emit::rt::__private::Part::Hole ( "a")
+                                ]),
                             };
 
                             emit::rt::__private_emit!({
