@@ -1,16 +1,15 @@
-use crate::{
-    std::{any::Any, fmt},
-    value::ValueBag,
-};
+use crate::std::{any::Any, fmt};
+
+use value_bag::ValueBag;
 
 #[cfg(feature = "std")]
 use crate::std::error::Error;
 
 #[cfg(feature = "serde")]
-use serde_lib::Serialize;
+use serde::Serialize;
 
 #[cfg(feature = "sval")]
-use sval_lib::value::Value;
+use sval::Value;
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -113,14 +112,7 @@ where
     T: Value + Any,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::capture_sval1(self)
-    }
-}
-
-#[cfg(feature = "sval")]
-impl Capture<CaptureSval> for dyn Value {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_sval1(self)
+        ValueBag::capture_sval2(self)
     }
 }
 
@@ -130,7 +122,7 @@ where
     T: Value,
 {
     fn capture(&self) -> ValueBag {
-        ValueBag::from_sval1(self)
+        ValueBag::from_sval2(self)
     }
 }
 
@@ -346,29 +338,11 @@ mod tests {
     #[test]
     #[cfg(feature = "sval")]
     fn capture_sval() {
-        use sval_lib::value::{self, Value};
-
-        struct Map;
-
-        impl Value for Map {
-            fn stream(&self, stream: &mut value::Stream) -> value::Result {
-                stream.map_begin(Some(2))?;
-
-                stream.map_key("a")?;
-                stream.map_value(42)?;
-
-                stream.map_key("b")?;
-                stream.map_value(17)?;
-
-                stream.map_end()
-            }
-        }
-
-        let map = Map;
+        let tuple = (1, 2, 3, 4, 5);
 
         // Capture an arbitrary `Value`
-        let _ = map.__private_capture_as_sval();
-        let _ = (&&&map).__private_capture_anon_as_sval();
+        let _ = tuple.__private_capture_as_sval();
+        let _ = (&&&tuple).__private_capture_anon_as_sval();
 
         // Capture a `&dyn Value`
         let v: &dyn Value = &map;

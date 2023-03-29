@@ -1,9 +1,3 @@
-/*!
-Private runtime implementation of event emission.
-
-This module generates calls to `emit`.
-*/
-
 #[macro_export]
 #[doc(hidden)]
 #[cfg(feature = "tracing")]
@@ -27,7 +21,7 @@ macro_rules! __private_format {
         record: $record:expr,
     }) => {{
         extern crate emit;
-        emit::__private::format($record)
+        emit::rt::__private::format($record)
     }};
 }
 
@@ -114,7 +108,7 @@ pub mod tracing {
                     let fields = meta.fields();
 
                     Event::dispatch(meta, &fields.value_set(&[
-                        (&fields.field("msg").unwrap(), Some(&field::display($record.render_msg()) as &dyn Value)),
+                        (&fields.field("msg").unwrap(), Some(&field::display(&$record) as &dyn Value)),
                         $(
                             #$cfg
                             (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))
@@ -127,9 +121,9 @@ pub mod tracing {
 
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    pub use tracing_core_lib as core;
+    pub use tracing_core as core;
 
-    use tracing_core_lib::{
+    use tracing_core::{
         callsite, dispatcher, Callsite as TracingCallsite, Interest, Metadata, Once,
     };
 

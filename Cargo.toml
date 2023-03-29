@@ -16,8 +16,8 @@ edition = "2021"
 [features]
 tracing = ["emit_rt/tracing"]
 std = ["emit_rt/std", "emit_ct/std"]
-sval = ["emit_rt/sval", "emit_ct/sval", "sval_lib"]
-serde = ["emit_rt/serde", "emit_ct/serde", "serde_lib"]
+sval = ["emit_rt/sval", "emit_ct/sval"]
+serde = ["emit_rt/serde", "emit_ct/serde"]
 
 [dependencies.emit_rt]
 path = "rt"
@@ -25,12 +25,5 @@ path = "rt"
 [dependencies.emit_ct]
 path = "ct"
 
-[dependencies.sval_lib]
-version = "1.0.0-alpha.5"
-optional = true
-package = "sval"
-
-[dependencies.serde_lib]
+[dependencies.value-bag]
 version = "1"
-optional = true
-package = "serde"
