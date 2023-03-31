@@ -10,6 +10,16 @@ impl<'a> Event<'a> {
         Timestamp
     }
 
+    pub fn level(&self) -> Level {
+        match self.0.level {
+            emit_rt::__private::Level::DEBUG => Level::Debug,
+            emit_rt::__private::Level::INFO => Level::Info,
+            emit_rt::__private::Level::WARN => Level::Warn,
+            emit_rt::__private::Level::ERROR => Level::Error,
+            _ => Level::Info,
+        }
+    }
+
     pub fn message<'b>(&'b self) -> Template<'b> {
         self.template().message()
     }
@@ -27,7 +37,22 @@ impl<'a> Event<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct Timestamp;
+
+#[derive(Debug)]
+pub enum Level {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl fmt::Display for Level {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
 
 pub struct Properties<'a> {
     record: &'a crate::rt::__private::Record<'a>,

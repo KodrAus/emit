@@ -19,19 +19,11 @@ mod emit;
 mod filter;
 
 /**
-Emit a trace record.
-*/
-#[proc_macro]
-pub fn trace(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(item)
-}
-
-/**
 Emit a debug record.
 */
 #[proc_macro]
 pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(item)
+    emit(quote!(DEBUG), TokenStream::from(item))
 }
 
 /**
@@ -39,7 +31,7 @@ Emit a info record.
 */
 #[proc_macro]
 pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(item)
+    emit(quote!(INFO), TokenStream::from(item))
 }
 
 /**
@@ -47,7 +39,7 @@ Emit a warn record.
 */
 #[proc_macro]
 pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(item)
+    emit(quote!(WARN), TokenStream::from(item))
 }
 
 /**
@@ -55,19 +47,15 @@ Emit a error record.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(item)
+    emit(quote!(ERROR), TokenStream::from(item))
 }
 
-/**
-Logging statements.
-*/
-#[proc_macro]
-pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+fn emit(
+    level: proc_macro2::TokenStream,
+    item: proc_macro2::TokenStream,
+) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
-        proc_macro::TokenStream::from(emit::expand_tokens(
-            TokenStream::from(item),
-            quote!(__private_emit),
-        ))
+        proc_macro::TokenStream::from(emit::expand_tokens(level, item, quote!(__private_emit)))
     } else {
         proc_macro::TokenStream::new()
     }
@@ -81,6 +69,7 @@ pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(emit::expand_tokens(
         TokenStream::from(item),
         quote!(__private_format),
+        quote!(default()),
     ))
 }
 

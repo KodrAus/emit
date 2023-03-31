@@ -23,7 +23,7 @@ extern crate core as std;
 Macros for emitting log events.
 */
 pub use emit_ct::{
-    as_debug, as_display, as_serde, as_sval, debug, emit, error, format, info, source, trace, warn,
+    as_debug, as_display, as_serde, as_sval, debug, error, format, info, source, warn,
 };
 
 /**

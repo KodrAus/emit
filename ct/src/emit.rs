@@ -13,7 +13,11 @@ use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
 
-pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenStream {
+pub(super) fn expand_tokens(
+    level: TokenStream,
+    input: TokenStream,
+    receiver: TokenStream,
+) -> TokenStream {
     let record_ident = Ident::new(&"record", input.span());
     let template = Template::parse2(input).expect("failed to expand template");
 
@@ -91,6 +95,8 @@ pub(super) fn expand_tokens(input: TokenStream, receiver: TokenStream) -> TokenS
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
                 let #record_ident = emit::rt::__private::Record {
+                    timestamp: emit::rt::__private::Timestamp::now(),
+                    level: emit::rt::__private::Level::#level,
                     kvs: &[#(#field_record_tokens),*],
                     template: #template_tokens,
                 };
@@ -395,7 +401,7 @@ mod tests {
         ];
 
         for (expr, expected) in cases {
-            let actual = expand_tokens(expr, quote!(__private_emit));
+            let actual = expand_tokens(quote!(info()), expr, quote!(__private_emit));
 
             assert_eq!(expected.to_string(), actual.to_string());
         }

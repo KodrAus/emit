@@ -2,7 +2,7 @@
 
 fn main() {
     emit::to(|evt| {
-        println!("{}", evt.message());
+        println!("{}: {}", evt.level(), evt.message());
     });
 
     emit::info!("something went wrong at {id: 42}");
