@@ -18,7 +18,7 @@ pub(super) fn expand_tokens(
     input: TokenStream,
     receiver: TokenStream,
 ) -> TokenStream {
-    let record_ident = Ident::new(&"record", input.span());
+    let event_ident = Ident::new(&"event", input.span());
     let template = Template::parse2(input).expect("failed to expand template");
 
     // Any field-values that aren't part of the template
@@ -82,7 +82,7 @@ pub(super) fn expand_tokens(
     let field_match_value_tokens = fields.match_value_tokens();
     let field_match_binding_tokens = fields.match_binding_tokens();
 
-    let field_record_tokens = fields.sorted_field_record_tokens();
+    let field_event_tokens = fields.sorted_field_event_tokens();
     let field_cfg_tokens = fields.sorted_field_cfg_tokens();
     let field_key_tokens = fields.sorted_field_key_tokens();
     let field_value_tokens = fields.sorted_field_value_tokens();
@@ -94,10 +94,10 @@ pub(super) fn expand_tokens(
 
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
-                let #record_ident = emit::rt::__private::Record {
-                    timestamp: emit::rt::__private::Timestamp::now(),
-                    level: emit::rt::__private::Level::#level,
-                    kvs: &[#(#field_record_tokens),*],
+                let #event_ident = emit::rt::__private::RawEvent {
+                    timestamp: emit::rt::__private::RawTimestamp::now(),
+                    level: emit::rt::__private::RawLevel::#level,
+                    properties: &[#(#field_event_tokens),*],
                     template: #template_tokens,
                 };
 
@@ -106,7 +106,7 @@ pub(super) fn expand_tokens(
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
                     values: [#(#field_value_tokens),*],
-                    record: &#record_ident,
+                    event: &#event_ident,
                 })
             }
         }
@@ -123,7 +123,7 @@ struct Fields {
 
 struct SortedField {
     field_key_tokens: TokenStream,
-    field_record_tokens: TokenStream,
+    field_event_tokens: TokenStream,
     field_value_tokens: TokenStream,
     cfg_attr: Option<Attribute>,
 }
@@ -143,10 +143,10 @@ impl Fields {
             .map(|field| &field.field_key_tokens)
     }
 
-    fn sorted_field_record_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+    fn sorted_field_event_tokens(&self) -> impl Iterator<Item = &TokenStream> {
         self.sorted_fields
             .values()
-            .map(|field| &field.field_record_tokens)
+            .map(|field| &field.field_event_tokens)
     }
 
     fn sorted_field_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
@@ -211,7 +211,7 @@ impl Fields {
             label.clone(),
             SortedField {
                 field_key_tokens: quote_spanned!(fv.span()=> #cfg_attr #label),
-                field_record_tokens: quote_spanned!(fv.span()=> #cfg_attr (#v.0, #v.1.by_ref())),
+                field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (#v.0, #v.1.by_ref())),
                 field_value_tokens: quote_spanned!(fv.span()=> #cfg_attr &#v),
                 cfg_attr,
             },
@@ -327,8 +327,8 @@ mod tests {
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let record = emit::rt::__private::Record {
-                                kvs: &[
+                            let event = emit::rt::__private::RawEvent {
+                                properties: &[
                                     (__tmp1.0, __tmp1.1.by_ref()),
                                     (__tmp0.0, __tmp0.1.by_ref()),
                                     (__tmp2.0, __tmp2.1.by_ref()),
@@ -362,7 +362,7 @@ mod tests {
                                 ],
                                 keys: ["a", "b", "c", "d", #[cfg(disabled)] "e"],
                                 values: [&__tmp1, &__tmp0, &__tmp2, &__tmp3, #[cfg(disabled)] &__tmp4],
-                                record: &record,
+                                event: &event,
                             })
                         }
                     }
@@ -377,8 +377,8 @@ mod tests {
                         { emit::ct::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let record = emit::rt::__private::Record {
-                                kvs: &[(__tmp0.0, __tmp0.1.by_ref())],
+                            let event = emit::rt::__private::RawEvent {
+                                properties: &[(__tmp0.0, __tmp0.1.by_ref())],
                                 template: emit::rt::__private::template(&[
                                     emit::rt::__private::Part::Text("Text and "),
                                     emit::rt::__private::Part::Hole ( "a")
@@ -392,7 +392,7 @@ mod tests {
                                 ],
                                 keys: ["a"],
                                 values: [&__tmp0],
-                                record: &record,
+                                event: &event,
                             })
                         }
                     }

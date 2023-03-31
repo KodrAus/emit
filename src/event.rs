@@ -3,7 +3,7 @@ use crate::std::fmt;
 use fv_template::rt::Context;
 pub use value_bag::ValueBag;
 
-pub struct Event<'a>(pub(crate) &'a crate::rt::__private::Record<'a>);
+pub struct Event<'a>(pub(crate) &'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Event<'a> {
     pub fn timestamp(&self) -> Timestamp {
@@ -12,10 +12,10 @@ impl<'a> Event<'a> {
 
     pub fn level(&self) -> Level {
         match self.0.level {
-            emit_rt::__private::Level::DEBUG => Level::Debug,
-            emit_rt::__private::Level::INFO => Level::Info,
-            emit_rt::__private::Level::WARN => Level::Warn,
-            emit_rt::__private::Level::ERROR => Level::Error,
+            emit_rt::__private::RawLevel::DEBUG => Level::Debug,
+            emit_rt::__private::RawLevel::INFO => Level::Info,
+            emit_rt::__private::RawLevel::WARN => Level::Warn,
+            emit_rt::__private::RawLevel::ERROR => Level::Error,
             _ => Level::Info,
         }
     }
@@ -26,14 +26,14 @@ impl<'a> Event<'a> {
 
     pub fn template<'b>(&'b self) -> Template<'b> {
         Template {
-            record: self.0,
+            event: self.0,
             style: Default::default(),
             properties: Default::default(),
         }
     }
 
     pub fn properties<'b>(&'b self) -> Properties<'b> {
-        Properties { record: self.0 }
+        Properties { event: self.0 }
     }
 }
 
@@ -55,21 +55,21 @@ impl fmt::Display for Level {
 }
 
 pub struct Properties<'a> {
-    record: &'a crate::rt::__private::Record<'a>,
+    event: &'a crate::rt::__private::RawEvent<'a>,
 }
 
 impl<'a> Properties<'a> {
     pub fn get<'b>(&'b self, key: impl AsRef<str>) -> Option<ValueBag<'b>> {
-        self.record.get(key).map(|value| value.by_ref())
+        self.event.get(key).map(|value| value.by_ref())
     }
 
     pub fn iter<'b>(&'b self) -> impl Iterator<Item = (&'b str, ValueBag<'b>)> {
-        self.record.kvs.iter().map(|(k, v)| (*k, v.by_ref()))
+        self.event.properties.iter().map(|(k, v)| (*k, v.by_ref()))
     }
 }
 
 pub struct Template<'a> {
-    record: &'a crate::rt::__private::Record<'a>,
+    event: &'a crate::rt::__private::RawEvent<'a>,
     style: TemplateStyle,
     properties: bool,
 }
@@ -88,7 +88,7 @@ impl Default for TemplateStyle {
 impl<'a> Template<'a> {
     pub fn message(self) -> Self {
         Template {
-            record: self.record,
+            event: self.event,
             style: self.style,
             properties: true,
         }
@@ -96,7 +96,7 @@ impl<'a> Template<'a> {
 
     pub fn braced(self) -> Self {
         Template {
-            record: self.record,
+            event: self.event,
             properties: self.properties,
             style: TemplateStyle::Braced,
         }
@@ -107,16 +107,16 @@ impl<'a> fmt::Display for Template<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ctxt = Context::new().fill(|f, label| {
             self.properties
-                .then(|| self.record.get(label))
+                .then(|| self.event.get(label))
                 .and_then(|value| value)
                 .map(|value| fmt::Display::fmt(value, f))
         });
 
         match self.style {
-            TemplateStyle::Tilde => fmt::Display::fmt(&self.record.template.render(ctxt), f),
+            TemplateStyle::Tilde => fmt::Display::fmt(&self.event.template.render(ctxt), f),
             TemplateStyle::Braced => fmt::Display::fmt(
                 &self
-                    .record
+                    .event
                     .template
                     .render(ctxt.missing(|f, label| write!(f, "{{{}}}", label))),
                 f,

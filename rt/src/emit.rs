@@ -18,10 +18,10 @@ macro_rules! __private_format {
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: $keys:expr,
         values: $values:expr,
-        record: $record:expr,
+        event: $event:expr,
     }) => {{
         extern crate emit;
-        emit::rt::__private::format($record)
+        emit::rt::__private::format($event)
     }};
 }
 
@@ -44,20 +44,20 @@ macro_rules! __private_emit_to_self {
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: [$($key:expr),*],
         values: [$($value:expr),*],
-        record: $record:expr,
+        event: $event:expr,
     }) => {{
         extern crate emit;
-        emit::__private::emit($record)
+        emit::__private::emit($event)
     }};
     ({
         to: Some($to:expr),
         key_value_cfgs: [$(#$cfg:tt),*],
         keys: [$($key:expr),*],
         values: [$($value:expr),*],
-        record: $record:expr,
+        event: $event:expr,
     }) => {{
         extern crate emit;
-        emit::__private::emit_to($to, $record)
+        emit::__private::emit_to($to, $event)
     }};
 }
 
@@ -71,7 +71,7 @@ pub mod tracing {
             key_value_cfgs: [$(#$cfg:tt),*],
             keys: [$($key:expr),*],
             values: [$($value:expr),*],
-            record: $record:expr,
+            event: $event:expr,
         }) => {{
             extern crate emit;
 
@@ -108,7 +108,7 @@ pub mod tracing {
                     let fields = meta.fields();
 
                     Event::dispatch(meta, &fields.value_set(&[
-                        (&fields.field("msg").unwrap(), Some(&field::display(&$record) as &dyn Value)),
+                        (&fields.field("msg").unwrap(), Some(&field::display(&$event) as &dyn Value)),
                         $(
                             #$cfg
                             (&fields.field($key).unwrap(), Some(&field::debug($value) as &dyn Value))

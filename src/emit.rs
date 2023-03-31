@@ -6,7 +6,7 @@ use crate::{
 
 use crate::Event;
 
-pub fn emit(record: &crate::rt::__private::Record) {
+pub fn emit(record: &crate::rt::__private::RawEvent) {
     #[cfg(feature = "std")]
     {
         if let Some(emitter) = EMITTER.get() {
@@ -19,11 +19,11 @@ pub fn emit(record: &crate::rt::__private::Record) {
     }
 }
 
-pub fn emit_to(target: Emitter, record: &crate::rt::__private::Record) {
+pub fn emit_to(target: Emitter, record: &crate::rt::__private::RawEvent) {
     target(&Event(record))
 }
 
 #[cfg(feature = "std")]
-pub fn format(record: &crate::rt::__private::Record) -> String {
+pub fn format(record: &crate::rt::__private::RawEvent) -> String {
     record.to_string()
 }

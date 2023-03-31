@@ -1,22 +1,22 @@
 use crate::std::fmt;
 
-pub struct Record<'a> {
-    pub timestamp: Timestamp,
-    pub level: Level,
-    pub kvs: &'a [(&'static str, ValueBag<'a>)],
+pub struct RawEvent<'a> {
+    pub timestamp: RawTimestamp,
+    pub level: RawLevel,
+    pub properties: &'a [(&'static str, ValueBag<'a>)],
     pub template: Template<'a>,
 }
 
-impl<'a> Record<'a> {
+impl<'a> RawEvent<'a> {
     pub fn get(&self, key: impl AsRef<str>) -> Option<&ValueBag<'a>> {
-        self.kvs
+        self.properties
             .binary_search_by_key(&key.as_ref(), |(k, _)| k)
             .ok()
-            .map(|index| &self.kvs[index].1)
+            .map(|index| &self.properties[index].1)
     }
 }
 
-impl<'a> fmt::Display for Record<'a> {
+impl<'a> fmt::Display for RawEvent<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let rendered = self.template.render(fv_template::rt::Context::new().fill(
             move |write: &mut fmt::Formatter, label| {
@@ -32,26 +32,26 @@ impl<'a> fmt::Display for Record<'a> {
 pub use fv_template::rt::{template, Part, Template};
 pub use value_bag::ValueBag;
 
-pub struct Timestamp;
+pub struct RawTimestamp;
 
-impl Timestamp {
+impl RawTimestamp {
     pub fn now() -> Self {
-        Timestamp
+        RawTimestamp
     }
 }
 
 #[derive(PartialEq, Eq)]
-pub struct Level(pub u8);
+pub struct RawLevel(pub u8);
 
-impl Level {
-    pub const DEBUG: Self = Level(7);
-    pub const INFO: Self = Level(6);
-    pub const WARN: Self = Level(4);
-    pub const ERROR: Self = Level(3);
+impl RawLevel {
+    pub const DEBUG: Self = RawLevel(7);
+    pub const INFO: Self = RawLevel(6);
+    pub const WARN: Self = RawLevel(4);
+    pub const ERROR: Self = RawLevel(3);
 }
 
-impl Default for Level {
+impl Default for RawLevel {
     fn default() -> Self {
-        Level::INFO
+        RawLevel::INFO
     }
 }
