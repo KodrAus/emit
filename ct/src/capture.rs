@@ -57,7 +57,7 @@ struct RawArgs {
 impl Parse for RawArgs {
     fn parse(input: ParseStream) -> parse::Result<Self> {
         Ok(RawArgs {
-            fields: input.parse_terminated(FieldValue::parse)?,
+            fields: input.parse_terminated(FieldValue::parse, Token![,])?,
         })
     }
 }

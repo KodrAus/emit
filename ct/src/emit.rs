@@ -7,7 +7,9 @@ This module generates calls to `rt::emit`.
 use std::{collections::BTreeMap, mem};
 
 use proc_macro2::{Span, TokenStream};
-use syn::{spanned::Spanned, Attribute, Expr, ExprPath, FieldValue, Ident, Meta};
+use syn::{
+    spanned::Spanned, Attribute, Expr, ExprPath, FieldValue, Ident, MacroDelimiter, Meta, MetaList,
+};
 
 use fv_template::ct::Template;
 
@@ -246,7 +248,7 @@ pub(super) trait AttributeExt {
 
 impl AttributeExt for Attribute {
     fn is_cfg(&self) -> bool {
-        if let Some(ident) = self.path.get_ident() {
+        if let Some(ident) = self.path().get_ident() {
             ident == "cfg"
         } else {
             false
@@ -254,21 +256,28 @@ impl AttributeExt for Attribute {
     }
 
     fn invert_cfg(&self) -> Option<Attribute> {
-        match self.path.get_ident() {
-            Some(ident) if ident == "cfg" => match self.parse_meta() {
-                Ok(Meta::List(list)) => {
-                    let inner = list.nested;
+        match self.path().get_ident() {
+            Some(ident) if ident == "cfg" => {
+                let tokens = match &self.meta {
+                    Meta::Path(meta) => quote!(not(#meta)),
+                    Meta::List(meta) => {
+                        let meta = &meta.tokens;
+                        quote!(not(#meta))
+                    }
+                    Meta::NameValue(meta) => quote!(not(#meta)),
+                };
 
-                    Some(Attribute {
-                        pound_token: self.pound_token.clone(),
-                        style: self.style.clone(),
-                        bracket_token: self.bracket_token.clone(),
-                        path: self.path.clone(),
-                        tokens: quote!((not(#inner))),
-                    })
-                }
-                _ => None,
-            },
+                Some(Attribute {
+                    pound_token: self.pound_token.clone(),
+                    style: self.style.clone(),
+                    bracket_token: self.bracket_token.clone(),
+                    meta: Meta::List(MetaList {
+                        path: self.path().clone(),
+                        delimiter: MacroDelimiter::Paren(Default::default()),
+                        tokens,
+                    }),
+                })
+            }
             _ => None,
         }
     }

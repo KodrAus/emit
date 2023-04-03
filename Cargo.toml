@@ -33,7 +33,7 @@ path = "ct"
 version = "1"
 
 [dependencies.fv-template]
-version = "0.1"
+version = "0.2"
 
 [dependencies.humantime]
 version = "2"
