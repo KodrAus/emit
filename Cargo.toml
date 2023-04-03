@@ -4,7 +4,9 @@ members = [
     "rt",
     "benches",
     "tests/ui",
-    "tests/smoke-test",
+]
+exclude = [
+    "tests/smoke-test"
 ]
 
 [package]
@@ -17,7 +19,7 @@ edition = "2021"
 default = ["std"]
 
 tracing = ["emit_rt/tracing"]
-std = ["emit_rt/std", "emit_ct/std"]
+std = ["emit_rt/std", "emit_ct/std", "dep:humantime"]
 sval = ["emit_rt/sval", "emit_ct/sval"]
 serde = ["emit_rt/serde", "emit_ct/serde"]
 
@@ -32,3 +34,7 @@ version = "1"
 
 [dependencies.fv-template]
 version = "0.1"
+
+[dependencies.humantime]
+version = "2"
+optional = true

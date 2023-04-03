@@ -1,5 +1,8 @@
 use crate::std::fmt;
 
+#[cfg(feature = "std")]
+use crate::std::time::Duration;
+
 pub struct RawEvent<'a> {
     pub timestamp: RawTimestamp,
     pub level: RawLevel,
@@ -32,11 +35,24 @@ impl<'a> fmt::Display for RawEvent<'a> {
 pub use fv_template::rt::{template, Part, Template};
 pub use value_bag::ValueBag;
 
-pub struct RawTimestamp;
+pub struct RawTimestamp(#[cfg(feature = "std")] pub Duration);
 
 impl RawTimestamp {
     pub fn now() -> Self {
-        RawTimestamp
+        #[cfg(feature = "std")]
+        {
+            use crate::std::time::SystemTime;
+
+            RawTimestamp(
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default(),
+            )
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            RawTimestamp()
+        }
     }
 }
 

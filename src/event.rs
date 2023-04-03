@@ -1,13 +1,17 @@
 use crate::std::fmt;
 
+#[cfg(feature = "std")]
+use crate::std::time::Duration;
+
 use fv_template::rt::Context;
 pub use value_bag::ValueBag;
 
 pub struct Event<'a>(pub(crate) &'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Event<'a> {
+    #[cfg(feature = "std")]
     pub fn timestamp(&self) -> Timestamp {
-        Timestamp
+        Timestamp(self.0.timestamp.0)
     }
 
     pub fn level(&self) -> Level {
@@ -37,8 +41,15 @@ impl<'a> Event<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct Timestamp;
+#[cfg(feature = "std")]
+pub struct Timestamp(Duration);
+
+#[cfg(feature = "std")]
+impl Timestamp {
+    pub fn elapsed_since_unix_epoch(&self) -> Duration {
+        self.0
+    }
+}
 
 #[derive(Debug)]
 pub enum Level {

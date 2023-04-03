@@ -193,7 +193,6 @@ pub fn as_serde(
 Capture an Error.
 
 There should only be a single `#[source]` attribute per log statement.
-It must use `source` as the key name.
 */
 #[proc_macro_attribute]
 pub fn source(
