@@ -97,10 +97,10 @@ pub(super) fn expand_tokens(
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
                 let #event_ident = emit::rt::__private::RawEvent {
-                    timestamp: emit::rt::__private::RawTimestamp::now(),
-                    level: emit::rt::__private::RawLevel::#level,
-                    properties: &[#(#field_event_tokens),*],
-                    template: #template_tokens,
+                    ts: emit::rt::__private::RawTimestamp::now(),
+                    lvl: emit::rt::__private::RawLevel::#level,
+                    props: &[#(#field_event_tokens),*],
+                    tpl: #template_tokens,
                 };
 
                 emit::rt::#receiver!({

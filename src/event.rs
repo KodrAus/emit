@@ -4,18 +4,18 @@ use crate::std::fmt;
 use crate::std::time::Duration;
 
 use fv_template::rt::Context;
-pub use value_bag::ValueBag;
+use value_bag::ValueBag;
 
 pub struct Event<'a>(pub(crate) &'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Event<'a> {
     #[cfg(feature = "std")]
-    pub fn timestamp(&self) -> Timestamp {
-        Timestamp(self.0.timestamp.0)
+    pub fn ts(&self) -> Timestamp {
+        Timestamp(self.0.ts.0)
     }
 
-    pub fn level(&self) -> Level {
-        match self.0.level {
+    pub fn lvl(&self) -> Level {
+        match self.0.lvl {
             emit_rt::__private::RawLevel::DEBUG => Level::Debug,
             emit_rt::__private::RawLevel::INFO => Level::Info,
             emit_rt::__private::RawLevel::WARN => Level::Warn,
@@ -24,19 +24,19 @@ impl<'a> Event<'a> {
         }
     }
 
-    pub fn message<'b>(&'b self) -> Template<'b> {
-        self.template().message()
+    pub fn msg<'b>(&'b self) -> Template<'b> {
+        self.tpl().message()
     }
 
-    pub fn template<'b>(&'b self) -> Template<'b> {
+    pub fn tpl<'b>(&'b self) -> Template<'b> {
         Template {
             event: self.0,
             style: Default::default(),
-            properties: Default::default(),
+            props: Default::default(),
         }
     }
 
-    pub fn properties<'b>(&'b self) -> Properties<'b> {
+    pub fn props<'b>(&'b self) -> Properties<'b> {
         Properties { event: self.0 }
     }
 }
@@ -70,19 +70,50 @@ pub struct Properties<'a> {
 }
 
 impl<'a> Properties<'a> {
-    pub fn get<'b>(&'b self, key: impl AsRef<str>) -> Option<ValueBag<'b>> {
-        self.event.get(key).map(|value| value.by_ref())
+    pub fn get<'b>(&'b self, key: impl AsRef<str>) -> Option<Value<'b>> {
+        self.event.get(key).map(|value| Value(value.by_ref()))
     }
 
-    pub fn iter<'b>(&'b self) -> impl Iterator<Item = (&'b str, ValueBag<'b>)> {
-        self.event.properties.iter().map(|(k, v)| (*k, v.by_ref()))
+    pub fn iter<'b>(&'b self) -> impl Iterator<Item = (&'b str, Value<'b>)> {
+        self.event
+            .props
+            .iter()
+            .map(|(k, v)| (*k, Value(v.by_ref())))
+    }
+}
+
+pub struct Value<'a>(ValueBag<'a>);
+
+impl<'a> fmt::Debug for Value<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<'a> fmt::Display for Value<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'a> sval::Value for Value<'a> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        self.0.stream(stream)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a> serde::Serialize for Value<'a> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
     }
 }
 
 pub struct Template<'a> {
     event: &'a crate::rt::__private::RawEvent<'a>,
     style: TemplateStyle,
-    properties: bool,
+    props: bool,
 }
 
 enum TemplateStyle {
@@ -101,14 +132,14 @@ impl<'a> Template<'a> {
         Template {
             event: self.event,
             style: self.style,
-            properties: true,
+            props: true,
         }
     }
 
     pub fn braced(self) -> Self {
         Template {
             event: self.event,
-            properties: self.properties,
+            props: self.props,
             style: TemplateStyle::Braced,
         }
     }
@@ -117,18 +148,18 @@ impl<'a> Template<'a> {
 impl<'a> fmt::Display for Template<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ctxt = Context::new().fill(|f, label| {
-            self.properties
+            self.props
                 .then(|| self.event.get(label))
                 .and_then(|value| value)
                 .map(|value| fmt::Display::fmt(value, f))
         });
 
         match self.style {
-            TemplateStyle::Tilde => fmt::Display::fmt(&self.event.template.render(ctxt), f),
+            TemplateStyle::Tilde => fmt::Display::fmt(&self.event.tpl.render(ctxt), f),
             TemplateStyle::Braced => fmt::Display::fmt(
                 &self
                     .event
-                    .template
+                    .tpl
                     .render(ctxt.missing(|f, label| write!(f, "{{{}}}", label))),
                 f,
             ),

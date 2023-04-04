@@ -3,25 +3,28 @@ use crate::std::fmt;
 #[cfg(feature = "std")]
 use crate::std::time::Duration;
 
+pub use fv_template::rt::{template, Part, Template};
+pub use value_bag::ValueBag;
+
 pub struct RawEvent<'a> {
-    pub timestamp: RawTimestamp,
-    pub level: RawLevel,
-    pub properties: &'a [(&'static str, ValueBag<'a>)],
-    pub template: Template<'a>,
+    pub ts: RawTimestamp,
+    pub lvl: RawLevel,
+    pub props: &'a [(&'static str, ValueBag<'a>)],
+    pub tpl: Template<'a>,
 }
 
 impl<'a> RawEvent<'a> {
     pub fn get(&self, key: impl AsRef<str>) -> Option<&ValueBag<'a>> {
-        self.properties
+        self.props
             .binary_search_by_key(&key.as_ref(), |(k, _)| k)
             .ok()
-            .map(|index| &self.properties[index].1)
+            .map(|index| &self.props[index].1)
     }
 }
 
 impl<'a> fmt::Display for RawEvent<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rendered = self.template.render(fv_template::rt::Context::new().fill(
+        let rendered = self.tpl.render(fv_template::rt::Context::new().fill(
             move |write: &mut fmt::Formatter, label| {
                 self.get(label)
                     .map(|value| fmt::Display::fmt(&value, write))
@@ -31,9 +34,6 @@ impl<'a> fmt::Display for RawEvent<'a> {
         fmt::Display::fmt(&rendered, f)
     }
 }
-
-pub use fv_template::rt::{template, Part, Template};
-pub use value_bag::ValueBag;
 
 pub struct RawTimestamp(#[cfg(feature = "std")] pub Duration);
 

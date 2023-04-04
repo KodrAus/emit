@@ -19,9 +19,9 @@ edition = "2021"
 default = ["std"]
 
 tracing = ["emit_rt/tracing"]
-std = ["emit_rt/std", "emit_ct/std", "dep:humantime"]
-sval = ["emit_rt/sval", "emit_ct/sval"]
-serde = ["emit_rt/serde", "emit_ct/serde"]
+std = ["emit_rt/std", "emit_ct/std"]
+sval = ["emit_rt/sval", "emit_ct/sval", "dep:sval"]
+serde = ["emit_rt/serde", "emit_ct/serde", "dep:serde"]
 
 [dependencies.emit_rt]
 path = "rt"
@@ -35,6 +35,12 @@ version = "1"
 [dependencies.fv-template]
 version = "0.2"
 
-[dependencies.humantime]
+[dependencies.sval]
 version = "2"
 optional = true
+default-features = false
+
+[dependencies.serde]
+version = "1"
+optional = true
+default-features = false
