@@ -9,14 +9,25 @@ use crate::std::{
 use fv_template::rt::Context;
 use value_bag::ValueBag;
 
+/**
+An event is a semantic record of some notable change in a system.
+
+Events combine a timestamp, a message template, and associated structured properties.
+*/
 pub struct Event<'a>(pub(crate) &'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Event<'a> {
+    /**
+    Get the time at which the event occurred.
+    */
     #[cfg(feature = "std")]
     pub fn ts(&self) -> Timestamp {
         Timestamp(self.0.ts.0)
     }
 
+    /**
+    Get an indicator of the kind of event that occurred.
+    */
     pub fn lvl(&self) -> Level {
         match self.0.lvl {
             emit_rt::__private::RawLevel::DEBUG => Level::Debug,
@@ -27,10 +38,20 @@ impl<'a> Event<'a> {
         }
     }
 
+    /**
+    Get a description of the event, intended for end-users.
+    */
     pub fn msg(&self) -> Template<'a> {
         self.tpl().msg()
     }
 
+    /**
+    Get the template of the event.
+
+    This template can either be rendered using the event's properties,
+    or converted into a textual representation with placeholders for
+    property values.
+    */
     pub fn tpl(&self) -> Template<'a> {
         Template {
             event: self.0,
@@ -39,26 +60,53 @@ impl<'a> Event<'a> {
         }
     }
 
+    /**
+    Get the properties captured with the event.
+    */
     pub fn props(&self) -> Properties<'a> {
         Properties(self.0)
     }
 }
 
+/**
+The time at which an event occurred.
+*/
 #[cfg(feature = "std")]
 pub struct Timestamp(Duration);
 
 #[cfg(feature = "std")]
 impl Timestamp {
+    /**
+    Convert the timestamp into a standard representation.
+    */
     pub fn to_system_time(&self) -> SystemTime {
         UNIX_EPOCH + self.0
     }
 }
 
+/**
+A course-grained category for the event.
+
+Levels provide some quick guage of the notability of a particular event.
+They're a standard concept shared by many tools and a useful static filter.
+*/
 #[derive(Debug)]
 pub enum Level {
+    /**
+    A weakly informative event that may be useful for debugging.
+    */
     Debug,
+    /**
+    An informative event.
+    */
     Info,
+    /**
+    A weakly erroneous event that was recovered from.
+    */
     Warn,
+    /**
+    An erroneous event.
+    */
     Error,
 }
 
@@ -68,32 +116,57 @@ impl fmt::Display for Level {
     }
 }
 
+/**
+The structured properties captured with an event.
+*/
 pub struct Properties<'a>(&'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Properties<'a> {
+    /**
+    Get a property by name.
+    */
     pub fn get(&self, key: impl AsRef<str>) -> Option<Value<'a>> {
         self.0.get(key).map(|value| Value(value.by_ref()))
     }
 
+    /**
+    Iterate over all properties.
+    */
     pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> {
         self.0.props.iter().map(|(k, v)| (*k, Value(v.by_ref())))
     }
 
+    /**
+    Get the semantic `err` property.
+
+    The error can be treated like a regular [`std::error::Error`].
+    If it was originally captured as an error then its backtrace and source
+    chain can also be accessed.
+    */
     #[cfg(feature = "std")]
     pub fn err(&self) -> Option<Error<'a>> {
         self.0
-            .get(crate::rt::__private::WELL_KNOWN_ERR_KEY)
+            .get(crate::well_known::ERR)
             .map(|err| Error(err.by_ref()))
     }
 }
 
+/**
+An individual property value.
+*/
 pub struct Value<'a>(ValueBag<'a>);
 
 impl<'a> Value<'a> {
+    /**
+    Attempt to downcast the value to some concrete type.
+    */
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
     }
 
+    /**
+    Try convert the value into a signed 64bit integer.
+    */
     pub fn to_i64(&self) -> Option<i64> {
         self.0.to_i64()
     }
@@ -125,6 +198,9 @@ impl<'a> serde::Serialize for Value<'a> {
     }
 }
 
+/**
+The semantic `err` property value.
+*/
 #[cfg(feature = "std")]
 pub struct Error<'a>(ValueBag<'a>);
 
@@ -156,6 +232,12 @@ impl<'a> error::Error for Error<'a> {
     }
 }
 
+/**
+A template is a textual message with holes to format properties into.
+
+Templates are lazy, they can be evaluated by formatting them either
+using their `Debug` or `Display` implementations.
+*/
 pub struct Template<'a> {
     event: &'a crate::rt::__private::RawEvent<'a>,
     style: TemplateStyle,
@@ -174,6 +256,9 @@ impl Default for TemplateStyle {
 }
 
 impl<'a> Template<'a> {
+    /**
+    Render properties into the event.
+    */
     pub fn msg(self) -> Self {
         Template {
             event: self.event,
@@ -182,6 +267,9 @@ impl<'a> Template<'a> {
         }
     }
 
+    /**
+    Render the holes in the template using braces like `{key}`.
+    */
     pub fn braced(self) -> Self {
         Template {
             event: self.event,
