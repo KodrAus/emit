@@ -21,7 +21,8 @@ macro_rules! __private_format {
         event: $event:expr,
     }) => {{
         extern crate emit;
-        emit::rt::__private::format($event)
+
+        emit::__private::format($event)
     }};
 }
 

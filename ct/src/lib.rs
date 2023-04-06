@@ -55,7 +55,11 @@ fn emit(
     item: proc_macro2::TokenStream,
 ) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
-        proc_macro::TokenStream::from(emit::expand_tokens(level, item, quote!(__private_emit)))
+        proc_macro::TokenStream::from(emit::expand_tokens(emit::ExpandTokens {
+            receiver: quote!(__private_emit),
+            level,
+            input: item,
+        }))
     } else {
         proc_macro::TokenStream::new()
     }
@@ -66,11 +70,11 @@ Format a template.
 */
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(emit::expand_tokens(
-        TokenStream::from(item),
-        quote!(__private_format),
-        quote!(default()),
-    ))
+    proc_macro::TokenStream::from(emit::expand_tokens(emit::ExpandTokens {
+        receiver: quote!(__private_format),
+        level: quote!(default()),
+        input: TokenStream::from(item),
+    }))
 }
 
 /**

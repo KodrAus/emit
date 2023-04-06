@@ -84,6 +84,12 @@ impl<'a> Properties<'a> {
 
 pub struct Value<'a>(ValueBag<'a>);
 
+impl<'a> Value<'a> {
+    pub fn to_i64(&self) -> Option<i64> {
+        self.0.to_i64()
+    }
+}
+
 impl<'a> fmt::Debug for Value<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)

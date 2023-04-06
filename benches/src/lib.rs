@@ -61,8 +61,8 @@ fn emit_10_as_debug(b: &mut test::Bencher) {
 fn emit_10_int_get_cast(b: &mut test::Bencher) {
     b.iter(|| {
         emit::info!(
-            target: |r| {
-                test::black_box(r.get("f5").unwrap().to_i64().unwrap());
+            to: |r| {
+                test::black_box(r.props().get("f5").unwrap().to_i64().unwrap());
             },
             "",
             f0: 0,
@@ -82,8 +82,8 @@ fn emit_10_int_get_cast(b: &mut test::Bencher) {
 fn emit_10_int_get_missing(b: &mut test::Bencher) {
     b.iter(|| {
         emit::info!(
-            target: |r| {
-                test::black_box(r.get("f10"));
+            to: |r| {
+                test::black_box(r.props().get("f10"));
             },
             "",
             f0: 0,

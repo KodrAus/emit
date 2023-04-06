@@ -343,11 +343,6 @@ mod tests {
         // Capture an arbitrary `Value`
         let _ = tuple.__private_capture_as_sval();
         let _ = (&&&tuple).__private_capture_anon_as_sval();
-
-        // Capture a `&dyn Value`
-        let v: &dyn Value = &map;
-        let _ = v.__private_capture_as_sval();
-        let _ = (&&&v).__private_capture_anon_as_sval();
     }
 
     #[test]

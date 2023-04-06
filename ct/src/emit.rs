@@ -15,13 +15,15 @@ use fv_template::ct::Template;
 
 use crate::capture::FieldValueExt;
 
-pub(super) fn expand_tokens(
-    level: TokenStream,
-    input: TokenStream,
-    receiver: TokenStream,
-) -> TokenStream {
-    let event_ident = Ident::new(&"event", input.span());
-    let template = Template::parse2(input).expect("failed to expand template");
+pub(super) struct ExpandTokens {
+    pub(super) receiver: TokenStream,
+    pub(super) level: TokenStream,
+    pub(super) input: TokenStream,
+}
+
+pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
+    let event_ident = Ident::new(&"event", opts.input.span());
+    let template = Template::parse2(opts.input).expect("failed to expand template");
 
     // Any field-values that aren't part of the template
     let mut extra_field_values: BTreeMap<_, _> = template
@@ -90,6 +92,8 @@ pub(super) fn expand_tokens(
     let field_value_tokens = fields.sorted_field_value_tokens();
 
     let to_tokens = args.to;
+    let level_tokens = opts.level;
+    let receiver_tokens = opts.receiver;
 
     quote!({
         extern crate emit;
@@ -98,12 +102,12 @@ pub(super) fn expand_tokens(
             (#(#field_match_binding_tokens),*) => {
                 let #event_ident = emit::rt::__private::RawEvent {
                     ts: emit::rt::__private::RawTimestamp::now(),
-                    lvl: emit::rt::__private::RawLevel::#level,
+                    lvl: emit::rt::__private::RawLevel::#level_tokens,
                     props: &[#(#field_event_tokens),*],
                     tpl: #template_tokens,
                 };
 
-                emit::rt::#receiver!({
+                emit::rt::#receiver_tokens!({
                     to: #to_tokens,
                     key_value_cfgs: [#(#field_cfg_tokens),*],
                     keys: [#(#field_key_tokens),*],
@@ -337,7 +341,9 @@ mod tests {
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
                             let event = emit::rt::__private::RawEvent {
-                                properties: &[
+                                ts: emit::rt::__private::RawTimestamp::now(),
+                                lvl: emit::rt::__private::RawLevel::info(),
+                                props: &[
                                     (__tmp1.0, __tmp1.1.by_ref()),
                                     (__tmp0.0, __tmp0.1.by_ref()),
                                     (__tmp2.0, __tmp2.1.by_ref()),
@@ -345,7 +351,7 @@ mod tests {
                                     #[cfg(disabled)]
                                     (__tmp4.0, __tmp4.1.by_ref())
                                 ],
-                                template: emit::rt::__private::template(&[
+                                tpl: emit::rt::__private::template(&[
                                     emit::rt::__private::Part::Text("Text and "),
                                     emit::rt::__private::Part::Hole ( "b"),
                                     emit::rt::__private::Part::Text(" and "),
@@ -387,8 +393,10 @@ mod tests {
                     ) {
                         (__tmp0) => {
                             let event = emit::rt::__private::RawEvent {
-                                properties: &[(__tmp0.0, __tmp0.1.by_ref())],
-                                template: emit::rt::__private::template(&[
+                                ts: emit::rt::__private::RawTimestamp::now(),
+                                lvl: emit::rt::__private::RawLevel::info(),
+                                props: &[(__tmp0.0, __tmp0.1.by_ref())],
+                                tpl: emit::rt::__private::template(&[
                                     emit::rt::__private::Part::Text("Text and "),
                                     emit::rt::__private::Part::Hole ( "a")
                                 ]),
@@ -410,7 +418,11 @@ mod tests {
         ];
 
         for (expr, expected) in cases {
-            let actual = expand_tokens(quote!(info()), expr, quote!(__private_emit));
+            let actual = expand_tokens(ExpandTokens {
+                receiver: quote!(__private_emit),
+                level: quote!(info()),
+                input: expr,
+            });
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
