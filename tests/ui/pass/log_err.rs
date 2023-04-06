@@ -5,14 +5,14 @@ extern crate emit;
 use std::io;
 
 fn main() {
-    emit::target(|record| {
+    emit::to(|record| {
         // Just make sure there's a typed `std::error::Error` there
-        assert!(record.source().is_some());
+        let err = record.props().err().expect("missing error");
 
-        println!("{}", sval_json::to_string(record).expect("failed to serialize"));
+        println!("{}", err.downcast_ref::<io::Error>().expect("invalid error type"));
     });
 
     let err = io::Error::from(io::ErrorKind::Other);
 
-    emit::info!("something went wrong ({#[emit::source] source: err})");
+    emit::info!("something went wrong ({err})");
 }

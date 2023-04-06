@@ -29,5 +29,7 @@ pub fn shave_the_yak(yak: &mut Yak) {
 }
 
 fn main() {
+    tracing_subscriber::fmt().init();
     
+    shave_the_yak(&mut Yak("🐮".to_owned()));
 }

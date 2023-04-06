@@ -6,6 +6,11 @@ use crate::std::time::Duration;
 pub use fv_template::rt::{template, Part, Template};
 pub use value_bag::ValueBag;
 
+/**
+A well-known name for an error.
+*/
+pub const WELL_KNOWN_ERR_KEY: &str = "err";
+
 pub struct RawEvent<'a> {
     pub ts: RawTimestamp,
     pub lvl: RawLevel,

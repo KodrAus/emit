@@ -24,11 +24,11 @@ impl<'a> Event<'a> {
         }
     }
 
-    pub fn msg<'b>(&'b self) -> Template<'b> {
-        self.tpl().message()
+    pub fn msg(&self) -> Template<'a> {
+        self.tpl().msg()
     }
 
-    pub fn tpl<'b>(&'b self) -> Template<'b> {
+    pub fn tpl(&self) -> Template<'a> {
         Template {
             event: self.0,
             style: Default::default(),
@@ -36,7 +36,7 @@ impl<'a> Event<'a> {
         }
     }
 
-    pub fn props<'b>(&'b self) -> Properties<'b> {
+    pub fn props(&self) -> Properties<'a> {
         Properties { event: self.0 }
     }
 }
@@ -70,11 +70,18 @@ pub struct Properties<'a> {
 }
 
 impl<'a> Properties<'a> {
-    pub fn get<'b>(&'b self, key: impl AsRef<str>) -> Option<Value<'b>> {
+    pub fn get(&self, key: impl AsRef<str>) -> Option<Value<'a>> {
         self.event.get(key).map(|value| Value(value.by_ref()))
     }
 
-    pub fn iter<'b>(&'b self) -> impl Iterator<Item = (&'b str, Value<'b>)> {
+    #[cfg(feature = "std")]
+    pub fn err(&self) -> Option<Error<'a>> {
+        self.event
+            .get(crate::rt::__private::WELL_KNOWN_ERR_KEY)
+            .map(|err| Error(err.by_ref()))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> {
         self.event
             .props
             .iter()
@@ -85,6 +92,10 @@ impl<'a> Properties<'a> {
 pub struct Value<'a>(ValueBag<'a>);
 
 impl<'a> Value<'a> {
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
+
     pub fn to_i64(&self) -> Option<i64> {
         self.0.to_i64()
     }
@@ -116,6 +127,37 @@ impl<'a> serde::Serialize for Value<'a> {
     }
 }
 
+#[cfg(feature = "std")]
+pub struct Error<'a>(ValueBag<'a>);
+
+#[cfg(feature = "std")]
+impl<'a> Error<'a> {
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a> fmt::Debug for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a> fmt::Display for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a> crate::std::error::Error for Error<'a> {
+    fn source(&self) -> Option<&(dyn crate::std::error::Error + 'static)> {
+        self.0.to_borrowed_error().and_then(|err| err.source())
+    }
+}
+
 pub struct Template<'a> {
     event: &'a crate::rt::__private::RawEvent<'a>,
     style: TemplateStyle,
@@ -134,7 +176,7 @@ impl Default for TemplateStyle {
 }
 
 impl<'a> Template<'a> {
-    pub fn message(self) -> Self {
+    pub fn msg(self) -> Self {
         Template {
             event: self.event,
             style: self.style,

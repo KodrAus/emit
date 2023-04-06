@@ -1,0 +1,18 @@
+error[E0277]: the trait bound `{integer}: std::error::Error` is not satisfied
+ --> fail/log_non_error_err.rs:4:41
+  |
+4 |     emit::info!("something went wrong ({err: 42})");
+  |                                         ^^^^^^^ the trait `std::error::Error` is not implemented for `{integer}`
+  |
+  = help: the following other types implement trait `emit::emit_rt::capture::Capture<T>`:
+            <(dyn std::error::Error + 'static) as emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureError>>
+            <(dyn std::fmt::Debug + 'static) as emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureDebug>>
+            <(dyn std::fmt::Display + 'static) as emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureDisplay>>
+            <str as emit::emit_rt::capture::Capture<T>>
+  = note: required for `{integer}` to implement `emit::emit_rt::capture::Capture<emit::emit_rt::capture::CaptureError>`
+note: required by a bound in `__private_capture_as_error`
+ --> $WORKSPACE/rt/src/capture.rs
+  |
+  |         Self: Capture<CaptureError>,
+  |               ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__PrivateCapture::__private_capture_as_error`
+  = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)

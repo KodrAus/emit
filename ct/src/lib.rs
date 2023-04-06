@@ -43,11 +43,23 @@ pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Emit a error record.
+Emit an error record.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     emit(quote!(ERROR), TokenStream::from(item))
+}
+
+/**
+Format a template.
+*/
+#[proc_macro]
+pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    proc_macro::TokenStream::from(emit::expand_tokens(emit::ExpandTokens {
+        receiver: quote!(__private_format),
+        level: quote!(default()),
+        input: TokenStream::from(item),
+    }))
 }
 
 fn emit(
@@ -63,18 +75,6 @@ fn emit(
     } else {
         proc_macro::TokenStream::new()
     }
-}
-
-/**
-Format a template.
-*/
-#[proc_macro]
-pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    proc_macro::TokenStream::from(emit::expand_tokens(emit::ExpandTokens {
-        receiver: quote!(__private_format),
-        level: quote!(default()),
-        input: TokenStream::from(item),
-    }))
 }
 
 /**
@@ -194,12 +194,10 @@ pub fn as_serde(
 }
 
 /**
-Capture an Error.
-
-There should only be a single `#[source]` attribute per log statement.
+Capture a key-value pair using its `Error` implementation.
 */
 #[proc_macro_attribute]
-pub fn source(
+pub fn as_error(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -228,7 +226,11 @@ pub fn source(
 pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |_| quote!(__private_capture_as_default),
+        fn_name: |key| match key {
+            // Default to capturing the well-known error identifier as an error
+            emit_rt::__private::WELL_KNOWN_ERR_KEY => quote!(__private_capture_as_error),
+            _ => quote!(__private_capture_as_default),
+        },
     }))
 }
 
@@ -309,12 +311,6 @@ pub fn __private_capture_anon_as_serde(item: proc_macro::TokenStream) -> proc_ma
 pub fn __private_capture_as_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
-        fn_name: |key| {
-            if key != "source" {
-                panic!("the #[source] attribute must use `source` as the key name")
-            }
-
-            quote!(__private_capture_as_error)
-        },
+        fn_name: |_| quote!(__private_capture_as_error),
     }))
 }
