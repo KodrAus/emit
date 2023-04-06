@@ -6,7 +6,6 @@ some outside observer. You can either configure `tracing` or your own function a
 for events.
 */
 
-#![cfg_attr(feature = "std", feature(once_cell))]
 #![no_std]
 
 #[cfg(any(feature = "std", test))]

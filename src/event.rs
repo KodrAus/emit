@@ -130,13 +130,6 @@ impl<'a> Properties<'a> {
     }
 
     /**
-    Iterate over all properties.
-    */
-    pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> {
-        self.0.props.iter().map(|(k, v)| (*k, Value(v.by_ref())))
-    }
-
-    /**
     Get the semantic `err` property.
 
     The error can be treated like a regular [`std::error::Error`].
@@ -148,6 +141,73 @@ impl<'a> Properties<'a> {
         self.0
             .get(crate::well_known::ERR)
             .map(|err| Error(err.by_ref()))
+    }
+}
+
+impl<'a> IntoIterator for Properties<'a> {
+    type Item = Property<'a>;
+    type IntoIter = PropertiesIntoIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PropertiesIntoIter(self.0.props.iter())
+    }
+}
+
+/**
+An iterator over properties on an event.
+*/
+pub struct PropertiesIntoIter<'a>(
+    <emit_rt::__private::RawProperties<'a> as IntoIterator>::IntoIter,
+);
+
+impl<'a> Iterator for PropertiesIntoIter<'a> {
+    type Item = Property<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(k, v)| Property(*k, v))
+    }
+}
+
+/**
+A key-value pair.
+*/
+pub struct Property<'a>(&'a str, &'a ValueBag<'a>);
+
+impl<'a> Property<'a> {
+    /**
+    Get the key name of this property.
+    */
+    pub fn key(&self) -> &'a str {
+        self.0
+    }
+
+    /**
+    Get the value of this property.
+    */
+    pub fn value(&self) -> Value<'a> {
+        Value(self.1.by_ref())
+    }
+
+    /**
+    Whether or not this property is the semantic `err`.
+    */
+    #[cfg(feature = "std")]
+    pub fn is_err(&self) -> bool {
+        self.0 == crate::well_known::ERR
+    }
+
+    /**
+    Try get the value of this property as the semantic `err`.
+
+    This method will return `None` if the property is not `err`.
+    */
+    #[cfg(feature = "std")]
+    pub fn err(&self) -> Option<Error<'a>> {
+        if self.is_err() {
+            Some(Error(self.1.by_ref()))
+        } else {
+            None
+        }
     }
 }
 

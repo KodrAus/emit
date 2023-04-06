@@ -9,7 +9,7 @@ pub use value_bag::ValueBag;
 pub struct RawEvent<'a> {
     pub ts: RawTimestamp,
     pub lvl: RawLevel,
-    pub props: &'a [(&'static str, ValueBag<'a>)],
+    pub props: RawProperties<'a>,
     pub tpl: Template<'a>,
 }
 
@@ -34,6 +34,8 @@ impl<'a> fmt::Display for RawEvent<'a> {
         fmt::Display::fmt(&rendered, f)
     }
 }
+
+pub type RawProperties<'a> = &'a [(&'static str, ValueBag<'a>)];
 
 pub struct RawTimestamp(#[cfg(feature = "std")] pub Duration);
 
