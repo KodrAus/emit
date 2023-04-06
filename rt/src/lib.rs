@@ -20,6 +20,8 @@ mod capture;
 mod emit;
 mod event;
 
+pub mod well_known;
+
 /**
 This module is the entrypoint for the macros.
 

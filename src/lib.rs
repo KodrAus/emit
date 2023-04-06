@@ -70,6 +70,9 @@ pub fn to(emitter: Emitter) {
 #[doc(inline)]
 pub use event::*;
 
+#[doc(inline)]
+pub use emit_rt::well_known;
+
 /**
 Private entrypoint for the `emit` crate.
 
