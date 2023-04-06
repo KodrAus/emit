@@ -1,7 +1,10 @@
 use crate::std::fmt;
 
 #[cfg(feature = "std")]
-use crate::std::time::Duration;
+use crate::std::{
+    error,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use fv_template::rt::Context;
 use value_bag::ValueBag;
@@ -37,7 +40,7 @@ impl<'a> Event<'a> {
     }
 
     pub fn props(&self) -> Properties<'a> {
-        Properties { event: self.0 }
+        Properties(self.0)
     }
 }
 
@@ -46,8 +49,8 @@ pub struct Timestamp(Duration);
 
 #[cfg(feature = "std")]
 impl Timestamp {
-    pub fn elapsed_since_unix_epoch(&self) -> Duration {
-        self.0
+    pub fn to_system_time(&self) -> SystemTime {
+        UNIX_EPOCH + self.0
     }
 }
 
@@ -65,27 +68,22 @@ impl fmt::Display for Level {
     }
 }
 
-pub struct Properties<'a> {
-    event: &'a crate::rt::__private::RawEvent<'a>,
-}
+pub struct Properties<'a>(&'a crate::rt::__private::RawEvent<'a>);
 
 impl<'a> Properties<'a> {
     pub fn get(&self, key: impl AsRef<str>) -> Option<Value<'a>> {
-        self.event.get(key).map(|value| Value(value.by_ref()))
+        self.0.get(key).map(|value| Value(value.by_ref()))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> {
+        self.0.props.iter().map(|(k, v)| (*k, Value(v.by_ref())))
     }
 
     #[cfg(feature = "std")]
     pub fn err(&self) -> Option<Error<'a>> {
-        self.event
+        self.0
             .get(crate::rt::__private::WELL_KNOWN_ERR_KEY)
             .map(|err| Error(err.by_ref()))
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&'a str, Value<'a>)> {
-        self.event
-            .props
-            .iter()
-            .map(|(k, v)| (*k, Value(v.by_ref())))
     }
 }
 
@@ -152,8 +150,8 @@ impl<'a> fmt::Display for Error<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> crate::std::error::Error for Error<'a> {
-    fn source(&self) -> Option<&(dyn crate::std::error::Error + 'static)> {
+impl<'a> error::Error for Error<'a> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         self.0.to_borrowed_error().and_then(|err| err.source())
     }
 }
