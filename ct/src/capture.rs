@@ -11,6 +11,7 @@ use quote::ToTokens;
 use syn::{
     parse::{self, Parse, ParseStream},
     punctuated::Punctuated,
+    spanned::Spanned,
     visit_mut::{self, VisitMut},
     Expr, ExprLit, ExprMacro, FieldValue, Lit, LitStr, Member,
 };
@@ -20,14 +21,16 @@ pub(super) struct ExpandTokens<F: Fn(&str) -> TokenStream> {
     pub(super) fn_name: F,
 }
 
-pub(super) fn expand_tokens(opts: ExpandTokens<impl Fn(&str) -> TokenStream>) -> TokenStream {
-    let key_value = syn::parse2::<FieldValue>(opts.expr).expect("failed to parse expr");
+pub(super) fn expand_tokens(
+    opts: ExpandTokens<impl Fn(&str) -> TokenStream>,
+) -> Result<TokenStream, syn::Error> {
+    let key_value = syn::parse2::<FieldValue>(opts.expr)?;
 
-    let key_name = key_value.key_name().expect("expected a string literal");
+    let key_name = key_value.key_name();
 
-    let fn_name = syn::parse2::<Ident>((opts.fn_name)(&key_name)).expect("failed to parse ident");
+    let fn_name = syn::parse2::<Ident>((opts.fn_name)(&key_name))?;
 
-    expand(key_value, fn_name)
+    Ok(expand(key_value, fn_name))
 }
 
 fn expand(key_value: FieldValue, fn_name: Ident) -> TokenStream {
@@ -63,29 +66,36 @@ impl Parse for RawArgs {
 }
 
 impl Args {
-    fn from_raw(args: RawArgs) -> Self {
+    fn from_raw(args: RawArgs) -> Result<Self, syn::Error> {
         let mut inspect = Default::default();
 
         // Don't accept any unrecognized field names
         for fv in args.fields {
-            let name = fv.key_name();
-
-            match name.as_deref() {
-                Some("inspect") => {
+            match &*fv.key_name() {
+                "inspect" => {
                     inspect = match &fv.expr {
                         Expr::Lit(ExprLit {
                             lit: Lit::Bool(lit),
                             ..
                         }) => lit.value,
-                        _ => panic!("the value of the `inspect` argument must be a literal `bool`"),
+                        lit => {
+                            return Err(syn::Error::new(
+                                lit.span(),
+                                "the value of the `inspect` argument must be a literal `bool`",
+                            ))
+                        }
                     };
                 }
-                Some(unknown) => panic!("unexpected field `{}`", unknown),
-                None => panic!("unexpected field <unnamed>"),
+                unknown => {
+                    return Err(syn::Error::new(
+                        fv.member.span(),
+                        format_args!("unexpected field `{}`", unknown),
+                    ))
+                }
             }
         }
 
-        Args { inspect }
+        Ok(Args { inspect })
     }
 }
 
@@ -95,16 +105,17 @@ pub(super) struct Args {
 
 pub(super) fn rename_capture_tokens(
     opts: RenameCaptureTokens<impl Fn(&str) -> bool, impl FnOnce(&Args) -> TokenStream>,
-) -> TokenStream {
-    let args = syn::parse2::<RawArgs>(opts.args).expect("failed to parse args");
-    let expr = syn::parse2::<Expr>(opts.expr).expect("failed to parse expr");
-    let to = syn::parse2::<Ident>((opts.to)(&Args::from_raw(args))).expect("failed to parse ident");
+) -> Result<TokenStream, syn::Error> {
+    let expr = syn::parse2::<Expr>(opts.expr)?;
 
     if !matches!(expr, Expr::Macro(..)) {
-        panic!("the emit attribute macros can only be placed on the outside of a field-value expression");
+        return Err(syn::Error::new(opts.args.span(), "the emit attribute macros can only be placed on the outside of a field-value expression"));
     }
 
-    rename_capture(expr, opts.predicate, to)
+    let args = syn::parse2::<RawArgs>(opts.args)?;
+    let to = syn::parse2::<Ident>((opts.to)(&Args::from_raw(args)?))?;
+
+    Ok(rename_capture(expr, opts.predicate, to))
 }
 
 fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -> TokenStream {
@@ -152,10 +163,10 @@ fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -
 
 pub(super) trait FieldValueExt {
     fn key_expr(&self) -> ExprLit;
-    fn key_name(&self) -> Option<String> {
+    fn key_name(&self) -> String {
         match self.key_expr().lit {
-            Lit::Str(s) => Some(s.value()),
-            _ => None,
+            Lit::Str(s) => s.value(),
+            _ => panic!("invalid key expression"),
         }
     }
 }
@@ -203,7 +214,8 @@ mod tests {
             let actual = expand_tokens(ExpandTokens {
                 expr,
                 fn_name: |_| fn_name.clone(),
-            });
+            })
+            .unwrap();
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
@@ -234,7 +246,8 @@ mod tests {
                 expr,
                 predicate: |ident| ident.starts_with("__private"),
                 to: |_| to,
-            });
+            })
+            .unwrap();
 
             assert_eq!(expected.to_string(), actual.to_string());
         }

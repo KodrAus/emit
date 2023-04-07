@@ -1,7 +1,7 @@
-error: custom attribute panicked
- --> $DIR/log_misplaced_attr.rs:8:37
+error: the emit attribute macros can only be placed on the outside of a field-value expression
+ --> fail/log_misplaced_attr.rs:8:37
   |
 8 |     emit::info!("Some text", value: #[emit::as_display] a);
   |                                     ^^^^^^^^^^^^^^^^^^^
   |
-  = help: message: the emit attribute macros can only be placed on the outside of a field-value expression
+  = note: this error originates in the attribute macro `emit::as_display` (in Nightly builds, run with -Z macro-backtrace for more info)

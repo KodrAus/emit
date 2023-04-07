@@ -1,7 +1,5 @@
-error: proc macro panicked
- --> fail/log_unknown_arg.rs:8:5
+error: unexpected field `not_an_arg`
+ --> fail/log_unknown_arg.rs:8:17
   |
 8 |     emit::info!(not_an_arg: false, "Logging with a deeply nested {value: v}");
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = help: message: unexpected field `not_an_arg`
+  |                 ^^^^^^^^^^^^^^^^^

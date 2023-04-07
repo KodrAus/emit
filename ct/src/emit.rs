@@ -21,21 +21,21 @@ pub(super) struct ExpandTokens {
     pub(super) input: TokenStream,
 }
 
-pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
+pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let event_ident = Ident::new(&"event", opts.input.span());
-    let template = Template::parse2(opts.input).expect("failed to expand template");
+    let template = Template::parse2(opts.input).map_err(|e| syn::Error::new(e.span(), e))?;
 
     // Any field-values that aren't part of the template
     let mut extra_field_values: BTreeMap<_, _> = template
         .after_template_field_values()
-        .map(|fv| (fv.key_name().expect("expected a string key"), fv))
-        .collect();
+        .map(|fv| Ok((fv.key_name(), fv)))
+        .collect::<Result<_, syn::Error>>()?;
 
     let mut fields = Fields::default();
 
     // Push the field-values that appear in the template
     for fv in template.template_field_values() {
-        let k = fv.key_name().expect("expected a string key");
+        let k = fv.key_name();
 
         // If the hole has a corresponding field-value outside the template
         // then it will be used as the source for the value and attributes
@@ -45,14 +45,17 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
             Some(extra_fv) => {
                 if let Expr::Path(ExprPath { ref path, .. }) = fv.expr {
                     // Make sure the field-value in the template is just a plain identifier
-                    assert!(fv.attrs.is_empty(), "keys that exist in the template and extra pairs should only use attributes on the extra pair");
+                    if !fv.attrs.is_empty() {
+                        return Err(syn::Error::new(fv.span(), "keys that exist in the template and extra pairs should only use attributes on the extra pair"));
+                    }
+
                     assert_eq!(
                         path.get_ident().map(|ident| ident.to_string()).as_ref(),
                         Some(&k),
                         "the key name and path don't match"
                     );
                 } else {
-                    panic!("keys that exist in the template and extra pairs should only use identifiers");
+                    return Err(syn::Error::new(extra_fv.span(), "keys that exist in the template and extra pairs should only use identifiers"));
                 }
 
                 extra_fv
@@ -60,17 +63,17 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
             None => fv,
         };
 
-        fields.push(k, fv.clone());
+        fields.push(k, fv.clone())?;
     }
 
     // Push any remaining extra field-values
     // This won't include any field values that also appear in the template
     for (k, fv) in extra_field_values {
-        fields.push(k, fv.clone());
+        fields.push(k, fv.clone())?;
     }
 
     // Get the additional args to the log expression
-    let args = Args::from_raw(template.before_template_field_values());
+    let args = Args::from_raw(template.before_template_field_values())?;
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens_with_visitor(
@@ -95,7 +98,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
     let level_tokens = opts.level;
     let receiver_tokens = opts.receiver;
 
-    quote!({
+    Ok(quote!({
         extern crate emit;
 
         match (#(#field_match_value_tokens),*) {
@@ -116,7 +119,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> TokenStream {
                 })
             }
         }
-    })
+    }))
 }
 
 #[derive(Default)]
@@ -178,16 +181,19 @@ impl Fields {
         i
     }
 
-    fn push(&mut self, label: String, mut fv: FieldValue) {
+    fn push(&mut self, label: String, mut fv: FieldValue) -> Result<(), syn::Error> {
         let mut attrs = vec![];
         let mut cfg_attr = None;
 
         for attr in mem::take(&mut fv.attrs) {
             if attr.is_cfg() {
-                assert!(
-                    cfg_attr.is_none(),
-                    "only a single #[cfg] is supported on fields"
-                );
+                if cfg_attr.is_some() {
+                    return Err(syn::Error::new(
+                        attr.span(),
+                        "only a single #[cfg] is supported on fields",
+                    ));
+                }
+
                 cfg_attr = Some(attr);
             } else {
                 attrs.push(attr);
@@ -204,7 +210,9 @@ impl Fields {
         // If there's a #[cfg] then also push its reverse
         // This is to give a dummy value to the pattern binding since they don't support attributes
         if let Some(cfg_attr) = &cfg_attr {
-            let cfg_attr = cfg_attr.invert_cfg().expect("attribute is not a #[cfg]");
+            let cfg_attr = cfg_attr
+                .invert_cfg()
+                .ok_or_else(|| syn::Error::new(cfg_attr.span(), "attribute is not a #[cfg]"))?;
 
             self.match_value_tokens
                 .push(quote_spanned!(fv.span()=> #cfg_attr ()));
@@ -224,8 +232,10 @@ impl Fields {
         );
 
         if previous.is_some() {
-            panic!("keys cannot be duplicated");
+            return Err(syn::Error::new(fv.span(), "keys cannot be duplicated"));
         }
+
+        Ok(())
     }
 }
 
@@ -292,24 +302,26 @@ struct Args {
 }
 
 impl Args {
-    fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Self {
+    fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Result<Self, syn::Error> {
         let mut to = quote!(None);
 
         // Don't accept any unrecognized field names
         for fv in args {
-            let name = fv.key_name();
-
-            match name.as_deref() {
-                Some("to") => {
+            match &*fv.key_name() {
+                "to" => {
                     let expr = &fv.expr;
                     to = quote!(Some(#expr));
                 }
-                Some(unknown) => panic!("unexpected field `{}`", unknown),
-                None => panic!("unexpected field <unnamed>"),
+                unknown => {
+                    return Err(syn::Error::new(
+                        fv.span(),
+                        format_args!("unexpected field `{}`", unknown),
+                    ))
+                }
             }
         }
 
-        Args { to }
+        Ok(Args { to })
     }
 }
 
@@ -422,7 +434,7 @@ mod tests {
                 receiver: quote!(__private_emit),
                 level: quote!(info()),
                 input: expr,
-            });
+            }).unwrap();
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
