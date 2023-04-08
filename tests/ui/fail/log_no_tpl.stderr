@@ -1,0 +1,5 @@
+error: parsing failed: missing string template
+ --> fail/log_no_tpl.rs:4:17
+  |
+4 |     emit::info!(to: |_| {});
+  |                 ^^^^^^^^^^

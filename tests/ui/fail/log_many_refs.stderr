@@ -1,11 +1,11 @@
 error[E0521]: borrowed data escapes outside of function
- --> fail/log_many_refs.rs:7:52
+ --> fail/log_many_refs.rs:5:52
   |
-6 |     fn call(v: &&&str) {
+4 |     fn call(v: &&&str) {
   |             -   - let's call the lifetime of this reference `'1`
   |             |
   |             `v` is a reference that is only valid in the function body
-7 |         emit::info!("Logging with a deeply nested {value: v}");
+5 |         emit::info!("Logging with a deeply nested {value: v}");
   |                                                    ^^^^^^^^
   |                                                    |
   |                                                    `v` escapes the function body here
@@ -14,13 +14,13 @@ error[E0521]: borrowed data escapes outside of function
   = note: this error originates in the macro `emit::ct::__private_capture` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0521]: borrowed data escapes outside of function
- --> fail/log_many_refs.rs:7:52
+ --> fail/log_many_refs.rs:5:52
   |
-6 |     fn call(v: &&&str) {
+4 |     fn call(v: &&&str) {
   |             -    - let's call the lifetime of this reference `'2`
   |             |
   |             `v` is a reference that is only valid in the function body
-7 |         emit::info!("Logging with a deeply nested {value: v}");
+5 |         emit::info!("Logging with a deeply nested {value: v}");
   |                                                    ^^^^^^^^
   |                                                    |
   |                                                    `v` escapes the function body here

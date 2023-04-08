@@ -1,5 +1,5 @@
 error: parsing failed: failed to parse `data.a` as a field-value expression
-  --> fail/log_path_expr.rs:14:48
+  --> fail/log_path_expr.rs:12:48
    |
-14 |     emit::info!("Logging with a deeply nested {data.a}");
+12 |     emit::info!("Logging with a deeply nested {data.a}");
    |                                                ^^^^^^

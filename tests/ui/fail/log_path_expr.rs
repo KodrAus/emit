@@ -5,8 +5,6 @@ struct Data {
 }
 
 fn main() {
-    tracing_subscriber::fmt().init();
-
     let data = Data {
         a: 42,
     };

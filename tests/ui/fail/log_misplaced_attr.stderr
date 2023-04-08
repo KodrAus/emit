@@ -1,7 +1,7 @@
 error: the emit attribute macros can only be placed on the outside of a field-value expression
- --> fail/log_misplaced_attr.rs:8:37
+ --> fail/log_misplaced_attr.rs:6:37
   |
-8 |     emit::info!("Some text", value: #[emit::as_display] a);
+6 |     emit::info!("Some text", value: #[emit::as_display] a);
   |                                     ^^^^^^^^^^^^^^^^^^^
   |
   = note: this error originates in the attribute macro `emit::as_display` (in Nightly builds, run with -Z macro-backtrace for more info)
