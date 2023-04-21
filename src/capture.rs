@@ -1,9 +1,9 @@
-use crate::std::{any::Any, fmt};
+use std::{any::Any, fmt};
 
 use value_bag::ValueBag;
 
 #[cfg(feature = "std")]
-use crate::std::error::Error;
+use std::error::Error;
 
 #[cfg(feature = "serde")]
 use serde::Serialize;
@@ -253,7 +253,7 @@ impl<T: ?Sized> __PrivateCapture for T {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::std::{fmt, string::String};
+    use std::{fmt, string::String};
 
     #[test]
     fn capture_default() {
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     #[cfg(feature = "std")]
     fn capture_error() {
-        use crate::std::io;
+        use std::io;
 
         // Capture an arbitrary `Error`
         let err = io::Error::from(io::ErrorKind::Other);

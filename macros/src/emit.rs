@@ -77,7 +77,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
 
     // A runtime representation of the template
     let template_tokens = template.to_rt_tokens_with_visitor(
-        quote!(emit::rt::__private),
+        quote!(emit::__private),
         CfgVisitor(|label: &str| {
             fields
                 .sorted_fields
@@ -90,11 +90,9 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     let field_match_binding_tokens = fields.match_binding_tokens();
 
     let field_event_tokens = fields.sorted_field_event_tokens();
-    let field_cfg_tokens = fields.sorted_field_cfg_tokens();
-    let field_key_tokens = fields.sorted_field_key_tokens();
-    let field_value_tokens = fields.sorted_field_value_tokens();
 
     let to_tokens = args.to;
+    let ts_tokens = args.ts;
     let level_tokens = opts.level;
     let receiver_tokens = opts.receiver;
 
@@ -103,20 +101,15 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
 
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
-                let #event_ident = emit::rt::__private::RawEvent {
-                    ts: emit::rt::__private::RawTimestamp::now(),
-                    lvl: emit::rt::__private::RawLevel::#level_tokens,
+                let #event_ident = emit::__private::RawEvent {
+                    to: #to_tokens,
+                    ts: #ts_tokens,
+                    lvl: #level_tokens,
                     props: &[#(#field_event_tokens),*],
                     tpl: #template_tokens,
                 };
 
-                emit::rt::#receiver_tokens!({
-                    to: #to_tokens,
-                    key_value_cfgs: [#(#field_cfg_tokens),*],
-                    keys: [#(#field_key_tokens),*],
-                    values: [#(#field_value_tokens),*],
-                    event: &#event_ident,
-                })
+                emit::#receiver_tokens!(#event_ident)
             }
         }
     }))
@@ -131,9 +124,7 @@ struct Fields {
 }
 
 struct SortedField {
-    field_key_tokens: TokenStream,
     field_event_tokens: TokenStream,
-    field_value_tokens: TokenStream,
     cfg_attr: Option<Attribute>,
 }
 
@@ -146,32 +137,10 @@ impl Fields {
         self.match_binding_tokens.iter()
     }
 
-    fn sorted_field_key_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields
-            .values()
-            .map(|field| &field.field_key_tokens)
-    }
-
     fn sorted_field_event_tokens(&self) -> impl Iterator<Item = &TokenStream> {
         self.sorted_fields
             .values()
             .map(|field| &field.field_event_tokens)
-    }
-
-    fn sorted_field_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields
-            .values()
-            .map(|field| &field.field_value_tokens)
-    }
-
-    fn sorted_field_cfg_tokens(&'_ self) -> impl Iterator<Item = TokenStream> + '_ {
-        self.sorted_fields.values().map(|field| {
-            field
-                .cfg_attr
-                .as_ref()
-                .map(|cfg_attr| quote!(#cfg_attr))
-                .unwrap_or_else(|| quote!(#[cfg(not(emit_rt__private_false))]))
-        })
     }
 
     fn next_ident(&mut self, span: Span) -> Ident {
@@ -204,7 +173,7 @@ impl Fields {
 
         // NOTE: We intentionally wrap the expression in layers of blocks
         self.match_value_tokens.push(
-            quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::ct::__private_capture!(#fv) }),
+            quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::__private_capture!(#fv) }),
         );
 
         // If there's a #[cfg] then also push its reverse
@@ -224,9 +193,7 @@ impl Fields {
         let previous = self.sorted_fields.insert(
             label.clone(),
             SortedField {
-                field_key_tokens: quote_spanned!(fv.span()=> #cfg_attr #label),
                 field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (#v.0, #v.1.by_ref())),
-                field_value_tokens: quote_spanned!(fv.span()=> #cfg_attr &#v),
                 cfg_attr,
             },
         );
@@ -299,11 +266,13 @@ impl AttributeExt for Attribute {
 
 struct Args {
     to: TokenStream,
+    ts: TokenStream,
 }
 
 impl Args {
     fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Result<Self, syn::Error> {
         let mut to = quote!(None);
+        let mut ts = quote!(None);
 
         // Don't accept any unrecognized field names
         for fv in args {
@@ -311,6 +280,10 @@ impl Args {
                 "to" => {
                     let expr = &fv.expr;
                     to = quote!(Some(#expr));
+                }
+                "ts" => {
+                    let expr = &fv.expr;
+                    ts = quote!(Some(#expr));
                 }
                 unknown => {
                     return Err(syn::Error::new(
@@ -321,7 +294,7 @@ impl Args {
             }
         }
 
-        Ok(Args { to })
+        Ok(Args { to, ts })
     }
 }
 
@@ -339,22 +312,22 @@ mod tests {
                     extern crate emit;
 
                     match (
-                        {emit::ct::__private_capture!(b: 17) },
-                        {emit::ct::__private_capture!(a) },
+                        {emit::__private_capture!(b: 17) },
+                        {emit::__private_capture!(a) },
                         {
                             #[as_debug]
-                            emit::ct::__private_capture!(c)
+                            emit::__private_capture!(c)
                         },
-                        {emit::ct::__private_capture!(d: String::from("short lived")) },
+                        {emit::__private_capture!(d: String::from("short lived")) },
                         #[cfg(disabled)]
-                        {emit::ct::__private_capture!(e) },
+                        {emit::__private_capture!(e) },
                         #[cfg(not(disabled))]
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let event = emit::rt::__private::RawEvent {
-                                ts: emit::rt::__private::RawTimestamp::now(),
-                                lvl: emit::rt::__private::RawLevel::info(),
+                            let event = emit::__private::RawEvent {
+                                ts: emit::__private::RawTimestamp::now(),
+                                lvl: emit::__private::RawLevel::info(),
                                 props: &[
                                     (__tmp1.0, __tmp1.1.by_ref()),
                                     (__tmp0.0, __tmp0.1.by_ref()),
@@ -363,22 +336,22 @@ mod tests {
                                     #[cfg(disabled)]
                                     (__tmp4.0, __tmp4.1.by_ref())
                                 ],
-                                tpl: emit::rt::__private::template(&[
-                                    emit::rt::__private::Part::Text("Text and "),
-                                    emit::rt::__private::Part::Hole ( "b"),
-                                    emit::rt::__private::Part::Text(" and "),
-                                    emit::rt::__private::Part::Hole ( "a"),
-                                    emit::rt::__private::Part::Text(" and "),
-                                    emit::rt::__private::Part::Hole ( "c" ),
-                                    emit::rt::__private::Part::Text(" and "),
-                                    emit::rt::__private::Part::Hole ( "d" ),
-                                    emit::rt::__private::Part::Text(" and "),
+                                tpl: emit::__private::template(&[
+                                    emit::__private::Part::Text("Text and "),
+                                    emit::__private::Part::Hole ( "b"),
+                                    emit::__private::Part::Text(" and "),
+                                    emit::__private::Part::Hole ( "a"),
+                                    emit::__private::Part::Text(" and "),
+                                    emit::__private::Part::Hole ( "c" ),
+                                    emit::__private::Part::Text(" and "),
+                                    emit::__private::Part::Hole ( "d" ),
+                                    emit::__private::Part::Text(" and "),
                                     #[cfg(disabled)]
-                                    emit::rt::__private::Part::Hole ( "e" )
+                                    emit::__private::Part::Hole ( "e" )
                                 ]),
                             };
 
-                            emit::rt::__private_emit!({
+                            emit::__private_emit!({
                                 to: None,
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))],
@@ -401,20 +374,20 @@ mod tests {
                     extern crate emit;
 
                     match (
-                        { emit::ct::__private_capture!(a: 42) }
+                        { emit::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let event = emit::rt::__private::RawEvent {
-                                ts: emit::rt::__private::RawTimestamp::now(),
-                                lvl: emit::rt::__private::RawLevel::info(),
+                            let event = emit::__private::RawEvent {
+                                ts: emit::__private::RawTimestamp::now(),
+                                lvl: emit::__private::RawLevel::info(),
                                 props: &[(__tmp0.0, __tmp0.1.by_ref())],
-                                tpl: emit::rt::__private::template(&[
-                                    emit::rt::__private::Part::Text("Text and "),
-                                    emit::rt::__private::Part::Hole ( "a")
+                                tpl: emit::__private::template(&[
+                                    emit::__private::Part::Text("Text and "),
+                                    emit::__private::Part::Hole ( "a")
                                 ]),
                             };
 
-                            emit::rt::__private_emit!({
+                            emit::__private_emit!({
                                 to: Some(log),
                                 key_value_cfgs: [
                                     #[cfg(not(emit_rt__private_false))]

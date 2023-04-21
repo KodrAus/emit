@@ -231,7 +231,7 @@ pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStre
         expr: TokenStream::from(item),
         fn_name: |key| match key {
             // Default to capturing the well-known error identifier as an error
-            emit_rt::well_known::ERR => quote!(__private_capture_as_error),
+            "err" => quote!(__private_capture_as_error),
             // In other cases, capture using the default implementation
             _ => quote!(__private_capture_as_default),
         },
