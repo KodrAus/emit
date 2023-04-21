@@ -1,4 +1,4 @@
-use std::{any::Any, fmt};
+use core::{any::Any, fmt};
 
 use value_bag::ValueBag;
 

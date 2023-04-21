@@ -39,15 +39,15 @@ impl<'a, C: When + ?Sized> When for ByRef<'a, C> {
     }
 }
 
-pub fn default() -> impl When {
-    struct Always;
+pub(crate) struct Always;
 
-    impl When for Always {
-        fn emit_when<P: Props>(&self, _: &Event<P>) -> bool {
-            true
-        }
+impl When for Always {
+    fn emit_when<P: Props>(&self, _: &Event<P>) -> bool {
+        true
     }
+}
 
+pub fn default() -> impl When {
     Always
 }
 

@@ -6,81 +6,33 @@ some outside observer. You can either configure `tracing` or your own function a
 for events.
 */
 
-/*
-#![no_std]
-
-#[cfg(any(feature = "std", test))]
-#[macro_use]
-#[allow(unused_imports)]
-extern crate std;
-
-#[cfg(not(any(feature = "std", test)))]
-#[macro_use]
-#[allow(unused_imports)]
-extern crate core as std;
-*/
+#![cfg_attr(not(feature = "std"), no_std)]
 
 mod capture;
 
 pub mod ctxt;
 mod event;
+pub mod key;
 pub mod props;
 mod template;
 pub mod to;
-mod value;
+pub mod value;
 pub mod well_known;
 pub mod when;
 
-use std::cell::RefCell;
-
 #[doc(inline)]
 pub use self::{
-    ctxt::Ctxt,
-    event::*,
-    props::{Prop, Props},
-    template::*,
-    to::To,
-    value::*,
-    when::When,
+    ctxt::Ctxt, event::*, key::*, props::Props, template::*, to::To, value::*, when::When,
 };
 
-pub fn emit(emitter: impl To, filter: impl When, ctxt: impl Ctxt, evt: Event<impl Props>) {
+pub fn emit(emitter: impl To, filter: impl When, ctxt: impl Ctxt, evt: &Event<impl Props>) {
     ctxt.with_ctxt(|ctxt| {
-        let evt = evt.chain(ctxt);
+        let evt = evt.by_ref().chain(ctxt);
 
         if filter.emit_when(&evt) {
-            let _ = emitter.emit_to(evt);
+            let _ = emitter.emit_to(&evt);
         }
     })
-}
-
-fn check(evt: Event<impl Props>) {
-    emit(
-        to::default(),
-        when::default(),
-        ctxt::default().by_ref().chain(ctxt::default()),
-        evt,
-    );
-}
-
-struct ThreadLocalCtxt;
-
-struct ThreadLocalProps;
-
-impl Props for ThreadLocalProps {
-    fn visit<'a, V: props::Visit<'a>>(&'a self, visitor: V) {}
-}
-
-impl Ctxt for ThreadLocalCtxt {
-    type Props = ThreadLocalProps;
-
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F) {
-        thread_local! {
-            static CTXT: RefCell<ThreadLocalProps> = RefCell::new(ThreadLocalProps);
-        }
-
-        CTXT.with(|ctxt| with(&*ctxt.borrow()))
-    }
 }
 
 mod internal {

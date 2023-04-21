@@ -1,7 +1,4 @@
-use crate::{
-    props::{self, Props},
-    Val,
-};
+use crate::props::{self, Props};
 
 use self::internal::{ErasedSlot, Slot};
 
@@ -54,15 +51,15 @@ impl<'a, T: Ctxt + 'a> Ctxt for ByRef<'a, T> {
 }
 
 pub fn default() -> impl Ctxt {
-    struct Empty;
-
-    impl Ctxt for Empty {
-        type Props = [(&'static str, Val<'static>); 0];
-
-        fn with_ctxt<F: FnOnce(&Self::Props)>(&self, _: F) {}
-    }
-
     Empty
+}
+
+pub(crate) struct Empty;
+
+impl Ctxt for Empty {
+    type Props = props::Empty;
+
+    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, _: F) {}
 }
 
 pub struct Chain<T, U> {
@@ -73,12 +70,9 @@ pub struct Chain<T, U> {
 pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 mod internal {
-    use core::{marker::PhantomData, mem};
+    use core::{marker::PhantomData, mem, ops::ControlFlow};
 
-    use crate::{
-        props::{ErasedProps, Visit},
-        Props,
-    };
+    use crate::{props::ErasedProps, Key, Props, Val};
 
     pub trait DispatchCtxt {
         fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot));
@@ -120,14 +114,14 @@ mod internal {
     }
 
     impl<T: Props + ?Sized> Props for Slot<T> {
-        fn visit<'a, V: Visit<'a>>(&'a self, visitor: V) {
-            self.get().visit(visitor)
+        fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+            self.get().for_each(for_each)
         }
     }
 
     impl Props for ErasedSlot {
-        fn visit<'a, V: Visit<'a>>(&'a self, visitor: V) {
-            self.get().visit(visitor)
+        fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+            self.get().for_each(for_each)
         }
     }
 }
