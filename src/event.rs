@@ -13,6 +13,12 @@ pub enum Level {
     Error,
 }
 
+impl Default for Level {
+    fn default() -> Self {
+        Level::Info
+    }
+}
+
 #[derive(Clone)]
 pub struct Event<'a, P = &'a dyn ErasedProps> {
     ts: Option<Timestamp>,

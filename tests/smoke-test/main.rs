@@ -2,7 +2,7 @@
 
 fn main() {
     // Set up a global receiver for events
-    emit::target(|evt| {
+    emit::to(|evt| {
         println!("{}: {}", evt.lvl(), evt.msg());
     });
 

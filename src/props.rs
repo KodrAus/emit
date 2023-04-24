@@ -47,6 +47,23 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
     }
 }
 
+impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
+        for (k, v) in self {
+            match for_each(k.by_ref(), v.by_ref()) {
+                ControlFlow::Continue(()) => continue,
+                ControlFlow::Break(()) => return,
+            }
+        }
+    }
+}
+
+impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+        (self as &[_]).for_each(for_each)
+    }
+}
+
 impl<A: Props, B: Props> Props for Chain<A, B> {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         let mut cf = ControlFlow::Continue(());

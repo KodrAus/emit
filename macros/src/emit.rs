@@ -8,7 +8,8 @@ use std::{collections::BTreeMap, mem};
 
 use proc_macro2::{Span, TokenStream};
 use syn::{
-    spanned::Spanned, Attribute, Expr, ExprPath, FieldValue, Ident, MacroDelimiter, Meta, MetaList,
+    spanned::Spanned, Attribute, Expr, ExprLit, ExprPath, FieldValue, Ident, MacroDelimiter, Meta,
+    MetaList,
 };
 
 use fv_template::ct::Template;
@@ -22,7 +23,6 @@ pub(super) struct ExpandTokens {
 }
 
 pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    let event_ident = Ident::new(&"event", opts.input.span());
     let template = Template::parse2(opts.input).map_err(|e| syn::Error::new(e.span(), e))?;
 
     // Any field-values that aren't part of the template
@@ -76,15 +76,23 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     let args = Args::from_raw(template.before_template_field_values())?;
 
     // A runtime representation of the template
-    let template_tokens = template.to_rt_tokens_with_visitor(
-        quote!(emit::__private),
-        CfgVisitor(|label: &str| {
-            fields
-                .sorted_fields
-                .get(label)
-                .and_then(|field| field.cfg_attr.as_ref())
-        }),
-    );
+    let template_tokens = {
+        let mut template_visitor = TemplateVisitor {
+            get_cfg_attr: |label: &str| {
+                fields
+                    .sorted_fields
+                    .get(label)
+                    .and_then(|field| field.cfg_attr.as_ref())
+            },
+            parts: Vec::new(),
+        };
+        template.visit(&mut template_visitor);
+        let template_parts = &template_visitor.parts;
+
+        quote!(emit::Template::new(&[
+            #(#template_parts),*
+        ]))
+    };
 
     let field_match_value_tokens = fields.match_value_tokens();
     let field_match_binding_tokens = fields.match_binding_tokens();
@@ -92,8 +100,15 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     let field_event_tokens = fields.sorted_field_event_tokens();
 
     let to_tokens = args.to;
+    let when_tokens = args.when;
+    let ctxt_tokens = args.ctxt;
     let ts_tokens = args.ts;
-    let level_tokens = opts.level;
+
+    let level_tokens = {
+        let level = opts.level;
+        quote!(emit::Level::#level)
+    };
+
     let receiver_tokens = opts.receiver;
 
     Ok(quote!({
@@ -101,15 +116,17 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
 
         match (#(#field_match_value_tokens),*) {
             (#(#field_match_binding_tokens),*) => {
-                let #event_ident = emit::__private::RawEvent {
-                    to: #to_tokens,
-                    ts: #ts_tokens,
-                    lvl: #level_tokens,
-                    props: &[#(#field_event_tokens),*],
-                    tpl: #template_tokens,
-                };
-
-                emit::#receiver_tokens!(#event_ident)
+                emit::#receiver_tokens(
+                    #to_tokens,
+                    #when_tokens,
+                    #ctxt_tokens,
+                    &emit::Event::new(
+                        #level_tokens,
+                        #ts_tokens,
+                        #template_tokens,
+                        &[#(#field_event_tokens),*],
+                    )
+                )
             }
         }
     }))
@@ -193,7 +210,7 @@ impl Fields {
         let previous = self.sorted_fields.insert(
             label.clone(),
             SortedField {
-                field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (#v.0, #v.1.by_ref())),
+                field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#v.0), #v.1.by_ref())),
                 cfg_attr,
             },
         );
@@ -206,19 +223,26 @@ impl Fields {
     }
 }
 
-struct CfgVisitor<F>(F);
+struct TemplateVisitor<F> {
+    get_cfg_attr: F,
+    parts: Vec<TokenStream>,
+}
 
-impl<'a, F> fv_template::ct::Visitor for CfgVisitor<F>
+impl<'a, F> fv_template::ct::Visitor for TemplateVisitor<F>
 where
     F: Fn(&str) -> Option<&'a Attribute> + 'a,
 {
-    fn visit_hole(&mut self, label: &str, hole: TokenStream) -> TokenStream {
-        match (self.0)(label) {
-            Some(cfg_attr) => {
-                quote!(#cfg_attr #hole)
-            }
-            _ => hole,
+    fn visit_hole(&mut self, label: &str, hole: &ExprLit) {
+        let hole = quote!(emit::template::Part::hole(#hole));
+
+        match (self.get_cfg_attr)(label) {
+            Some(cfg_attr) => self.parts.push(quote!(#cfg_attr #hole)),
+            _ => self.parts.push(quote!(#hole)),
         }
+    }
+
+    fn visit_text(&mut self, text: &str) {
+        self.parts.push(quote!(emit::template::Part::text(#text)));
     }
 }
 
@@ -266,12 +290,17 @@ impl AttributeExt for Attribute {
 
 struct Args {
     to: TokenStream,
+    when: TokenStream,
+    ctxt: TokenStream,
     ts: TokenStream,
 }
 
 impl Args {
     fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Result<Self, syn::Error> {
-        let mut to = quote!(None);
+        let mut to = quote!(emit::target::default());
+        let mut when = quote!(emit::filter::default());
+        let mut ctxt = quote!(emit::ctxt::default());
+
         let mut ts = quote!(None);
 
         // Don't accept any unrecognized field names
@@ -280,6 +309,14 @@ impl Args {
                 "to" => {
                     let expr = &fv.expr;
                     to = quote!(Some(#expr));
+                }
+                "when" => {
+                    let expr = &fv.expr;
+                    when = quote!(Some(#expr));
+                }
+                "ctxt" => {
+                    let expr = &fv.expr;
+                    ctxt = quote!(Some(#expr));
                 }
                 "ts" => {
                     let expr = &fv.expr;
@@ -294,7 +331,7 @@ impl Args {
             }
         }
 
-        Ok(Args { to, ts })
+        Ok(Args { to, when, ctxt, ts })
     }
 }
 
@@ -325,9 +362,9 @@ mod tests {
                         ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let event = emit::__private::RawEvent {
-                                ts: emit::__private::RawTimestamp::now(),
-                                lvl: emit::__private::RawLevel::info(),
+                            let event = emit::RawEvent {
+                                ts: emit::Timestamp::now(),
+                                lvl: emit::Level::Info,
                                 props: &[
                                     (__tmp1.0, __tmp1.1.by_ref()),
                                     (__tmp0.0, __tmp0.1.by_ref()),
@@ -336,18 +373,18 @@ mod tests {
                                     #[cfg(disabled)]
                                     (__tmp4.0, __tmp4.1.by_ref())
                                 ],
-                                tpl: emit::__private::template(&[
-                                    emit::__private::Part::Text("Text and "),
-                                    emit::__private::Part::Hole ( "b"),
-                                    emit::__private::Part::Text(" and "),
-                                    emit::__private::Part::Hole ( "a"),
-                                    emit::__private::Part::Text(" and "),
-                                    emit::__private::Part::Hole ( "c" ),
-                                    emit::__private::Part::Text(" and "),
-                                    emit::__private::Part::Hole ( "d" ),
-                                    emit::__private::Part::Text(" and "),
+                                tpl: emit::template::Template::new(&[
+                                    emit::template::Part::Text("Text and "),
+                                    emit::template::Part::Hole ( "b"),
+                                    emit::template::Part::Text(" and "),
+                                    emit::template::Part::Hole ( "a"),
+                                    emit::template::Part::Text(" and "),
+                                    emit::template::Part::Hole ( "c" ),
+                                    emit::template::Part::Text(" and "),
+                                    emit::template::Part::Hole ( "d" ),
+                                    emit::template::Part::Text(" and "),
                                     #[cfg(disabled)]
-                                    emit::__private::Part::Hole ( "e" )
+                                    emit::template::Part::Hole ( "e" )
                                 ]),
                             };
 
@@ -377,13 +414,13 @@ mod tests {
                         { emit::__private_capture!(a: 42) }
                     ) {
                         (__tmp0) => {
-                            let event = emit::__private::RawEvent {
-                                ts: emit::__private::RawTimestamp::now(),
-                                lvl: emit::__private::RawLevel::info(),
+                            let event = emit::Event {
+                                ts: emit::Timestamp::now(),
+                                lvl: emit::Level::Info,
                                 props: &[(__tmp0.0, __tmp0.1.by_ref())],
-                                tpl: emit::__private::template(&[
-                                    emit::__private::Part::Text("Text and "),
-                                    emit::__private::Part::Hole ( "a")
+                                tpl: emit::template::Template::new(&[
+                                    emit::template::Part::Text("Text and "),
+                                    emit::template::Part::Hole ( "a")
                                 ]),
                             };
 
@@ -404,8 +441,8 @@ mod tests {
 
         for (expr, expected) in cases {
             let actual = expand_tokens(ExpandTokens {
-                receiver: quote!(__private_emit),
-                level: quote!(info()),
+                receiver: quote!(emit),
+                level: quote!(Info),
                 input: expr,
             }).unwrap();
 

@@ -20,6 +20,13 @@ impl<'k> Key<'k> {
         }
     }
 
+    pub fn by_ref<'b>(&'b self) -> Key<'b> {
+        Key {
+            value_ref: self.value_ref,
+            value_static: self.value_static,
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         self.value_ref
     }
@@ -31,7 +38,7 @@ impl<'k> Key<'k> {
 
 impl<'a> From<&'a str> for Key<'a> {
     fn from(value: &'a str) -> Self {
-        Key::new(value)
+        Key::new_ref(value)
     }
 }
 

@@ -28,7 +28,7 @@ path = "macros"
 version = "1"
 
 [dependencies.fv-template]
-version = "0.2"
+version = "0.3"
 
 [dependencies.sval]
 version = "2"

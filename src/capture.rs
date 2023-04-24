@@ -18,7 +18,7 @@ The parameter lets us choose the way values are captured, since many
 types can be captured in lots of different ways.
 */
 pub trait Capture<T: ?Sized> {
-    fn capture(&self) -> ValueBag;
+    fn capture(&self) -> crate::Value;
 }
 
 /**
@@ -53,8 +53,8 @@ impl CaptureSized for CaptureSerde {}
 impl CaptureSized for CaptureError {}
 
 impl<T: CaptureSized + ?Sized> Capture<T> for str {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from(self).into()
     }
 }
 
@@ -62,14 +62,14 @@ impl<T> Capture<CaptureDisplay> for T
 where
     T: fmt::Display + Any,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::capture_display(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::capture_display(self).into()
     }
 }
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_display(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_dyn_display(self).into()
     }
 }
 
@@ -77,8 +77,8 @@ impl<T> Capture<CaptureAnonDisplay> for T
 where
     T: fmt::Display,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_display(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_display(self).into()
     }
 }
 
@@ -86,14 +86,14 @@ impl<T> Capture<CaptureDebug> for T
 where
     T: fmt::Debug + Any,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::capture_debug(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::capture_debug(self).into()
     }
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_debug(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_dyn_debug(self).into()
     }
 }
 
@@ -101,8 +101,8 @@ impl<T> Capture<CaptureAnonDebug> for T
 where
     T: fmt::Debug,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_debug(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_debug(self).into()
     }
 }
 
@@ -111,8 +111,8 @@ impl<T> Capture<CaptureSval> for T
 where
     T: Value + Any,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::capture_sval2(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::capture_sval2(self).into()
     }
 }
 
@@ -121,8 +121,8 @@ impl<T> Capture<CaptureAnonSval> for T
 where
     T: Value,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_sval2(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_sval2(self).into()
     }
 }
 
@@ -131,8 +131,8 @@ impl<T> Capture<CaptureSerde> for T
 where
     T: Serialize + Any,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::capture_serde1(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::capture_serde1(self).into()
     }
 }
 
@@ -141,8 +141,8 @@ impl<T> Capture<CaptureAnonSerde> for T
 where
     T: Serialize,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_serde1(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_serde1(self).into()
     }
 }
 
@@ -151,15 +151,15 @@ impl<T> Capture<CaptureError> for T
 where
     T: Error + 'static,
 {
-    fn capture(&self) -> ValueBag {
-        ValueBag::capture_error(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::capture_error(self).into()
     }
 }
 
 #[cfg(feature = "std")]
 impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
-    fn capture(&self) -> ValueBag {
-        ValueBag::from_dyn_error(self)
+    fn capture(&self) -> crate::Value {
+        ValueBag::from_dyn_error(self).into()
     }
 }
 
@@ -177,70 +177,70 @@ so that when a bound isn't satisfied we get a more accurate type error.
 contexts. (We're expecting non-hygienic spans to support value interpolation).
 */
 pub trait __PrivateCapture {
-    fn __private_capture_as_default(&self) -> ValueBag
+    fn __private_capture_as_default(&self) -> crate::Value
     where
         Self: Capture<WithDefault>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_display(&self) -> ValueBag
+    fn __private_capture_as_display(&self) -> crate::Value
     where
         Self: Capture<CaptureDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_display(&self) -> ValueBag
+    fn __private_capture_anon_as_display(&self) -> crate::Value
     where
         Self: Capture<CaptureAnonDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_debug(&self) -> ValueBag
+    fn __private_capture_as_debug(&self) -> crate::Value
     where
         Self: Capture<CaptureDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_debug(&self) -> ValueBag
+    fn __private_capture_anon_as_debug(&self) -> crate::Value
     where
         Self: Capture<CaptureAnonDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_sval(&self) -> ValueBag
+    fn __private_capture_as_sval(&self) -> crate::Value
     where
         Self: Capture<CaptureSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_sval(&self) -> ValueBag
+    fn __private_capture_anon_as_sval(&self) -> crate::Value
     where
         Self: Capture<CaptureAnonSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_serde(&self) -> ValueBag
+    fn __private_capture_as_serde(&self) -> crate::Value
     where
         Self: Capture<CaptureSerde>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_serde(&self) -> ValueBag
+    fn __private_capture_anon_as_serde(&self) -> crate::Value
     where
         Self: Capture<CaptureAnonSerde>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_error(&self) -> ValueBag
+    fn __private_capture_as_error(&self) -> crate::Value
     where
         Self: Capture<CaptureError>,
     {

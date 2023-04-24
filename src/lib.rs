@@ -8,6 +8,8 @@ for events.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub use emit_macros::*;
+
 mod capture;
 
 pub mod ctxt;
@@ -39,6 +41,11 @@ pub fn emit(to: impl Target, when: impl Filter, with: impl Ctxt, evt: &Event<imp
 
 mod internal {
     pub struct Erased<T>(pub(crate) T);
+}
+
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::capture::__PrivateCapture;
 }
 
 /*

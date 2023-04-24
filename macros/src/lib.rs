@@ -23,7 +23,7 @@ Emit a debug record.
 */
 #[proc_macro]
 pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(DEBUG), TokenStream::from(item))
+    emit(quote!(Debug), TokenStream::from(item))
 }
 
 /**
@@ -31,7 +31,7 @@ Emit a info record.
 */
 #[proc_macro]
 pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(INFO), TokenStream::from(item))
+    emit(quote!(Info), TokenStream::from(item))
 }
 
 /**
@@ -39,7 +39,7 @@ Emit a warn record.
 */
 #[proc_macro]
 pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(WARN), TokenStream::from(item))
+    emit(quote!(Warn), TokenStream::from(item))
 }
 
 /**
@@ -47,7 +47,7 @@ Emit an error record.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(ERROR), TokenStream::from(item))
+    emit(quote!(Error), TokenStream::from(item))
 }
 
 /**
@@ -56,7 +56,7 @@ Format a template.
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     emit::expand_tokens(emit::ExpandTokens {
-        receiver: quote!(__private_format),
+        receiver: quote!(format),
         level: quote!(default()),
         input: TokenStream::from(item),
     })
@@ -69,7 +69,7 @@ fn emit(
 ) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
         emit::expand_tokens(emit::ExpandTokens {
-            receiver: quote!(__private_emit),
+            receiver: quote!(emit),
             level,
             input: item,
         })
