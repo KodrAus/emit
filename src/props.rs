@@ -1,14 +1,12 @@
-use crate::Key;
-use crate::ToKey;
-use crate::Val;
+use crate::{Key, Value};
 
-use core::ops::ControlFlow;
+use core::{borrow::Borrow, ops::ControlFlow};
 
 pub trait Props {
-    fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F);
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F);
 
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Val<'v>> {
-        let key = key.to_key();
+    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.borrow();
         let mut value = None;
 
         self.for_each(|k, v| {
@@ -40,17 +38,17 @@ pub trait Props {
 }
 
 impl<'a, P: Props + ?Sized> Props for &'a P {
-    fn for_each<'v, F: FnMut(Key<'v>, Val<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         (**self).for_each(for_each)
     }
 
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Val<'v>> {
+    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
         (**self).get(key)
     }
 }
 
 impl<A: Props, B: Props> Props for Chain<A, B> {
-    fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         let mut cf = ControlFlow::Continue(());
 
         self.first.for_each(|k, v| match for_each(k, v) {
@@ -68,13 +66,15 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
         self.second.for_each(for_each)
     }
 
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Val<'v>> {
-        self.first.get(&key).or_else(|| self.second.get(&key))
+    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.borrow();
+
+        self.first.get(key).or_else(|| self.second.get(key))
     }
 }
 
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
-    fn for_each<'v, F: FnMut(Key<'v>, Val<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         self.0.for_each(for_each)
     }
 }
@@ -82,7 +82,7 @@ impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
 pub(crate) struct Empty;
 
 impl Props for Empty {
-    fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {}
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
 }
 
 pub struct Chain<T, U> {
@@ -95,14 +95,14 @@ pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 mod internal {
     use core::ops::ControlFlow;
 
-    use crate::{Key, Val};
+    use crate::{Key, Value};
 
     pub trait DispatchProps {
         fn dispatch_for_each<'a, 'b>(
             &'a self,
-            for_each: &'b mut dyn FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>,
+            for_each: &'b mut dyn FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>,
         );
-        fn dispatch_get<'a>(&'a self, key: Key) -> Option<Val<'a>>;
+        fn dispatch_get<'a>(&'a self, key: &str) -> Option<Value<'a>>;
     }
 
     pub trait SealedProps {
@@ -123,22 +123,22 @@ impl<P: Props> internal::SealedProps for P {
 impl<P: Props> internal::DispatchProps for P {
     fn dispatch_for_each<'a, 'b>(
         &'a self,
-        for_each: &'b mut dyn FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>,
+        for_each: &'b mut dyn FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>,
     ) {
         self.for_each(for_each)
     }
 
-    fn dispatch_get<'a>(&'a self, key: Key) -> Option<Val<'a>> {
+    fn dispatch_get<'a>(&'a self, key: &str) -> Option<Value<'a>> {
         self.get(key)
     }
 }
 
 impl<'a> Props for dyn ErasedProps + 'a {
-    fn for_each<'v, F: FnMut(Key<'v>, Val<'v>) -> ControlFlow<()>>(&'v self, mut for_each: F) {
+    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, mut for_each: F) {
         self.erase_props().0.dispatch_for_each(&mut for_each)
     }
 
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Val<'v>> {
-        self.erase_props().0.dispatch_get(key.to_key())
+    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+        self.erase_props().0.dispatch_get(key.borrow())
     }
 }

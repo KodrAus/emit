@@ -5,7 +5,7 @@ use self::internal::{ErasedSlot, Slot};
 pub trait Ctxt {
     type Props: Props + ?Sized;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F);
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F);
 
     fn by_ref(&self) -> ByRef<Self> {
         ByRef(self)
@@ -25,7 +25,7 @@ pub trait Ctxt {
 impl<P: Props + ?Sized> Ctxt for P {
     type Props = Self;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         with(self)
     }
 }
@@ -33,9 +33,9 @@ impl<P: Props + ?Sized> Ctxt for P {
 impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
     type Props = props::Chain<Slot<T::Props>, Slot<U::Props>>;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F) {
-        self.first.with_ctxt(|first| {
-            self.second.with_ctxt(|second| unsafe {
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        self.first.with_props(|first| {
+            self.second.with_props(|second| unsafe {
                 with(&Props::chain(Slot::new(first), Slot::new(second)))
             })
         })
@@ -45,8 +45,8 @@ impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
 impl<'a, T: Ctxt + 'a> Ctxt for ByRef<'a, T> {
     type Props = T::Props;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F) {
-        self.0.with_ctxt(with)
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        self.0.with_props(with)
     }
 }
 
@@ -59,7 +59,7 @@ pub(crate) struct Empty;
 impl Ctxt for Empty {
     type Props = props::Empty;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, _: F) {}
+    fn with_props<F: FnOnce(&Self::Props)>(&self, _: F) {}
 }
 
 pub struct Chain<T, U> {
@@ -72,7 +72,7 @@ pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 mod internal {
     use core::{marker::PhantomData, mem, ops::ControlFlow};
 
-    use crate::{props::ErasedProps, Key, Props, Val};
+    use crate::{props::ErasedProps, Key, Props, Value};
 
     pub trait DispatchCtxt {
         fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot));
@@ -114,13 +114,13 @@ mod internal {
     }
 
     impl<T: Props + ?Sized> Props for Slot<T> {
-        fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+        fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
             self.get().for_each(for_each)
         }
     }
 
     impl Props for ErasedSlot {
-        fn for_each<'a, F: FnMut(Key<'a>, Val<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+        fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
             self.get().for_each(for_each)
         }
     }
@@ -138,14 +138,14 @@ impl<C: Ctxt> internal::SealedCtxt for C {
 
 impl<C: Ctxt> internal::DispatchCtxt for C {
     fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot)) {
-        self.with_ctxt(move |props| with(unsafe { ErasedSlot::new(&props) }))
+        self.with_props(move |props| with(unsafe { ErasedSlot::new(&props) }))
     }
 }
 
 impl<'a> Ctxt for dyn ErasedCtxt + 'a {
     type Props = ErasedSlot;
 
-    fn with_ctxt<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         let mut f = Some(with);
 
         self.erase_ctxt()

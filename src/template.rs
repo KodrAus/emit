@@ -1,7 +1,8 @@
-pub struct Tpl<'a>(fv_template::rt::Template<'a>);
+#[derive(Clone)]
+pub struct Template<'a>(fv_template::rt::Template<'a>);
 
-impl<'a> Tpl<'a> {
-    pub fn by_ref<'b>(&'b self) -> Tpl<'b> {
+impl<'a> Template<'a> {
+    pub fn by_ref<'b>(&'b self) -> Template<'b> {
         todo!()
     }
 }

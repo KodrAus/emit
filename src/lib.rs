@@ -12,25 +12,27 @@ mod capture;
 
 pub mod ctxt;
 mod event;
+pub mod filter;
 pub mod key;
 pub mod props;
-mod template;
-pub mod to;
+pub mod target;
+pub mod template;
+pub mod time;
 pub mod value;
 pub mod well_known;
-pub mod when;
 
 #[doc(inline)]
 pub use self::{
-    ctxt::Ctxt, event::*, key::*, props::Props, template::*, to::To, value::*, when::When,
+    ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target, template::*,
+    time::Timestamp, value::*,
 };
 
-pub fn emit(emitter: impl To, filter: impl When, ctxt: impl Ctxt, evt: &Event<impl Props>) {
-    ctxt.with_ctxt(|ctxt| {
+pub fn emit(to: impl Target, when: impl Filter, with: impl Ctxt, evt: &Event<impl Props>) {
+    with.with_props(|ctxt| {
         let evt = evt.by_ref().chain(ctxt);
 
-        if filter.emit_when(&evt) {
-            let _ = emitter.emit_to(&evt);
+        if when.matches_event(&evt) {
+            let _ = to.emit_event(&evt);
         }
     })
 }
