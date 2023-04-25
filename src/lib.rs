@@ -29,7 +29,17 @@ pub use self::{
     time::Timestamp, value::*,
 };
 
-pub fn emit(to: impl Target, when: impl Filter, with: impl Ctxt, evt: &Event<impl Props>) {
+pub fn emit(
+    to: impl Target,
+    when: impl Filter,
+    with: impl Ctxt,
+    lvl: Level,
+    ts: Option<Timestamp>,
+    tpl: Template,
+    props: impl Props,
+) {
+    let evt = Event::new(lvl, ts.or_else(now), tpl, props);
+
     with.chain(CTXT.get().by_ref()).with_props(|ctxt| {
         let evt = evt.by_ref().chain(ctxt);
 
@@ -92,6 +102,25 @@ static FILTER: StaticCell<filter::Always> = StaticCell(filter::Always);
 #[cfg(feature = "std")]
 pub fn when(filter: impl Filter + Send + Sync + 'static) {
     let _ = FILTER.set(Box::new(filter));
+}
+
+#[cfg(feature = "std")]
+static TIME: OnceLock<Box<dyn time::Time + Send + Sync>> = OnceLock::new();
+
+#[cfg(feature = "std")]
+pub fn time(time: impl time::Time + Send + Sync + 'static) {
+    let _ = TIME.set(Box::new(time));
+}
+
+fn now() -> Option<time::Timestamp> {
+    #[cfg(feature = "std")]
+    {
+        Some(time::Timestamp::now())
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        None
+    }
 }
 
 /*

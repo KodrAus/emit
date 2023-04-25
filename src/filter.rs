@@ -40,24 +40,6 @@ impl<F: Filter> Filter for Option<F> {
     }
 }
 
-impl Filter for fn(&Event) -> bool {
-    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-        (self)(&evt.erase())
-    }
-}
-
-impl<T: Filter, U: Filter> Filter for Chain<T, U> {
-    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.first.matches_event(evt) && self.second.matches_event(evt)
-    }
-}
-
-impl<'a, C: Filter + ?Sized> Filter for ByRef<'a, C> {
-    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.0.matches_event(evt)
-    }
-}
-
 pub(crate) struct Always;
 
 impl Filter for Always {
@@ -70,12 +52,42 @@ pub fn default() -> impl Filter {
     Always
 }
 
+impl Filter for fn(&Event) -> bool {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        (self)(&evt.erase())
+    }
+}
+
+pub struct FromFn<F>(F);
+
+impl<F: Fn(&Event) -> bool> Filter for FromFn<F> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        (self.0)(&evt.erase())
+    }
+}
+
+pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
+    FromFn(f)
+}
+
 pub struct Chain<T, U> {
     pub(crate) first: T,
     pub(crate) second: U,
 }
 
+impl<T: Filter, U: Filter> Filter for Chain<T, U> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.first.matches_event(evt) && self.second.matches_event(evt)
+    }
+}
+
 pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
+
+impl<'a, C: Filter + ?Sized> Filter for ByRef<'a, C> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.0.matches_event(evt)
+    }
+}
 
 mod internal {
     use crate::Event;

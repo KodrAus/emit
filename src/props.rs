@@ -80,6 +80,17 @@ impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
     }
 }
 
+pub(crate) struct Empty;
+
+impl Props for Empty {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
+}
+
+pub struct Chain<T, U> {
+    pub(crate) first: T,
+    pub(crate) second: U,
+}
+
 impl<A: Props, B: Props> Props for Chain<A, B> {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         let mut cf = ControlFlow::Continue(());
@@ -106,24 +117,13 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
     }
 }
 
+pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
+
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         self.0.for_each(for_each)
     }
 }
-
-pub(crate) struct Empty;
-
-impl Props for Empty {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
-}
-
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
-}
-
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 mod internal {
     use core::ops::ControlFlow;

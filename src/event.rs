@@ -41,6 +41,14 @@ impl<'a, P: Props> Event<'a, P> {
         self.props.for_each(for_each)
     }
 
+    pub fn ts(&self) -> Option<Timestamp> {
+        self.ts
+    }
+
+    pub fn lvl(&self) -> Level {
+        self.lvl
+    }
+
     pub fn get<'b>(&'b self, k: impl Borrow<str>) -> Option<Value<'b>> {
         self.props.get(k)
     }

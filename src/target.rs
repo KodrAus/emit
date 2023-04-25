@@ -40,10 +40,9 @@ impl<T: Target> Target for Option<T> {
     }
 }
 
-impl Target for fn(&Event) {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        (self)(&evt.erase())
-    }
+pub struct Chain<T, U> {
+    pub(crate) first: T,
+    pub(crate) second: U,
 }
 
 impl<T: Target, U: Target> Target for Chain<T, U> {
@@ -52,6 +51,8 @@ impl<T: Target, U: Target> Target for Chain<T, U> {
         self.second.emit_event(evt);
     }
 }
+
+pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
@@ -69,12 +70,23 @@ pub fn default() -> impl Target {
     Discard
 }
 
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
+impl Target for fn(&Event) {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        (self)(&evt.erase())
+    }
 }
 
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
+pub struct FromFn<F>(F);
+
+impl<F: Fn(&Event)> Target for FromFn<F> {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        (self.0)(&evt.erase())
+    }
+}
+
+pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
+    FromFn(f)
+}
 
 mod internal {
     use crate::Event;

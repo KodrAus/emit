@@ -2,9 +2,9 @@
 
 fn main() {
     // Set up a global receiver for events
-    emit::to(|evt| {
+    emit::to(emit::target::from_fn(|evt| {
         println!("{}: {}", evt.lvl(), evt.msg());
-    });
+    }));
 
     // Emit an info event to the global receiver
     emit::info!("something went wrong at {id: 42}");

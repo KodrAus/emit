@@ -120,12 +120,10 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
                     #to_tokens,
                     #when_tokens,
                     #ctxt_tokens,
-                    &emit::Event::new(
-                        #level_tokens,
-                        #ts_tokens,
-                        #template_tokens,
-                        &[#(#field_event_tokens),*],
-                    )
+                    #level_tokens,
+                    #ts_tokens,
+                    #template_tokens,
+                    &[#(#field_event_tokens),*],
                 )
             }
         }
