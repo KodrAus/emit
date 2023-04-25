@@ -47,6 +47,22 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
     }
 }
 
+impl<P: Props> Props for Option<P> {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+        match self {
+            Some(props) => props.for_each(for_each),
+            None => (),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, P: Props + ?Sized + 'a> Props for Box<P> {
+    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+        (**self).for_each(for_each)
+    }
+}
+
 impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         for (k, v) in self {

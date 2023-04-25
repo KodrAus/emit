@@ -22,11 +22,20 @@ pub trait Ctxt {
     }
 }
 
-impl<P: Props + ?Sized> Ctxt for P {
-    type Props = Self;
+impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
+    type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        with(self)
+        (**self).with_props(with)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for Box<C> {
+    type Props = C::Props;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        (**self).with_props(with)
     }
 }
 
@@ -39,6 +48,17 @@ impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
                 with(&Props::chain(Slot::new(first), Slot::new(second)))
             })
         })
+    }
+}
+
+impl<C: Ctxt> Ctxt for Option<C> {
+    type Props = Option<Slot<C::Props>>;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        match self {
+            Some(ctxt) => ctxt.with_props(|props| unsafe { with(&Some(Slot::new(props))) }),
+            None => with(&None),
+        }
     }
 }
 
@@ -151,5 +171,13 @@ impl<'a> Ctxt for dyn ErasedCtxt + 'a {
         self.erase_ctxt()
             .0
             .dispatch_with_ctxt(&mut |props| f.take().expect("called multiple times")(&props));
+    }
+}
+
+impl<'a> Ctxt for dyn ErasedCtxt + Send + Sync + 'a {
+    type Props = ErasedSlot;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        (self as &(dyn ErasedCtxt + 'a)).with_props(with)
     }
 }

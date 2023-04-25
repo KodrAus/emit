@@ -30,11 +30,11 @@ pub use self::{
 };
 
 pub fn emit(to: impl Target, when: impl Filter, with: impl Ctxt, evt: &Event<impl Props>) {
-    with.with_props(|ctxt| {
+    with.chain(CTXT.get().by_ref()).with_props(|ctxt| {
         let evt = evt.by_ref().chain(ctxt);
 
-        if when.matches_event(&evt) {
-            let _ = to.emit_event(&evt);
+        if when.chain(FILTER.get().by_ref()).matches_event(&evt) {
+            to.chain(TARGET.get().by_ref()).emit_event(&evt);
         }
     })
 }
@@ -46,6 +46,52 @@ mod internal {
 #[doc(hidden)]
 pub mod __private {
     pub use crate::capture::__PrivateCapture;
+}
+
+#[cfg(feature = "std")]
+use std::sync::OnceLock;
+
+#[cfg(not(feature = "std"))]
+struct StaticCell<T>(T);
+
+#[cfg(not(feature = "std"))]
+impl<T> StaticCell<T> {
+    fn get(&self) -> &T {
+        &self.0
+    }
+}
+
+#[cfg(feature = "std")]
+static TARGET: OnceLock<Box<dyn target::ErasedTarget + Send + Sync>> = OnceLock::new();
+
+#[cfg(not(feature = "std"))]
+static TARGET: StaticCell<target::Discard> = StaticCell(target::Discard);
+
+#[cfg(feature = "std")]
+pub fn to(target: impl Target + Send + Sync + 'static) {
+    let _ = TARGET.set(Box::new(target));
+}
+
+#[cfg(feature = "std")]
+static CTXT: OnceLock<Box<dyn ctxt::ErasedCtxt + Send + Sync>> = OnceLock::new();
+
+#[cfg(not(feature = "std"))]
+static CTXT: StaticCell<ctxt::Empty> = StaticCell(ctxt::Empty);
+
+#[cfg(feature = "std")]
+pub fn with(ctxt: impl Ctxt + Send + Sync + 'static) {
+    let _ = CTXT.set(Box::new(ctxt));
+}
+
+#[cfg(feature = "std")]
+static FILTER: OnceLock<Box<dyn filter::ErasedFilter + Send + Sync>> = OnceLock::new();
+
+#[cfg(not(feature = "std"))]
+static FILTER: StaticCell<filter::Always> = StaticCell(filter::Always);
+
+#[cfg(feature = "std")]
+pub fn when(filter: impl Filter + Send + Sync + 'static) {
+    let _ = FILTER.set(Box::new(filter));
 }
 
 /*

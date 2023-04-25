@@ -15,8 +15,6 @@ authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2021"
 
 [features]
-default = ["std"]
-
 std = ["emit_macros/std", "value-bag/error"]
 sval = ["emit_macros/sval", "value-bag/sval", "dep:sval"]
 serde = ["emit_macros/serde", "value-bag/serde", "dep:serde"]

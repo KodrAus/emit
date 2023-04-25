@@ -18,9 +18,31 @@ pub trait Target {
     }
 }
 
-impl<F: Fn(Event)> Target for F {
+impl<'a, T: Target + ?Sized> Target for &'a T {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        (self)(evt.erase())
+        (**self).emit_event(evt)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, T: Target + ?Sized + 'a> Target for Box<T> {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        (**self).emit_event(evt)
+    }
+}
+
+impl<T: Target> Target for Option<T> {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        match self {
+            Some(target) => target.emit_event(evt),
+            None => Discard.emit_event(evt),
+        }
+    }
+}
+
+impl Target for fn(&Event) {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        (self)(&evt.erase())
     }
 }
 
@@ -66,9 +88,9 @@ mod internal {
     }
 }
 
-pub trait ErasedTo: internal::SealedTarget {}
+pub trait ErasedTarget: internal::SealedTarget {}
 
-impl<T: Target> ErasedTo for T {}
+impl<T: Target> ErasedTarget for T {}
 
 impl<T: Target> internal::SealedTarget for T {
     fn erase_to(&self) -> crate::internal::Erased<&dyn internal::DispatchTarget> {
@@ -82,8 +104,14 @@ impl<T: Target> internal::DispatchTarget for T {
     }
 }
 
-impl<'a> Target for dyn ErasedTo + 'a {
+impl<'a> Target for dyn ErasedTarget + 'a {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         self.erase_to().0.dispatch_emit_to(&evt.erase())
+    }
+}
+
+impl<'a> Target for dyn ErasedTarget + Send + Sync + 'a {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        (self as &(dyn ErasedTarget + 'a)).emit_event(evt)
     }
 }
