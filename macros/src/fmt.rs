@@ -6,7 +6,7 @@ use crate::{
     hook,
 };
 
-pub(super) fn create_tokens(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
+pub(super) fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
     quote_spanned!(hole.span()=>
         #(#attrs)*
         {

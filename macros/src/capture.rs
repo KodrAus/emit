@@ -1,9 +1,3 @@
-/*!
-Compile-time implementation of value capturing.
-
-This module generates calls to `rt::capture`.
-*/
-
 use proc_macro2::TokenStream;
 
 use syn::{parse::Parse, spanned::Spanned, Attribute, FieldValue};
@@ -33,7 +27,7 @@ impl Parse for Args {
     }
 }
 
-pub(super) fn create_tokens(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
+pub(super) fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
     let fn_name = match &*fv.key_name() {
         // Default to capturing the well-known error identifier as an error
         "err" => quote!(__private_capture_as_error),

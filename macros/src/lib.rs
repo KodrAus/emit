@@ -20,6 +20,8 @@ mod emit;
 mod filter;
 mod fmt;
 mod hook;
+mod props;
+mod template;
 mod util;
 
 /**

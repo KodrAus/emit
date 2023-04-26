@@ -6,7 +6,7 @@ use crate::{props, Props, Value};
 pub struct Template<'a>(&'a [Part<'a>]);
 
 impl<'a> Template<'a> {
-    pub fn new(parts: &'a [Part<'static>]) -> Template<'a> {
+    pub fn new(parts: &'static [Part<'static>]) -> Template<'a> {
         Template(parts)
     }
 

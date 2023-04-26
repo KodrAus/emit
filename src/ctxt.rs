@@ -50,10 +50,6 @@ impl<C: Ctxt> Ctxt for Option<C> {
     }
 }
 
-pub fn default() -> impl Ctxt {
-    Empty
-}
-
 pub struct Empty;
 
 impl Ctxt for Empty {

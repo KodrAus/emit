@@ -66,10 +66,6 @@ impl Target for Discard {
     fn emit_event<P: Props>(&self, _: &Event<P>) {}
 }
 
-pub fn default() -> impl Target {
-    Discard
-}
-
 impl Target for fn(&Event) {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         (self)(&evt.erase())

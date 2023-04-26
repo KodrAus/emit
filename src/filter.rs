@@ -48,10 +48,6 @@ impl Filter for Always {
     }
 }
 
-pub fn default() -> impl Filter {
-    Always
-}
-
 impl Filter for fn(&Event) -> bool {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         (self)(&evt.erase())

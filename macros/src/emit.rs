@@ -1,20 +1,9 @@
-/*!
-Compile-time implementation of event emission.
-
-This module generates calls to `rt::emit`.
-*/
-
-use std::{collections::BTreeMap, mem};
-
-use proc_macro2::{Span, TokenStream};
-use syn::{spanned::Spanned, Attribute, Expr, ExprLit, ExprPath, FieldValue, Ident};
-
-use fv_template::ct::Template;
+use proc_macro2::TokenStream;
+use syn::{parse::Parse, FieldValue};
 
 use crate::{
     args::{self, Arg},
-    capture, fmt,
-    util::{AttributeCfg, FieldValueKey},
+    template,
 };
 
 pub(super) struct ExpandTokens {
@@ -30,98 +19,33 @@ struct Args {
     ts: TokenStream,
 }
 
-impl Args {
-    fn from_field_values<'a>(
-        args: impl Iterator<Item = &'a FieldValue> + 'a,
-    ) -> Result<Self, syn::Error> {
+impl Parse for Args {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut to = Arg::token_stream("to", |expr| Ok(quote!(Some(#expr))));
         let mut when = Arg::token_stream("when", |expr| Ok(quote!(Some(#expr))));
         let mut with = Arg::token_stream("with", |expr| Ok(quote!(Some(#expr))));
         let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(Some(#expr))));
 
-        args::set_from_field_values(args, [&mut to, &mut when, &mut with, &mut ts])?;
+        args::set_from_field_values(
+            input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
+            [&mut to, &mut when, &mut with, &mut ts],
+        )?;
 
         Ok(Args {
-            to: to.take().unwrap_or_else(|| quote!(emit::target::default())),
-            when: when
-                .take()
-                .unwrap_or_else(|| quote!(emit::filter::default())),
-            with: with.take().unwrap_or_else(|| quote!(emit::ctxt::default())),
+            to: to.take().unwrap_or_else(|| quote!(emit::target::Discard)),
+            when: when.take().unwrap_or_else(|| quote!(emit::filter::Always)),
+            with: with.take().unwrap_or_else(|| quote!(emit::ctxt::Empty)),
             ts: ts.take().unwrap_or_else(|| quote!(None)),
         })
     }
 }
 
 pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    let template = Template::parse2(opts.input).map_err(|e| syn::Error::new(e.span(), e))?;
+    let (args, template, props) = template::parse2::<Args>(opts.input)?;
 
-    // Any field-values that aren't part of the template
-    let mut extra_field_values: BTreeMap<_, _> = template
-        .after_template_field_values()
-        .map(|fv| Ok((fv.key_name(), fv)))
-        .collect::<Result<_, syn::Error>>()?;
-
-    let mut fields = Fields::default();
-
-    // Push the field-values that appear in the template
-    for fv in template.template_field_values() {
-        let k = fv.key_name();
-
-        // If the hole has a corresponding field-value outside the template
-        // then it will be used as the source for the value and attributes
-        // In this case, it's expected that the field-value in the template is
-        // just a single identifier
-        let fv = match extra_field_values.remove(&k) {
-            Some(extra_fv) => {
-                if let Expr::Path(ExprPath { ref path, .. }) = fv.expr {
-                    // Make sure the field-value in the template is just a plain identifier
-                    if !fv.attrs.is_empty() {
-                        return Err(syn::Error::new(fv.span(), "keys that exist in the template and extra pairs should only use attributes on the extra pair"));
-                    }
-
-                    assert_eq!(
-                        path.get_ident().map(|ident| ident.to_string()).as_ref(),
-                        Some(&k),
-                        "the key name and path don't match"
-                    );
-                } else {
-                    return Err(syn::Error::new(extra_fv.span(), "keys that exist in the template and extra pairs should only use identifiers"));
-                }
-
-                extra_fv
-            }
-            None => fv,
-        };
-
-        fields.push(k, fv.clone())?;
-    }
-
-    // Push any remaining extra field-values
-    // This won't include any field values that also appear in the template
-    for (k, fv) in extra_field_values {
-        fields.push(k, fv.clone())?;
-    }
-
-    // Get the additional args to the log expression
-    let args = Args::from_field_values(template.before_template_field_values())?;
-
-    // A runtime representation of the template
-    let template_tokens = {
-        let mut template_visitor = TemplateVisitor {
-            get_field: |label: &str| fields.sorted_fields.get(label).expect("missing field"),
-            parts: Vec::new(),
-        };
-        template.visit(&mut template_visitor);
-        let template_parts = &template_visitor.parts;
-
-        quote!(emit::Template::new(&[
-            #((#template_parts)),*
-        ]))
-    };
-
-    let field_match_value_tokens = fields.match_value_tokens();
-    let field_match_binding_tokens = fields.match_binding_tokens();
-    let field_event_tokens = fields.sorted_field_event_tokens();
+    let props_match_value_tokens = props.match_value_tokens();
+    let props_match_binding_tokens = props.match_binding_tokens();
+    let props_tokens = props.sorted_key_value_tokens();
 
     let to_tokens = args.to;
     let when_tokens = args.when;
@@ -133,13 +57,15 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
         quote!(emit::Level::#level)
     };
 
+    let template_tokens = template.template_tokens();
+
     let receiver_tokens = opts.receiver;
 
     Ok(quote!({
         extern crate emit;
 
-        match (#((#field_match_value_tokens)),*) {
-            (#(#field_match_binding_tokens),*) => {
+        match (#((#props_match_value_tokens)),*) {
+            (#(#props_match_binding_tokens),*) => {
                 emit::#receiver_tokens(
                     #to_tokens,
                     #when_tokens,
@@ -147,136 +73,11 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
                     #level_tokens,
                     #ts_tokens,
                     #template_tokens,
-                    &[#(#field_event_tokens),*],
+                    &[#(#props_tokens),*],
                 )
             }
         }
     }))
-}
-
-#[derive(Default)]
-struct Fields {
-    match_value_tokens: Vec<TokenStream>,
-    match_binding_tokens: Vec<TokenStream>,
-    sorted_fields: BTreeMap<String, SortedField>,
-    field_index: usize,
-}
-
-struct SortedField {
-    field_event_tokens: TokenStream,
-    cfg_attr: Option<Attribute>,
-    attrs: Vec<Attribute>,
-}
-
-impl Fields {
-    fn match_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.match_value_tokens.iter()
-    }
-
-    fn match_binding_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.match_binding_tokens.iter()
-    }
-
-    fn sorted_field_event_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields
-            .values()
-            .map(|field| &field.field_event_tokens)
-    }
-
-    fn next_ident(&mut self, span: Span) -> Ident {
-        let i = Ident::new(&format!("__tmp{}", self.field_index), span);
-        self.field_index += 1;
-
-        i
-    }
-
-    fn push(&mut self, label: String, mut fv: FieldValue) -> Result<(), syn::Error> {
-        let mut attrs = vec![];
-        let mut cfg_attr = None;
-
-        for attr in mem::take(&mut fv.attrs) {
-            if attr.is_cfg() {
-                if cfg_attr.is_some() {
-                    return Err(syn::Error::new(
-                        attr.span(),
-                        "only a single #[cfg] is supported on fields",
-                    ));
-                }
-
-                cfg_attr = Some(attr);
-            } else {
-                attrs.push(attr);
-            }
-        }
-
-        let v = self.next_ident(fv.span());
-
-        let capture_tokens = capture::create_tokens(&attrs, &fv);
-
-        self.match_value_tokens.push(match cfg_attr {
-            Some(ref cfg_attr) => quote_spanned!(fv.span()=>
-                #cfg_attr
-                {
-                    #capture_tokens
-                }
-            ),
-            None => capture_tokens,
-        });
-
-        // If there's a #[cfg] then also push its reverse
-        // This is to give a dummy value to the pattern binding since they don't support attributes
-        if let Some(cfg_attr) = &cfg_attr {
-            let cfg_attr = cfg_attr
-                .invert_cfg()
-                .ok_or_else(|| syn::Error::new(cfg_attr.span(), "attribute is not a #[cfg]"))?;
-
-            self.match_value_tokens
-                .push(quote_spanned!(fv.span()=> #cfg_attr ()));
-        }
-
-        self.match_binding_tokens.push(quote!(#v));
-
-        // Make sure keys aren't duplicated
-        let previous = self.sorted_fields.insert(
-            label.clone(),
-            SortedField {
-                field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#v.0), #v.1.by_ref())),
-                cfg_attr,
-                attrs,
-            },
-        );
-
-        if previous.is_some() {
-            return Err(syn::Error::new(fv.span(), "keys cannot be duplicated"));
-        }
-
-        Ok(())
-    }
-}
-
-struct TemplateVisitor<F> {
-    get_field: F,
-    parts: Vec<TokenStream>,
-}
-
-impl<'a, F> fv_template::ct::Visitor for TemplateVisitor<F>
-where
-    F: Fn(&str) -> &'a SortedField + 'a,
-{
-    fn visit_hole(&mut self, label: &str, hole: &ExprLit) {
-        let field = (self.get_field)(label);
-
-        let hole_tokens = fmt::create_tokens(&field.attrs, hole);
-
-        match field.cfg_attr {
-            Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),
-            _ => self.parts.push(quote!(#hole_tokens)),
-        }
-    }
-
-    fn visit_text(&mut self, text: &str) {
-        self.parts.push(quote!(emit::template::Part::text(#text)));
-    }
 }
 
 #[cfg(test)]
