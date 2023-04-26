@@ -14,9 +14,12 @@ extern crate syn;
 
 use proc_macro2::TokenStream;
 
+mod args;
 mod capture;
 mod emit;
 mod filter;
+mod hook;
+mod util;
 
 /**
 Emit a debug record.
@@ -87,11 +90,11 @@ pub fn as_debug(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture::rename_capture_tokens(capture::RenameCaptureTokens {
+    hook::rename_hook_tokens(hook::RenameHookTokens {
         args: TokenStream::from(args),
         expr: TokenStream::from(item),
-        predicate: |ident| ident.starts_with("__private_capture"),
-        to: |args| {
+        predicate: |ident: &str| ident.starts_with("__private_capture"),
+        to: |args: &capture::Args| {
             if args.inspect {
                 quote!(__private_capture_as_debug)
             } else {
@@ -110,11 +113,11 @@ pub fn as_display(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture::rename_capture_tokens(capture::RenameCaptureTokens {
+    hook::rename_hook_tokens(hook::RenameHookTokens {
         args: TokenStream::from(args),
         expr: TokenStream::from(item),
-        predicate: |ident| ident.starts_with("__private_capture"),
-        to: |args| {
+        predicate: |ident: &str| ident.starts_with("__private_capture"),
+        to: |args: &capture::Args| {
             if args.inspect {
                 quote!(__private_capture_as_display)
             } else {
@@ -135,11 +138,11 @@ pub fn as_sval(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "sval")]
     {
-        capture::rename_capture_tokens(capture::RenameCaptureTokens {
+        hook::rename_hook_tokens(hook::RenameHookTokens {
             args: TokenStream::from(args),
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |args| {
+            predicate: |ident: &str| ident.starts_with("__private_capture"),
+            to: |args: &capture::Args| {
                 if args.inspect {
                     quote!(__private_capture_as_sval)
                 } else {
@@ -170,11 +173,11 @@ pub fn as_serde(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "serde")]
     {
-        capture::rename_capture_tokens(capture::RenameCaptureTokens {
+        hook::rename_hook_tokens(hook::RenameHookTokens {
             args: TokenStream::from(args),
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |args| {
+            predicate: |ident: &str| ident.starts_with("__private_capture"),
+            to: |args: &capture::Args| {
                 if args.inspect {
                     quote!(__private_capture_as_serde)
                 } else {
@@ -205,11 +208,11 @@ pub fn as_error(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "std")]
     {
-        capture::rename_capture_tokens(capture::RenameCaptureTokens {
+        hook::rename_hook_tokens(hook::RenameHookTokens {
             args: TokenStream::from(args),
             expr: TokenStream::from(item),
-            predicate: |ident| ident.starts_with("__private_capture"),
-            to: |_| quote!(__private_capture_as_error),
+            predicate: |ident: &str| ident.starts_with("__private_capture"),
+            to: |_: &capture::Args| quote!(__private_capture_as_error),
         })
         .unwrap_or_compile_error()
     }
@@ -229,6 +232,7 @@ pub fn as_error(
 pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |key| match key {
             // Default to capturing the well-known error identifier as an error
             "err" => quote!(__private_capture_as_error),
@@ -244,6 +248,7 @@ pub fn __private_capture(item: proc_macro::TokenStream) -> proc_macro::TokenStre
 pub fn __private_capture_as_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_as_debug),
     })
     .unwrap_or_compile_error()
@@ -254,6 +259,7 @@ pub fn __private_capture_as_debug(item: proc_macro::TokenStream) -> proc_macro::
 pub fn __private_capture_anon_as_debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_anon_as_debug),
     })
     .unwrap_or_compile_error()
@@ -264,6 +270,7 @@ pub fn __private_capture_anon_as_debug(item: proc_macro::TokenStream) -> proc_ma
 pub fn __private_capture_as_display(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_as_display),
     })
     .unwrap_or_compile_error()
@@ -274,6 +281,7 @@ pub fn __private_capture_as_display(item: proc_macro::TokenStream) -> proc_macro
 pub fn __private_capture_anon_as_display(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_anon_as_display),
     })
     .unwrap_or_compile_error()
@@ -284,6 +292,7 @@ pub fn __private_capture_anon_as_display(item: proc_macro::TokenStream) -> proc_
 pub fn __private_capture_as_sval(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_as_sval),
     })
     .unwrap_or_compile_error()
@@ -294,6 +303,7 @@ pub fn __private_capture_as_sval(item: proc_macro::TokenStream) -> proc_macro::T
 pub fn __private_capture_anon_as_sval(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_anon_as_sval),
     })
     .unwrap_or_compile_error()
@@ -304,6 +314,7 @@ pub fn __private_capture_anon_as_sval(item: proc_macro::TokenStream) -> proc_mac
 pub fn __private_capture_as_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_as_serde),
     })
     .unwrap_or_compile_error()
@@ -314,6 +325,7 @@ pub fn __private_capture_as_serde(item: proc_macro::TokenStream) -> proc_macro::
 pub fn __private_capture_anon_as_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_anon_as_serde),
     })
     .unwrap_or_compile_error()
@@ -324,9 +336,16 @@ pub fn __private_capture_anon_as_serde(item: proc_macro::TokenStream) -> proc_ma
 pub fn __private_capture_as_error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     capture::expand_tokens(capture::ExpandTokens {
         expr: TokenStream::from(item),
+        fn_trait: quote!(__PrivateCaptureHook),
         fn_name: |_| quote!(__private_capture_as_error),
     })
     .unwrap_or_compile_error()
+}
+
+#[proc_macro]
+#[doc(hidden)]
+pub fn __private_fmt(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    item
 }
 
 trait TokenStreamExt {

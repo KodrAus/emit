@@ -7,19 +7,48 @@ This module generates calls to `rt::emit`.
 use std::{collections::BTreeMap, mem};
 
 use proc_macro2::{Span, TokenStream};
-use syn::{
-    spanned::Spanned, Attribute, Expr, ExprLit, ExprPath, FieldValue, Ident, MacroDelimiter, Meta,
-    MetaList,
-};
+use syn::{spanned::Spanned, Attribute, Expr, ExprLit, ExprPath, FieldValue, Ident};
 
 use fv_template::ct::Template;
 
-use crate::capture::FieldValueExt;
+use crate::{
+    args::{self, Arg},
+    util::{AttributeCfg, FieldValueKey},
+};
 
 pub(super) struct ExpandTokens {
     pub(super) receiver: TokenStream,
     pub(super) level: TokenStream,
     pub(super) input: TokenStream,
+}
+
+struct Args {
+    to: TokenStream,
+    when: TokenStream,
+    with: TokenStream,
+    ts: TokenStream,
+}
+
+impl Args {
+    fn from_field_values<'a>(
+        args: impl Iterator<Item = &'a FieldValue> + 'a,
+    ) -> Result<Self, syn::Error> {
+        let mut to = Arg::token_stream("to", |expr| Ok(quote!(Some(#expr))));
+        let mut when = Arg::token_stream("when", |expr| Ok(quote!(Some(#expr))));
+        let mut with = Arg::token_stream("with", |expr| Ok(quote!(Some(#expr))));
+        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(Some(#expr))));
+
+        args::set_from_field_values(args, [&mut to, &mut when, &mut with, &mut ts])?;
+
+        Ok(Args {
+            to: to.take().unwrap_or_else(|| quote!(emit::target::default())),
+            when: when
+                .take()
+                .unwrap_or_else(|| quote!(emit::filter::default())),
+            with: with.take().unwrap_or_else(|| quote!(emit::ctxt::default())),
+            ts: ts.take().unwrap_or_else(|| quote!(None)),
+        })
+    }
 }
 
 pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
@@ -73,7 +102,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     }
 
     // Get the additional args to the log expression
-    let args = Args::from_raw(template.before_template_field_values())?;
+    let args = Args::from_field_values(template.before_template_field_values())?;
 
     // A runtime representation of the template
     let template_tokens = {
@@ -101,7 +130,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
 
     let to_tokens = args.to;
     let when_tokens = args.when;
-    let ctxt_tokens = args.ctxt;
+    let with_tokens = args.with;
     let ts_tokens = args.ts;
 
     let level_tokens = {
@@ -119,7 +148,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
                 emit::#receiver_tokens(
                     #to_tokens,
                     #when_tokens,
-                    #ctxt_tokens,
+                    #with_tokens,
                     #level_tokens,
                     #ts_tokens,
                     #template_tokens,
@@ -231,7 +260,7 @@ where
     F: Fn(&str) -> Option<&'a Attribute> + 'a,
 {
     fn visit_hole(&mut self, label: &str, hole: &ExprLit) {
-        let hole = quote!(emit::template::Part::hole(#hole));
+        let hole = quote!({ emit::__private_fmt!(emit::template::Part::hole(#hole)) });
 
         match (self.get_cfg_attr)(label) {
             Some(cfg_attr) => self.parts.push(quote!(#cfg_attr #hole)),
@@ -241,95 +270,6 @@ where
 
     fn visit_text(&mut self, text: &str) {
         self.parts.push(quote!(emit::template::Part::text(#text)));
-    }
-}
-
-pub(super) trait AttributeExt {
-    fn is_cfg(&self) -> bool;
-    fn invert_cfg(&self) -> Option<Attribute>;
-}
-
-impl AttributeExt for Attribute {
-    fn is_cfg(&self) -> bool {
-        if let Some(ident) = self.path().get_ident() {
-            ident == "cfg"
-        } else {
-            false
-        }
-    }
-
-    fn invert_cfg(&self) -> Option<Attribute> {
-        match self.path().get_ident() {
-            Some(ident) if ident == "cfg" => {
-                let tokens = match &self.meta {
-                    Meta::Path(meta) => quote!(not(#meta)),
-                    Meta::List(meta) => {
-                        let meta = &meta.tokens;
-                        quote!(not(#meta))
-                    }
-                    Meta::NameValue(meta) => quote!(not(#meta)),
-                };
-
-                Some(Attribute {
-                    pound_token: self.pound_token.clone(),
-                    style: self.style.clone(),
-                    bracket_token: self.bracket_token.clone(),
-                    meta: Meta::List(MetaList {
-                        path: self.path().clone(),
-                        delimiter: MacroDelimiter::Paren(Default::default()),
-                        tokens,
-                    }),
-                })
-            }
-            _ => None,
-        }
-    }
-}
-
-struct Args {
-    to: TokenStream,
-    when: TokenStream,
-    ctxt: TokenStream,
-    ts: TokenStream,
-}
-
-impl Args {
-    fn from_raw<'a>(args: impl Iterator<Item = &'a FieldValue> + 'a) -> Result<Self, syn::Error> {
-        let mut to = quote!(emit::target::default());
-        let mut when = quote!(emit::filter::default());
-        let mut ctxt = quote!(emit::ctxt::default());
-
-        let mut ts = quote!(None);
-
-        // Don't accept any unrecognized field names
-        for fv in args {
-            match &*fv.key_name() {
-                "to" => {
-                    let expr = &fv.expr;
-                    to = quote!(Some(#expr));
-                }
-                "when" => {
-                    let expr = &fv.expr;
-                    when = quote!(Some(#expr));
-                }
-                "ctxt" => {
-                    let expr = &fv.expr;
-                    ctxt = quote!(Some(#expr));
-                }
-                "ts" => {
-                    let expr = &fv.expr;
-                    ts = quote!(Some(#expr));
-                }
-                unknown => {
-                    return Err(syn::Error::new(
-                        fv.span(),
-                        format_args!("unexpected field `{}`", unknown),
-                    ))
-                }
-            }
-        }
-
-        Ok(Args { to, when, ctxt, ts })
     }
 }
 

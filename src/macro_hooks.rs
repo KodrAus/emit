@@ -11,6 +11,8 @@ use serde::Serialize;
 #[cfg(feature = "sval")]
 use sval::Value;
 
+use crate::template::Formatter;
+
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
 
@@ -176,7 +178,7 @@ so that when a bound isn't satisfied we get a more accurate type error.
 - It uses clumsily uglified names that are unlikely to clash in non-hygienic
 contexts. (We're expecting non-hygienic spans to support value interpolation).
 */
-pub trait __PrivateCapture {
+pub trait __PrivateCaptureHook {
     fn __private_capture_as_default(&self) -> crate::Value
     where
         Self: Capture<WithDefault>,
@@ -248,7 +250,12 @@ pub trait __PrivateCapture {
     }
 }
 
-impl<T: ?Sized> __PrivateCapture for T {}
+impl<T: ?Sized> __PrivateCaptureHook for T {}
+
+pub trait __PrivateFmtHook {
+    fn __private_fmt_with_default(self) -> Self;
+    fn __private_fmt_with(self, formatter: Formatter) -> Self;
+}
 
 #[cfg(test)]
 mod tests {

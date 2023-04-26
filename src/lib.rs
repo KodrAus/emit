@@ -10,7 +10,7 @@ for events.
 
 pub use emit_macros::*;
 
-mod capture;
+mod macro_hooks;
 
 pub mod ctxt;
 mod event;
@@ -25,7 +25,7 @@ pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
-    ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target, template::*,
+    ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target, template::Template,
     time::Timestamp, value::*,
 };
 
@@ -55,7 +55,7 @@ mod internal {
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::capture::__PrivateCapture;
+    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook};
 }
 
 #[cfg(feature = "std")]
