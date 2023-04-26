@@ -55,8 +55,8 @@ mod internal {
 
 #[doc(hidden)]
 pub mod __private {
-    pub use core;
     pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook};
+    pub use core;
 }
 
 #[cfg(feature = "std")]

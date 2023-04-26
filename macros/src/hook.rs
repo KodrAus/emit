@@ -4,8 +4,9 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
     parse::Parse,
+    punctuated::Punctuated,
     visit_mut::{self, VisitMut},
-    Expr, Ident, ExprMethodCall, punctuated::Punctuated,
+    Expr, ExprMethodCall, Ident,
 };
 
 use crate::util::parse_comma_separated2;
@@ -30,7 +31,12 @@ pub(super) fn rename_hook_tokens<T: Parse>(
     Ok(rename_capture(expr, opts.predicate, to_ident, to_args))
 }
 
-fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to_ident: Ident, to_args: Punctuated<Expr, Token![,]>) -> TokenStream {
+fn rename_capture(
+    mut expr: Expr,
+    predicate: impl Fn(&str) -> bool,
+    to_ident: Ident,
+    to_args: Punctuated<Expr, Token![,]>,
+) -> TokenStream {
     struct RenameVisitor<F> {
         scratch: String,
         predicate: F,

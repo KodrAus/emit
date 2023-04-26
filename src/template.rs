@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::Value;
+use crate::{props, Props, Value};
 
 #[derive(Clone)]
 pub struct Template<'a>(&'a [Part<'a>]);
@@ -16,6 +16,50 @@ impl<'a> Template<'a> {
 
     pub fn by_ref<'b>(&'b self) -> Template<'b> {
         Template(self.0)
+    }
+
+    pub fn render<'b>(&'b self) -> Render<'b, props::Empty> {
+        Render {
+            tpl: self.by_ref(),
+            props: props::Empty,
+        }
+    }
+}
+
+pub struct Render<'a, P> {
+    tpl: Template<'a>,
+    props: P,
+}
+
+impl<'a, P> Render<'a, P> {
+    pub fn with_props<U>(self, props: U) -> Render<'a, U> {
+        Render {
+            tpl: self.tpl,
+            props,
+        }
+    }
+}
+
+impl<'a, P: Props> fmt::Display for Render<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for part in self.tpl.0 {
+            match part.0 {
+                PartKind::Text { value } => f.write_str(value)?,
+                PartKind::Hole { label, formatter } => {
+                    if let Some(value) = self.props.get(label) {
+                        if let Some(formatter) = formatter {
+                            formatter(&value, f)?;
+                        } else {
+                            fmt::Display::fmt(&value, f)?;
+                        }
+                    } else {
+                        write!(f, "`{}`", label)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

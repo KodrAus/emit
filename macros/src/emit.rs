@@ -13,7 +13,8 @@ use fv_template::ct::Template;
 
 use crate::{
     args::{self, Arg},
-    util::{AttributeCfg, FieldValueKey}, capture, fmt,
+    capture, fmt,
+    util::{AttributeCfg, FieldValueKey},
 };
 
 pub(super) struct ExpandTokens {
@@ -107,25 +108,19 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     // A runtime representation of the template
     let template_tokens = {
         let mut template_visitor = TemplateVisitor {
-            get_field: |label: &str| {
-                fields
-                    .sorted_fields
-                    .get(label)
-                    .expect("missing field")
-            },
+            get_field: |label: &str| fields.sorted_fields.get(label).expect("missing field"),
             parts: Vec::new(),
         };
         template.visit(&mut template_visitor);
         let template_parts = &template_visitor.parts;
 
         quote!(emit::Template::new(&[
-            #(#template_parts),*
+            #((#template_parts)),*
         ]))
     };
 
     let field_match_value_tokens = fields.match_value_tokens();
     let field_match_binding_tokens = fields.match_binding_tokens();
-
     let field_event_tokens = fields.sorted_field_event_tokens();
 
     let to_tokens = args.to;
@@ -143,7 +138,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     Ok(quote!({
         extern crate emit;
 
-        match (#(#field_match_value_tokens),*) {
+        match (#((#field_match_value_tokens)),*) {
             (#(#field_match_binding_tokens),*) => {
                 emit::#receiver_tokens(
                     #to_tokens,
@@ -218,17 +213,15 @@ impl Fields {
 
         let capture_tokens = capture::create_tokens(&attrs, &fv);
 
-        self.match_value_tokens.push(
-            match cfg_attr {
-                Some(ref cfg_attr) => quote_spanned!(fv.span()=>
-                    #cfg_attr
-                    {
-                        #capture_tokens
-                    }
-                ),
-                None => capture_tokens
-            }
-        );
+        self.match_value_tokens.push(match cfg_attr {
+            Some(ref cfg_attr) => quote_spanned!(fv.span()=>
+                #cfg_attr
+                {
+                    #capture_tokens
+                }
+            ),
+            None => capture_tokens,
+        });
 
         // If there's a #[cfg] then also push its reverse
         // This is to give a dummy value to the pattern binding since they don't support attributes

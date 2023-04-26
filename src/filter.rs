@@ -40,7 +40,7 @@ impl<F: Filter> Filter for Option<F> {
     }
 }
 
-pub(crate) struct Always;
+pub struct Always;
 
 impl Filter for Always {
     fn matches_event<P: Props>(&self, _: &Event<P>) -> bool {

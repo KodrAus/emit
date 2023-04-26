@@ -1,7 +1,10 @@
 use proc_macro2::TokenStream;
-use syn::{ExprLit, Attribute, spanned::Spanned, parse::Parse};
+use syn::{parse::Parse, spanned::Spanned, Attribute, ExprLit, FieldValue};
 
-use crate::{hook, args::{Arg, self}};
+use crate::{
+    args::{self, Arg},
+    hook,
+};
 
 pub(super) fn create_tokens(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
     quote_spanned!(hole.span()=>
@@ -22,7 +25,10 @@ impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut flags = Arg::str("flags");
 
-        args::set_from_parse2(input.cursor().token_stream(), [&mut flags])?;
+        args::set_from_field_values(
+            input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
+            [&mut flags],
+        )?;
 
         Ok(Args {
             flags: flags.take_or_default(),
@@ -44,9 +50,10 @@ pub(super) fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, 
             let fmt = if args.flags.is_empty() {
                 "{}".to_owned()
             } else {
+                // `:?b` -> `{:?b}`
                 format!("{{:{}}}", args.flags)
             };
-            
+
             let to_ident = quote!(__private_fmt_as);
             let to_arg = quote!(|v, f| {
                 extern crate emit;

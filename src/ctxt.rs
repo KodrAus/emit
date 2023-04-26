@@ -54,12 +54,14 @@ pub fn default() -> impl Ctxt {
     Empty
 }
 
-pub(crate) struct Empty;
+pub struct Empty;
 
 impl Ctxt for Empty {
     type Props = props::Empty;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, _: F) {}
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        with(&props::Empty)
+    }
 }
 
 pub struct Chain<T, U> {

@@ -4,13 +4,14 @@ Compile-time implementation of value capturing.
 This module generates calls to `rt::capture`.
 */
 
-use proc_macro2::{TokenStream};
+use proc_macro2::TokenStream;
 
-use syn::{parse::Parse, FieldValue, Attribute, spanned::Spanned};
+use syn::{parse::Parse, spanned::Spanned, Attribute, FieldValue};
 
 use crate::{
     args::{self, Arg},
-    util::FieldValueKey, hook,
+    hook,
+    util::FieldValueKey,
 };
 
 pub(super) struct Args {
@@ -21,7 +22,10 @@ impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut inspect = Arg::bool("inspect");
 
-        args::set_from_parse2(input.cursor().token_stream(), [&mut inspect])?;
+        args::set_from_field_values(
+            input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
+            [&mut inspect],
+        )?;
 
         Ok(Args {
             inspect: inspect.take_or_default(),
@@ -56,7 +60,9 @@ pub(super) struct RenameHookTokens<T> {
     pub(super) to: T,
 }
 
-pub(super) fn rename_hook_tokens(opts: RenameHookTokens<impl FnOnce(&Args) -> TokenStream>) -> Result<TokenStream, syn::Error> {
+pub(super) fn rename_hook_tokens(
+    opts: RenameHookTokens<impl FnOnce(&Args) -> TokenStream>,
+) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
         args: opts.args,
         expr: opts.expr,

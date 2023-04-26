@@ -1,4 +1,4 @@
-use core::{borrow::Borrow, ops::ControlFlow};
+use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
 use crate::{
     props::{ByRef, Chain, ErasedProps},
@@ -47,6 +47,10 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn lvl(&self) -> Level {
         self.lvl
+    }
+
+    pub fn msg<'b>(&'b self) -> impl fmt::Display + 'b {
+        self.tpl.render().with_props(&self.props)
     }
 
     pub fn get<'b>(&'b self, k: impl Borrow<str>) -> Option<Value<'b>> {

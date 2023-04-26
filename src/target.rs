@@ -60,7 +60,7 @@ impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
     }
 }
 
-pub(crate) struct Discard;
+pub struct Discard;
 
 impl Target for Discard {
     fn emit_event<P: Props>(&self, _: &Event<P>) {}

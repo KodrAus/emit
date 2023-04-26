@@ -18,9 +18,9 @@ mod args;
 mod capture;
 mod emit;
 mod filter;
+mod fmt;
 mod hook;
 mod util;
-mod fmt;
 
 /**
 Emit a debug record.

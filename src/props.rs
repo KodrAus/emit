@@ -80,7 +80,7 @@ impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
     }
 }
 
-pub(crate) struct Empty;
+pub struct Empty;
 
 impl Props for Empty {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}

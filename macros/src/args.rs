@@ -1,10 +1,7 @@
 use proc_macro2::TokenStream;
-use syn::{
-    spanned::Spanned,
-    Expr, ExprLit, FieldValue, Lit,
-};
+use syn::{spanned::Spanned, Expr, ExprLit, FieldValue, Lit};
 
-use crate::util::{FieldValueKey, parse_comma_separated2};
+use crate::util::FieldValueKey;
 
 /**
 An argument represented as a field-value input to a macro.
@@ -109,24 +106,17 @@ impl<T> ArgDef for Arg<T> {
     }
 }
 
-pub fn set_from_parse2<const N: usize>(
-    tokens: TokenStream,
-    args: [&mut dyn ArgDef; N],
-) -> Result<(), syn::Error> {
-    set_from_field_values(parse_comma_separated2::<FieldValue>(tokens)?.iter(), args)
-}
-
 pub fn set_from_field_values<'a, const N: usize>(
     field_values: impl Iterator<Item = &'a FieldValue> + 'a,
-    args: [&mut dyn ArgDef; N],
+    mut args: [&mut dyn ArgDef; N],
 ) -> Result<(), syn::Error> {
-    for fv in field_values {
+    'fields: for fv in field_values {
         let key_name = fv.key_name();
 
-        for arg in args {
+        for arg in &mut args {
             if arg.key() == key_name {
                 arg.set(&fv.expr)?;
-                continue;
+                continue 'fields;
             }
         }
 
