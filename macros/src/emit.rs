@@ -13,7 +13,7 @@ use fv_template::ct::Template;
 
 use crate::{
     args::{self, Arg},
-    util::{AttributeCfg, FieldValueKey},
+    util::{AttributeCfg, FieldValueKey}, capture, fmt,
 };
 
 pub(super) struct ExpandTokens {
@@ -107,11 +107,11 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     // A runtime representation of the template
     let template_tokens = {
         let mut template_visitor = TemplateVisitor {
-            get_cfg_attr: |label: &str| {
+            get_field: |label: &str| {
                 fields
                     .sorted_fields
                     .get(label)
-                    .and_then(|field| field.cfg_attr.as_ref())
+                    .expect("missing field")
             },
             parts: Vec::new(),
         };
@@ -170,6 +170,7 @@ struct Fields {
 struct SortedField {
     field_event_tokens: TokenStream,
     cfg_attr: Option<Attribute>,
+    attrs: Vec<Attribute>,
 }
 
 impl Fields {
@@ -215,9 +216,18 @@ impl Fields {
 
         let v = self.next_ident(fv.span());
 
-        // NOTE: We intentionally wrap the expression in layers of blocks
+        let capture_tokens = capture::create_tokens(&attrs, &fv);
+
         self.match_value_tokens.push(
-            quote_spanned!(fv.span()=> #cfg_attr { #(#attrs)* emit::__private_capture!(#fv) }),
+            match cfg_attr {
+                Some(ref cfg_attr) => quote_spanned!(fv.span()=>
+                    #cfg_attr
+                    {
+                        #capture_tokens
+                    }
+                ),
+                None => capture_tokens
+            }
         );
 
         // If there's a #[cfg] then also push its reverse
@@ -239,6 +249,7 @@ impl Fields {
             SortedField {
                 field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#v.0), #v.1.by_ref())),
                 cfg_attr,
+                attrs,
             },
         );
 
@@ -251,20 +262,22 @@ impl Fields {
 }
 
 struct TemplateVisitor<F> {
-    get_cfg_attr: F,
+    get_field: F,
     parts: Vec<TokenStream>,
 }
 
 impl<'a, F> fv_template::ct::Visitor for TemplateVisitor<F>
 where
-    F: Fn(&str) -> Option<&'a Attribute> + 'a,
+    F: Fn(&str) -> &'a SortedField + 'a,
 {
     fn visit_hole(&mut self, label: &str, hole: &ExprLit) {
-        let hole = quote!({ emit::__private_fmt!(emit::template::Part::hole(#hole)) });
+        let field = (self.get_field)(label);
 
-        match (self.get_cfg_attr)(label) {
-            Some(cfg_attr) => self.parts.push(quote!(#cfg_attr #hole)),
-            _ => self.parts.push(quote!(#hole)),
+        let hole_tokens = fmt::create_tokens(&field.attrs, hole);
+
+        match field.cfg_attr {
+            Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),
+            _ => self.parts.push(quote!(#hole_tokens)),
         }
     }
 

@@ -1,12 +1,10 @@
 use proc_macro2::TokenStream;
 use syn::{
-    parse::{self, Parse, ParseStream},
-    punctuated::Punctuated,
     spanned::Spanned,
     Expr, ExprLit, FieldValue, Lit,
 };
 
-use crate::util::FieldValueKey;
+use crate::util::{FieldValueKey, parse_comma_separated2};
 
 /**
 An argument represented as a field-value input to a macro.
@@ -115,19 +113,7 @@ pub fn set_from_parse2<const N: usize>(
     tokens: TokenStream,
     args: [&mut dyn ArgDef; N],
 ) -> Result<(), syn::Error> {
-    struct RawArgs {
-        fields: Punctuated<FieldValue, Token![,]>,
-    }
-
-    impl Parse for RawArgs {
-        fn parse(input: ParseStream) -> parse::Result<Self> {
-            Ok(RawArgs {
-                fields: input.parse_terminated(FieldValue::parse, Token![,])?,
-            })
-        }
-    }
-
-    set_from_field_values(syn::parse2::<RawArgs>(tokens)?.fields.iter(), args)
+    set_from_field_values(parse_comma_separated2::<FieldValue>(tokens)?.iter(), args)
 }
 
 pub fn set_from_field_values<'a, const N: usize>(

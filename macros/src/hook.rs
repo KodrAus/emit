@@ -4,10 +4,11 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
     parse::Parse,
-    spanned::Spanned,
     visit_mut::{self, VisitMut},
-    Expr, ExprMacro, Ident,
+    Expr, Ident, ExprMethodCall, punctuated::Punctuated,
 };
+
+use crate::util::parse_comma_separated2;
 
 pub(super) struct RenameHookTokens<P, T> {
     pub(super) args: TokenStream,
@@ -17,24 +18,24 @@ pub(super) struct RenameHookTokens<P, T> {
 }
 
 pub(super) fn rename_hook_tokens<T: Parse>(
-    opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> TokenStream>,
+    opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> (TokenStream, TokenStream)>,
 ) -> Result<TokenStream, syn::Error> {
     let expr = syn::parse2::<Expr>(opts.expr)?;
 
-    if !matches!(expr, Expr::Macro(..)) {
-        return Err(syn::Error::new(opts.args.span(), "the emit attribute macros can only be placed on the outside of a field-value expression"));
-    }
+    let (to_ident_tokens, to_arg_tokens) = (opts.to)(&syn::parse2::<T>(opts.args)?);
 
-    let to = syn::parse2::<Ident>((opts.to)(&syn::parse2::<T>(opts.args)?))?;
+    let to_ident = syn::parse2(to_ident_tokens)?;
+    let to_args = parse_comma_separated2(to_arg_tokens)?;
 
-    Ok(rename_capture(expr, opts.predicate, to))
+    Ok(rename_capture(expr, opts.predicate, to_ident, to_args))
 }
 
-fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -> TokenStream {
+fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to_ident: Ident, to_args: Punctuated<Expr, Token![,]>) -> TokenStream {
     struct RenameVisitor<F> {
         scratch: String,
         predicate: F,
-        to: Ident,
+        to_ident: Ident,
+        to_args: Punctuated<Expr, Token![,]>,
     }
 
     impl<F> VisitMut for RenameVisitor<F>
@@ -42,19 +43,13 @@ fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -
         F: Fn(&str) -> bool,
     {
         fn visit_expr_mut(&mut self, node: &mut Expr) {
-            if let Expr::Macro(ExprMacro { ref mut mac, .. }) = node {
-                if let Some(last) = mac.path.segments.last_mut() {
-                    self.scratch.clear();
-                    write!(&mut self.scratch, "{}", last.ident)
-                        .expect("infallible write to string");
+            if let Expr::MethodCall(ExprMethodCall { method, args, .. }) = node {
+                self.scratch.clear();
+                write!(&mut self.scratch, "{}", method).expect("infallible write to string");
 
-                    if (self.predicate)(&self.scratch) {
-                        let span = last.ident.span();
-
-                        // Set the name of the identifier, retaining its original span
-                        last.ident = self.to.clone();
-                        last.ident.set_span(span);
-                    }
+                if (self.predicate)(&self.scratch) {
+                    *method = self.to_ident.clone();
+                    *args = self.to_args.clone();
                 }
             }
 
@@ -66,9 +61,47 @@ fn rename_capture(mut expr: Expr, predicate: impl Fn(&str) -> bool, to: Ident) -
     RenameVisitor {
         scratch: String::new(),
         predicate,
-        to,
+        to_ident,
+        to_args,
     }
     .visit_expr_mut(&mut expr);
 
     expr.to_token_stream()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_rename() {
+        let cases = vec![
+            (
+                (
+                    quote!(__private_capture!(a)),
+                    quote!(__private_capture_as_debug),
+                ),
+                quote!(__private_capture_as_debug!(a)),
+            ),
+            (
+                (
+                    quote!(log::__private_capture!(a: 42)),
+                    quote!(__private_capture_as_debug),
+                ),
+                quote!(log::__private_capture_as_debug!(a: 42)),
+            ),
+        ];
+
+        for ((expr, to), expected) in cases {
+            let actual = rename_hook_tokens(RenameHookTokens {
+                args: quote!({}),
+                expr,
+                predicate: |ident: &str| ident.starts_with("__private"),
+                to: |_: &Expr| (to, quote!()),
+            })
+            .unwrap();
+
+            assert_eq!(expected.to_string(), actual.to_string());
+        }
+    }
 }

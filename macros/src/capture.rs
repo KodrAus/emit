@@ -4,45 +4,14 @@ Compile-time implementation of value capturing.
 This module generates calls to `rt::capture`.
 */
 
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{TokenStream};
 
-use syn::{parse::Parse, FieldValue};
+use syn::{parse::Parse, FieldValue, Attribute, spanned::Spanned};
 
 use crate::{
     args::{self, Arg},
-    util::FieldValueKey,
+    util::FieldValueKey, hook,
 };
-
-pub(super) struct ExpandTokens<F: Fn(&str) -> TokenStream> {
-    pub(super) expr: TokenStream,
-    pub(super) fn_trait: TokenStream,
-    pub(super) fn_name: F,
-}
-
-pub(super) fn expand_tokens(
-    opts: ExpandTokens<impl Fn(&str) -> TokenStream>,
-) -> Result<TokenStream, syn::Error> {
-    let key_value = syn::parse2::<FieldValue>(opts.expr)?;
-
-    let key_name = key_value.key_name();
-
-    let fn_name = syn::parse2::<Ident>((opts.fn_name)(&key_name))?;
-
-    Ok(expand(key_value, opts.fn_trait, fn_name))
-}
-
-fn expand(key_value: FieldValue, fn_trait: TokenStream, fn_name: Ident) -> TokenStream {
-    let key_expr = key_value.key_expr();
-    let expr = key_value.expr;
-
-    quote!(
-        {
-            extern crate emit;
-            use emit::__private::#fn_trait;
-            (#key_expr, (#expr).#fn_name())
-        }
-    )
-}
 
 pub(super) struct Args {
     pub(super) inspect: bool,
@@ -58,6 +27,46 @@ impl Parse for Args {
             inspect: inspect.take_or_default(),
         })
     }
+}
+
+pub(super) fn create_tokens(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
+    let fn_name = match &*fv.key_name() {
+        // Default to capturing the well-known error identifier as an error
+        "err" => quote!(__private_capture_as_error),
+        // In other cases, capture using the default implementation
+        _ => quote!(__private_capture_as_default),
+    };
+
+    let key_expr = fv.key_expr();
+    let expr = &fv.expr;
+
+    quote_spanned!(fv.span()=>
+        #(#attrs)*
+        {
+            extern crate emit;
+            use emit::__private::__PrivateCaptureHook;
+            (#key_expr, (#expr).#fn_name())
+        }
+    )
+}
+
+pub(super) struct RenameHookTokens<T> {
+    pub(super) args: TokenStream,
+    pub(super) expr: TokenStream,
+    pub(super) to: T,
+}
+
+pub(super) fn rename_hook_tokens(opts: RenameHookTokens<impl FnOnce(&Args) -> TokenStream>) -> Result<TokenStream, syn::Error> {
+    hook::rename_hook_tokens(hook::RenameHookTokens {
+        args: opts.args,
+        expr: opts.expr,
+        predicate: |ident: &str| ident.starts_with("__private_capture"),
+        to: move |args: &Args| {
+            let to_ident = (opts.to)(args);
+
+            (to_ident, quote!())
+        },
+    })
 }
 
 #[cfg(test)]
@@ -91,38 +100,6 @@ mod tests {
             let actual = expand_tokens(ExpandTokens {
                 expr,
                 fn_name: |_| fn_name.clone(),
-            })
-            .unwrap();
-
-            assert_eq!(expected.to_string(), actual.to_string());
-        }
-    }
-
-    #[test]
-    fn expand_rename() {
-        let cases = vec![
-            (
-                (
-                    quote!(__private_capture!(a)),
-                    quote!(__private_capture_as_debug),
-                ),
-                quote!(__private_capture_as_debug!(a)),
-            ),
-            (
-                (
-                    quote!(log::__private_capture!(a: 42)),
-                    quote!(__private_capture_as_debug),
-                ),
-                quote!(log::__private_capture_as_debug!(a: 42)),
-            ),
-        ];
-
-        for ((expr, to), expected) in cases {
-            let actual = rename_hook_tokens(RenameHookTokens {
-                args: quote!(),
-                expr,
-                predicate: |ident| ident.starts_with("__private"),
-                to: |_| to,
             })
             .unwrap();
 

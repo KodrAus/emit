@@ -11,7 +11,7 @@ use serde::Serialize;
 #[cfg(feature = "sval")]
 use sval::Value;
 
-use crate::template::Formatter;
+use crate::template::{Formatter, Part};
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -253,8 +253,18 @@ pub trait __PrivateCaptureHook {
 impl<T: ?Sized> __PrivateCaptureHook for T {}
 
 pub trait __PrivateFmtHook {
-    fn __private_fmt_with_default(self) -> Self;
-    fn __private_fmt_with(self, formatter: Formatter) -> Self;
+    fn __private_fmt_as_default(self) -> Self;
+    fn __private_fmt_as(self, formatter: Formatter) -> Self;
+}
+
+impl<'a> __PrivateFmtHook for Part<'a> {
+    fn __private_fmt_as_default(self) -> Self {
+        self
+    }
+
+    fn __private_fmt_as(self, formatter: Formatter) -> Self {
+        self.with_formatter(formatter)
+    }
 }
 
 #[cfg(test)]

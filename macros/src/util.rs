@@ -1,4 +1,5 @@
-use syn::{Attribute, ExprLit, FieldValue, Lit, LitStr, MacroDelimiter, Member, Meta, MetaList};
+use proc_macro2::TokenStream;
+use syn::{Attribute, ExprLit, FieldValue, Lit, LitStr, MacroDelimiter, Member, Meta, MetaList, punctuated::Punctuated, parse::{Parse, ParseStream, self}};
 
 pub(super) trait FieldValueKey {
     fn key_expr(&self) -> ExprLit;
@@ -63,4 +64,20 @@ impl AttributeCfg for Attribute {
             _ => None,
         }
     }
+}
+
+pub(super) fn parse_comma_separated2<T: Parse>(tokens: TokenStream) -> Result<Punctuated<T, Token![,]>, syn::Error> {
+    struct ParsePunctuated<T> {
+        fields: Punctuated<T, Token![,]>,
+    }
+
+    impl<T: Parse> Parse for ParsePunctuated<T> {
+        fn parse(input: ParseStream) -> parse::Result<Self> {
+            Ok(ParsePunctuated {
+                fields: input.parse_terminated(T::parse, Token![,])?,
+            })
+        }
+    }
+
+    Ok(syn::parse2::<ParsePunctuated<T>>(tokens)?.fields)
 }
