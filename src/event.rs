@@ -49,9 +49,11 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("Event");
 
-        f.field("ts", &self.ts)
-            .field("lvl", &self.lvl)
-            .field("msg", &self.msg());
+        if let Some(ref ts) = self.ts {
+            f.field("ts", ts);
+        }
+
+        f.field("lvl", &self.lvl).field("msg", &self.msg());
 
         self.props.for_each(|k, v| {
             f.field(k.as_str(), &v);
