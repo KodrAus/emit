@@ -88,7 +88,7 @@ pub fn to(target: impl Target + Send + Sync + 'static) {
 static CTXT: OnceLock<Box<dyn ctxt::ErasedCtxt + Send + Sync>> = OnceLock::new();
 
 #[cfg(not(feature = "std"))]
-static CTXT: StaticCell<ctxt::Empty> = StaticCell(ctxt::Empty);
+static CTXT: StaticCell<props::Empty> = StaticCell(props::Empty);
 
 #[cfg(feature = "std")]
 pub fn with(ctxt: impl Ctxt + Send + Sync + 'static) {
