@@ -5,6 +5,18 @@ use crate::{props, Props, Value};
 #[derive(Clone)]
 pub struct Template<'a>(&'a [Part<'a>]);
 
+impl<'a> fmt::Debug for Template<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.render(), f)
+    }
+}
+
+impl<'a> fmt::Display for Template<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.render(), f)
+    }
+}
+
 impl<'a> Template<'a> {
     pub fn new(parts: &'static [Part<'static>]) -> Template<'a> {
         Template(parts)
@@ -60,6 +72,28 @@ impl<'a, P: Props> fmt::Display for Render<'a, P> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a, P: Props> fmt::Debug for Render<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use fmt::Write as _;
+
+        struct Escape<W>(W);
+
+        impl<W: fmt::Write> fmt::Write for Escape<W> {
+            fn write_str(&mut self, s: &str) -> fmt::Result {
+                for c in s.escape_debug() {
+                    self.0.write_char(c)?;
+                }
+
+                Ok(())
+            }
+        }
+
+        f.write_char('"')?;
+        write!(Escape(&mut *f), "{}", self)?;
+        f.write_char('"')
     }
 }
 

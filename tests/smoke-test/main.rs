@@ -17,7 +17,7 @@ fn main() {
     );
 
     emit::to(emit::target::from_fn(|evt| {
-        println!("{}", evt.msg());
+        println!("{:?}", evt);
     }));
 
     // Emit an info event to the global receiver

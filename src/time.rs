@@ -1,4 +1,4 @@
-use core::time::Duration;
+use core::{fmt, time::Duration};
 
 pub trait Time {
     fn get(&self) -> Timestamp;
@@ -19,6 +19,12 @@ impl<'a, T: Time + ?Sized + 'a> Time for Box<T> {
 
 #[derive(Clone, Copy)]
 pub struct Timestamp(Duration);
+
+impl fmt::Debug for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
 
 impl Timestamp {
     pub fn new(elapsed_since_unix_epoch: Duration) -> Self {

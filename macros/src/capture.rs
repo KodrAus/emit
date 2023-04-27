@@ -41,7 +41,6 @@ pub(super) fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> Token
     quote_spanned!(fv.span()=>
         #(#attrs)*
         {
-            extern crate emit;
             use emit::__private::__PrivateCaptureHook;
             (emit::Key::new(#key_expr), (#expr).#fn_name())
         }
@@ -86,7 +85,6 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        extern crate emit;
                         use emit::__private::__PrivateCaptureHook;
                         ("a", (a).__private_capture_as_default())
                     }
@@ -98,7 +96,6 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        extern crate emit;
                         use emit::__private::__PrivateCaptureHook;
                         ("a", (42).__private_capture_as_default())
                     }
@@ -110,7 +107,6 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        extern crate emit;
                         use emit::__private::__PrivateCaptureHook;
                         ("err", (42).__private_capture_as_error())
                     }

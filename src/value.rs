@@ -3,6 +3,10 @@ use core::fmt;
 pub struct Value<'a>(value_bag::ValueBag<'a>);
 
 impl<'a> Value<'a> {
+    pub fn to_borrowed_str(&self) -> Option<&str> {
+        self.0.to_borrowed_str()
+    }
+
     pub fn by_ref<'b>(&'b self) -> Value<'b> {
         Value(self.0.by_ref())
     }
@@ -23,6 +27,12 @@ impl<'a> fmt::Display for Value<'a> {
 impl<'a> From<value_bag::ValueBag<'a>> for Value<'a> {
     fn from(value: value_bag::ValueBag<'a>) -> Self {
         Value(value)
+    }
+}
+
+impl<'a> From<&'a str> for Value<'a> {
+    fn from(value: &'a str) -> Self {
+        Value(value.into())
     }
 }
 

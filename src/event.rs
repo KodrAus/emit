@@ -1,6 +1,10 @@
 use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
-use crate::{props::ErasedProps, ByRef, Chain, Key, Props, Template, Timestamp, Value};
+use crate::{
+    props::{self, ErasedProps},
+    template::Render,
+    well_known, ByRef, Chain, Key, Props, Template, Timestamp, Value,
+};
 
 #[derive(Clone, Copy)]
 pub enum Level {
@@ -8,6 +12,23 @@ pub enum Level {
     Info,
     Warn,
     Error,
+}
+
+impl fmt::Debug for Level {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "\"{}\"", self)
+    }
+}
+
+impl fmt::Display for Level {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Level::Info => "info",
+            Level::Error => "error",
+            Level::Warn => "warn",
+            Level::Debug => "debug",
+        })
+    }
 }
 
 impl Default for Level {
@@ -24,6 +45,24 @@ pub struct Event<'a, P = &'a dyn ErasedProps> {
     props: P,
 }
 
+impl<'a, P: Props> fmt::Debug for Event<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("Event");
+
+        f.field("ts", &self.ts)
+            .field("lvl", &self.lvl)
+            .field("msg", &self.msg());
+
+        self.props.for_each(|k, v| {
+            f.field(k.as_str(), &v);
+
+            ControlFlow::Continue(())
+        });
+
+        f.finish()
+    }
+}
+
 impl<'a, P: Props> Event<'a, P> {
     pub fn new(lvl: Level, ts: Option<Timestamp>, tpl: Template<'a>, props: P) -> Self {
         Event {
@@ -34,10 +73,6 @@ impl<'a, P: Props> Event<'a, P> {
         }
     }
 
-    pub fn for_each<'b>(&'b self, for_each: impl FnMut(Key<'b>, Value<'b>) -> ControlFlow<()>) {
-        self.props.for_each(for_each)
-    }
-
     pub fn ts(&self) -> Option<Timestamp> {
         self.ts
     }
@@ -46,8 +81,28 @@ impl<'a, P: Props> Event<'a, P> {
         self.lvl
     }
 
-    pub fn msg<'b>(&'b self) -> impl fmt::Display + 'b {
+    pub fn msg<'b>(&'b self) -> Render<'b, &'b P> {
         self.tpl.render().with_props(&self.props)
+    }
+
+    pub fn tpl<'b>(&'b self) -> Render<'b, props::Empty> {
+        self.tpl.render()
+    }
+
+    pub fn err<'b>(&'b self) -> Option<Value<'b>> {
+        self.props.get(well_known::ERR_KEY)
+    }
+
+    pub fn trace_id<'b>(&'b self) -> Option<Value<'b>> {
+        self.props.get(well_known::TRACE_ID_KEY)
+    }
+
+    pub fn span_id<'b>(&'b self) -> Option<Value<'b>> {
+        self.props.get(well_known::SPAN_ID_KEY)
+    }
+
+    pub fn for_each<'b>(&'b self, for_each: impl FnMut(Key<'b>, Value<'b>) -> ControlFlow<()>) {
+        self.props.for_each(for_each)
     }
 
     pub fn get<'b>(&'b self, k: impl Borrow<str>) -> Option<Value<'b>> {
@@ -61,6 +116,10 @@ impl<'a, P: Props> Event<'a, P> {
             tpl: self.tpl,
             props: self.props.chain(other),
         }
+    }
+
+    pub fn props(&self) -> &P {
+        &self.props
     }
 
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {

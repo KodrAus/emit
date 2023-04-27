@@ -35,6 +35,7 @@ pub(super) fn expand_template_tokens(
 ) -> Result<TokenStream, syn::Error> {
     let (_, template, props) = template::parse2::<TemplateArgs>(opts.input)?;
 
+    // Ensure that a standalone template only specifies identifiers
     for key_value in props.iter() {
         if key_value.has_expr {
             return Err(syn::Error::new(

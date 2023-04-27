@@ -10,7 +10,6 @@ pub(super) fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> To
     quote_spanned!(hole.span()=>
         #(#attrs)*
         {
-            extern crate emit;
             use emit::__private::__PrivateFmtHook;
             emit::template::Part::hole(#hole).__private_fmt_as_default()
         }
@@ -62,7 +61,6 @@ pub(super) fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, 
 
             let to_ident = quote!(__private_fmt_as);
             let to_arg = quote!(|v, f| {
-                extern crate emit;
                 use emit::__private::core::fmt;
                 emit::__private::core::write!(f, #fmt, v)
             });
@@ -94,7 +92,6 @@ mod tests {
             quote!(),
             quote!(hole.__private_fmt_default()),
             quote!(hole.__private_fmt_as(|v, f| {
-                extern crate emit;
                 use emit::__private::core::fmt;
                 emit::__private::core::write!(f, "{}", v)
             })),

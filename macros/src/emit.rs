@@ -62,8 +62,6 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     let receiver_tokens = opts.receiver;
 
     Ok(quote!({
-        extern crate emit;
-
         match (#(#props_match_input_tokens),*) {
             (#(#props_match_binding_tokens),*) => {
                 emit::#receiver_tokens(
@@ -91,33 +89,27 @@ mod tests {
             (
                 quote!("Text and {b: 17} and {a} and {#[as_debug] c} and {d: String::from(\"short lived\")} and {#[cfg(disabled)] e}"),
                 quote!({
-                    extern crate emit;
                     match (
                         {
-                            extern crate emit;
                             use emit::__private::__PrivateCaptureHook;
                             ("b", (17).__private_capture_as_default())
                         },
                         {
-                            extern crate emit;
                             use emit::__private::__PrivateCaptureHook;
                             ("a", (a).__private_capture_as_default())
                         },
                         #[as_debug]
                         {
-                            extern crate emit;
                             use emit::__private::__PrivateCaptureHook;
                             ("c", (c).__private_capture_as_default())
                         },
                         {
-                            extern crate emit;
                             use emit::__private::__PrivateCaptureHook;
                             ("d", (String::from ("short lived")).__private_capture_as_default())
                         },
                         #[cfg (disabled)]
                         {
                             {
-                                extern crate emit;
                                 use emit::__private::__PrivateCaptureHook;
                                 ("e", (e).__private_capture_as_default())
                             }
@@ -133,26 +125,22 @@ mod tests {
                                 emit::Template::new_ref(&[
                                     emit::template::Part::text ("Text and "),
                                     {
-                                        extern crate emit;
                                         use emit::__private::__PrivateFmtHook;
                                         emit::template::Part::hole ("b").__private_fmt_as_default()
                                     },
                                     emit::template::Part::text (" and "),
                                     {
-                                        extern crate emit;
                                         use emit::__private::__PrivateFmtHook;
                                         emit::template::Part::hole ("a").__private_fmt_as_default()
                                     },
                                     emit::template::Part::text (" and "),
                                     #[as_debug]
                                     {
-                                        extern crate emit;
                                         use emit::__private::__PrivateFmtHook;
                                         emit::template::Part::hole ("c").__private_fmt_as_default()
                                     },
                                     emit::template::Part::text (" and "),
                                     {
-                                        extern crate emit;
                                         use emit::__private::__PrivateFmtHook;
                                         emit::template::Part::hole ("d").__private_fmt_as_default()
                                     },
@@ -160,7 +148,6 @@ mod tests {
                                     #[cfg (disabled)]
                                     {
                                         {
-                                            extern crate emit;
                                             use emit::__private::__PrivateFmtHook;
                                             emit::template::Part::hole ("e").__private_fmt_as_default()
                                         }
