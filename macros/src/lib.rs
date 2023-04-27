@@ -109,6 +109,30 @@ fn emit(
 }
 
 /**
+#[emit::with(set: impl SetCtxt, emit: false, lvl: info, "Hello!", a, b: 35)]
+fn x(a: 42) {
+    ..
+}
+
+fn x(a: 42) {
+    let mut link = emit::link(set, emit::props! { a, b: 35 });
+    emit::activate(set, &mut link);
+
+    ..
+
+    emit::deactivate(set, &mut link);
+    emit::unlink(set, link);
+}
+*/
+#[proc_macro_attribute]
+pub fn with(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    item
+}
+
+/**
 Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]
