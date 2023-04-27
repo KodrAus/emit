@@ -14,6 +14,7 @@ extern crate syn;
 
 use proc_macro2::TokenStream;
 
+mod build;
 mod args;
 mod capture;
 mod emit;
@@ -67,6 +68,13 @@ pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         input: TokenStream::from(item),
     })
     .unwrap_or_compile_error()
+}
+
+#[proc_macro]
+pub fn props(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    build::expand_props_tokens(build::ExpandPropsTokens {
+        input: TokenStream::from(item),
+    }).unwrap_or_compile_error()
 }
 
 fn emit(

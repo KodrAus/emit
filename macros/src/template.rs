@@ -27,7 +27,7 @@ pub(super) fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props
         .map(|fv| Ok((fv.key_name(), fv)))
         .collect::<Result<_, syn::Error>>()?;
 
-    let mut props = Props::default();
+    let mut props = Props::new();
 
     // Push the field-values that appear in the template
     for fv in template.template_field_values() {
@@ -59,13 +59,13 @@ pub(super) fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props
             None => fv,
         };
 
-        props.push(k, fv)?;
+        props.push(fv)?;
     }
 
     // Push any remaining extra field-values
     // This won't include any field values that also appear in the template
-    for (k, fv) in extra_field_values {
-        props.push(k, fv)?;
+    for (_, fv) in extra_field_values {
+        props.push(fv)?;
     }
 
     // A runtime representation of the template

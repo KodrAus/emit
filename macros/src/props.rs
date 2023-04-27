@@ -1,26 +1,46 @@
 use std::collections::BTreeMap;
 
 use proc_macro2::{Span, TokenStream};
-use syn::{spanned::Spanned, Attribute, FieldValue, Ident};
+use syn::{spanned::Spanned, Attribute, FieldValue, Ident, parse::Parse, Expr};
 
-use crate::{capture, util::AttributeCfg};
+use crate::{capture, util::{AttributeCfg, FieldValueKey}};
 
 #[derive(Default)]
 pub(super) struct Props {
     match_value_tokens: Vec<TokenStream>,
     match_binding_tokens: Vec<TokenStream>,
-    sorted_fields: BTreeMap<String, Field>,
-    field_index: usize,
+    key_values: BTreeMap<String, KeyValue>,
+    key_value_index: usize,
 }
 
-pub(super) struct Field {
-    field_event_tokens: TokenStream,
+impl Parse for Props {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let fv = input.parse_terminated(FieldValue::parse, Token![,])?;
+
+        let mut props = Props::new();
+
+        for fv in fv {
+            props.push(&fv)?;
+        }
+
+        Ok(props)
+    }
+}
+
+pub(super) struct KeyValue {
+    match_bound_tokens: TokenStream,
+    direct_bound_tokens: TokenStream,
     pub cfg_attr: Option<Attribute>,
     pub attrs: Vec<Attribute>,
+    pub has_expr: bool,
 }
 
 impl Props {
-    pub(super) fn match_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+    pub(super) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(super) fn match_input_tokens(&self) -> impl Iterator<Item = &TokenStream> {
         self.match_value_tokens.iter()
     }
 
@@ -28,24 +48,34 @@ impl Props {
         self.match_binding_tokens.iter()
     }
 
-    pub(super) fn sorted_key_value_tokens(&self) -> impl Iterator<Item = &TokenStream> {
-        self.sorted_fields
+    pub(super) fn match_bound_tokens(&self) -> TokenStream {
+        let key_values = self.key_values
             .values()
-            .map(|field| &field.field_event_tokens)
+            .map(|kv| &kv.match_bound_tokens);
+
+        quote!(&[#(#key_values),*])
     }
 
-    fn next_ident(&mut self, span: Span) -> Ident {
-        let i = Ident::new(&format!("__tmp{}", self.field_index), span);
-        self.field_index += 1;
+    pub(super) fn props_tokens(&self) -> TokenStream {
+        let key_values = self.key_values
+            .values()
+            .map(|kv| &kv.direct_bound_tokens);
+
+        quote!(&[#(#key_values),*])
+    }
+
+    fn next_match_binding_ident(&mut self, span: Span) -> Ident {
+        let i = Ident::new(&format!("__tmp{}", self.key_value_index), span);
+        self.key_value_index += 1;
 
         i
     }
 
-    pub(super) fn get(&self, label: &str) -> Option<&Field> {
-        self.sorted_fields.get(label)
+    pub(super) fn get(&self, label: &str) -> Option<&KeyValue> {
+        self.key_values.get(label)
     }
 
-    pub(super) fn push(&mut self, label: String, fv: &FieldValue) -> Result<(), syn::Error> {
+    pub(super) fn push(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
         let mut attrs = vec![];
         let mut cfg_attr = None;
 
@@ -54,7 +84,7 @@ impl Props {
                 if cfg_attr.is_some() {
                     return Err(syn::Error::new(
                         attr.span(),
-                        "only a single #[cfg] is supported on fields",
+                        "only a single #[cfg] is supported on key-value pairs",
                     ));
                 }
 
@@ -64,19 +94,23 @@ impl Props {
             }
         }
 
-        let v = self.next_ident(fv.span());
+        let match_bound_ident = self.next_match_binding_ident(fv.span());
 
-        let capture_tokens = capture::key_value_with_hook(&attrs, &fv);
+        let key_value_tokens = {
+            let key_value_tokens = capture::key_value_with_hook(&attrs, &fv);
 
-        self.match_value_tokens.push(match cfg_attr {
-            Some(ref cfg_attr) => quote_spanned!(fv.span()=>
+            match cfg_attr {
+                Some(ref cfg_attr) => quote_spanned!(fv.span()=>
                 #cfg_attr
                 {
-                    #capture_tokens
+                    #key_value_tokens
                 }
             ),
-            None => capture_tokens,
-        });
+                None => key_value_tokens,
+            }
+        };
+
+        self.match_value_tokens.push(key_value_tokens.clone());
 
         // If there's a #[cfg] then also push its reverse
         // This is to give a dummy value to the pattern binding since they don't support attributes
@@ -89,13 +123,15 @@ impl Props {
                 .push(quote_spanned!(fv.span()=> #cfg_attr ()));
         }
 
-        self.match_binding_tokens.push(quote!(#v));
+        self.match_binding_tokens.push(quote!(#match_bound_ident));
 
         // Make sure keys aren't duplicated
-        let previous = self.sorted_fields.insert(
-            label.clone(),
-            Field {
-                field_event_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#v.0), #v.1.by_ref())),
+        let previous = self.key_values.insert(
+            fv.key_name(),
+            KeyValue {
+                match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#match_bound_ident.0), #match_bound_ident.1.by_ref())),
+                direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
+                has_expr: fv.colon_token.is_some(),
                 cfg_attr,
                 attrs,
             },

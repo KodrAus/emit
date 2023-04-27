@@ -43,9 +43,9 @@ impl Parse for Args {
 pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let (args, template, props) = template::parse2::<Args>(opts.input)?;
 
-    let props_match_value_tokens = props.match_value_tokens();
+    let props_match_input_tokens = props.match_input_tokens();
     let props_match_binding_tokens = props.match_binding_tokens();
-    let props_tokens = props.sorted_key_value_tokens();
+    let props_tokens = props.match_bound_tokens();
 
     let to_tokens = args.to;
     let when_tokens = args.when;
@@ -64,7 +64,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     Ok(quote!({
         extern crate emit;
 
-        match (#(#props_match_value_tokens),*) {
+        match (#(#props_match_input_tokens),*) {
             (#(#props_match_binding_tokens),*) => {
                 emit::#receiver_tokens(
                     #to_tokens,
@@ -73,7 +73,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
                     #level_tokens,
                     #ts_tokens,
                     #template_tokens,
-                    &[#(#props_tokens),*],
+                    #props_tokens,
                 )
             }
         }
