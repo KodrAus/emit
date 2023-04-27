@@ -42,7 +42,7 @@ pub fn emit(
     let evt = Event::new(lvl, ts.or_else(now), tpl, props);
 
     with.chain(CTXT.get().by_ref()).with_props(|ctxt| {
-        let evt = evt.by_ref().chain(ctxt);
+        let evt = evt.chain(ctxt);
 
         if when.chain(FILTER.get().by_ref()).matches_event(&evt) {
             to.chain(TARGET.get().by_ref()).emit_event(&evt);
