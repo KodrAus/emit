@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::{parse::Parse, FieldValue};
 
-use crate::{props::Props, args, template};
+use crate::{args, props::Props, template};
 
 pub(super) struct ExpandPropsTokens {
     pub(super) input: TokenStream,
@@ -9,7 +9,7 @@ pub(super) struct ExpandPropsTokens {
 
 pub(super) fn expand_props_tokens(opts: ExpandPropsTokens) -> Result<TokenStream, syn::Error> {
     let props = syn::parse2::<Props>(opts.input)?;
-    
+
     Ok(props.props_tokens())
 }
 
@@ -30,8 +30,19 @@ impl Parse for TemplateArgs {
     }
 }
 
-pub(super) fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
+pub(super) fn expand_template_tokens(
+    opts: ExpandTemplateTokens,
+) -> Result<TokenStream, syn::Error> {
     let (_, template, props) = template::parse2::<TemplateArgs>(opts.input)?;
-    
-    todo!()
+
+    for key_value in props.iter() {
+        if key_value.has_expr {
+            return Err(syn::Error::new(
+                key_value.span(),
+                "key-values in raw templates cannot capture values",
+            ));
+        }
+    }
+
+    Ok(template.template_tokens())
 }

@@ -90,8 +90,8 @@ pub(super) struct Template {
 }
 
 impl Template {
-    pub fn template_tokens(&self) -> &TokenStream {
-        &self.template_tokens
+    pub fn template_tokens(&self) -> TokenStream {
+        self.template_tokens.clone()
     }
 }
 

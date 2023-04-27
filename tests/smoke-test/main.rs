@@ -1,6 +1,21 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
 fn main() {
+    println!(
+        "{}",
+        emit::tpl!(
+            "something went wrong at {id} with {x}!",
+            #[emit::fmt(flags: "04")]
+            x
+        )
+        .render()
+        .with_props(emit::props! {
+            #[emit::as_debug]
+            id: 42,
+            x: 15,
+        })
+    );
+
     emit::to(emit::target::from_fn(|evt| {
         println!("{}", evt.msg());
     }));

@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 
 use proc_macro2::{Span, TokenStream};
-use syn::{spanned::Spanned, Attribute, FieldValue, Ident, parse::Parse, Expr};
+use syn::{parse::Parse, spanned::Spanned, Attribute, FieldValue, Ident};
 
-use crate::{capture, util::{AttributeCfg, FieldValueKey}};
+use crate::{
+    capture,
+    util::{AttributeCfg, FieldValueKey},
+};
 
 #[derive(Default)]
 pub(super) struct Props {
@@ -30,9 +33,16 @@ impl Parse for Props {
 pub(super) struct KeyValue {
     match_bound_tokens: TokenStream,
     direct_bound_tokens: TokenStream,
+    span: Span,
     pub cfg_attr: Option<Attribute>,
     pub attrs: Vec<Attribute>,
     pub has_expr: bool,
+}
+
+impl KeyValue {
+    pub(super) fn span(&self) -> Span {
+        self.span.clone()
+    }
 }
 
 impl Props {
@@ -49,17 +59,13 @@ impl Props {
     }
 
     pub(super) fn match_bound_tokens(&self) -> TokenStream {
-        let key_values = self.key_values
-            .values()
-            .map(|kv| &kv.match_bound_tokens);
+        let key_values = self.key_values.values().map(|kv| &kv.match_bound_tokens);
 
         quote!(&[#(#key_values),*])
     }
 
     pub(super) fn props_tokens(&self) -> TokenStream {
-        let key_values = self.key_values
-            .values()
-            .map(|kv| &kv.direct_bound_tokens);
+        let key_values = self.key_values.values().map(|kv| &kv.direct_bound_tokens);
 
         quote!(&[#(#key_values),*])
     }
@@ -73,6 +79,10 @@ impl Props {
 
     pub(super) fn get(&self, label: &str) -> Option<&KeyValue> {
         self.key_values.get(label)
+    }
+
+    pub(super) fn iter<'a>(&'a self) -> impl Iterator<Item = &'a KeyValue> + 'a {
+        self.key_values.values()
     }
 
     pub(super) fn push(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
@@ -101,11 +111,11 @@ impl Props {
 
             match cfg_attr {
                 Some(ref cfg_attr) => quote_spanned!(fv.span()=>
-                #cfg_attr
-                {
-                    #key_value_tokens
-                }
-            ),
+                    #cfg_attr
+                    {
+                        #key_value_tokens
+                    }
+                ),
                 None => key_value_tokens,
             }
         };
@@ -123,14 +133,16 @@ impl Props {
                 .push(quote_spanned!(fv.span()=> #cfg_attr ()));
         }
 
-        self.match_binding_tokens.push(quote!(#match_bound_ident));
+        self.match_binding_tokens
+            .push(quote_spanned!(fv.span()=> #match_bound_ident));
 
         // Make sure keys aren't duplicated
         let previous = self.key_values.insert(
             fv.key_name(),
             KeyValue {
-                match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (emit::Key::new(#match_bound_ident.0), #match_bound_ident.1.by_ref())),
+                match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (#match_bound_ident.0.by_ref(), #match_bound_ident.1.by_ref())),
                 direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
+                span: fv.span(),
                 has_expr: fv.colon_token.is_some(),
                 cfg_attr,
                 attrs,

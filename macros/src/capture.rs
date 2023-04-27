@@ -43,7 +43,7 @@ pub(super) fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> Token
         {
             extern crate emit;
             use emit::__private::__PrivateCaptureHook;
-            (#key_expr, (#expr).#fn_name())
+            (emit::Key::new(#key_expr), (#expr).#fn_name())
         }
     )
 }
