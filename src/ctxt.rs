@@ -5,7 +5,7 @@ use crate::{
 
 use self::internal::{ErasedSlot, Slot};
 
-pub trait Ctxt {
+pub trait GetCtxt {
     type Props: Props + ?Sized;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F);
@@ -14,7 +14,7 @@ pub trait Ctxt {
         ByRef(self)
     }
 
-    fn chain<U: Ctxt>(self, other: U) -> Chain<Self, U>
+    fn chain<U: GetCtxt>(self, other: U) -> Chain<Self, U>
     where
         Self: Sized,
     {
@@ -25,7 +25,7 @@ pub trait Ctxt {
     }
 }
 
-impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
+impl<'a, C: GetCtxt + ?Sized> GetCtxt for &'a C {
     type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -34,7 +34,7 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
 }
 
 #[cfg(feature = "std")]
-impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for Box<C> {
+impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for Box<C> {
     type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -42,7 +42,16 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for Box<C> {
     }
 }
 
-impl<C: Ctxt> Ctxt for Option<C> {
+#[cfg(feature = "std")]
+impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for std::sync::Arc<C> {
+    type Props = C::Props;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        (**self).with_props(with)
+    }
+}
+
+impl<C: GetCtxt> GetCtxt for Option<C> {
     type Props = Option<Slot<C::Props>>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -53,7 +62,7 @@ impl<C: Ctxt> Ctxt for Option<C> {
     }
 }
 
-impl Ctxt for props::Empty {
+impl GetCtxt for props::Empty {
     type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -61,7 +70,7 @@ impl Ctxt for props::Empty {
     }
 }
 
-impl<'a> Ctxt for props::SortedSlice<'a> {
+impl<'a> GetCtxt for props::SortedSlice<'a> {
     type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -69,7 +78,7 @@ impl<'a> Ctxt for props::SortedSlice<'a> {
     }
 }
 
-impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
+impl<T: GetCtxt, U: GetCtxt> GetCtxt for Chain<T, U> {
     type Props = Chain<Slot<T::Props>, Slot<U::Props>>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -81,7 +90,7 @@ impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
     }
 }
 
-impl<'a, T: Ctxt + 'a> Ctxt for ByRef<'a, T> {
+impl<'a, T: GetCtxt + 'a> GetCtxt for ByRef<'a, T> {
     type Props = T::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -91,7 +100,7 @@ impl<'a, T: Ctxt + 'a> Ctxt for ByRef<'a, T> {
 
 pub struct FromProps<P>(P);
 
-impl<P: Props> Ctxt for FromProps<P> {
+impl<P: Props> GetCtxt for FromProps<P> {
     type Props = P;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -103,17 +112,89 @@ pub fn from_props<P: Props>(props: P) -> FromProps<P> {
     FromProps(props)
 }
 
+pub trait SetCtxt {
+    type Link;
+
+    fn link<P: Props>(&self, props: P) -> Self::Link;
+    fn unlink(&self, link: Self::Link);
+
+    fn activate(&self, link: &mut Self::Link);
+    fn deactivate(&self, link: &mut Self::Link);
+}
+
+impl<'a, C: SetCtxt + ?Sized> SetCtxt for &'a C {
+    type Link = C::Link;
+
+    fn link<P: Props>(&self, props: P) -> Self::Link {
+        (**self).link(props)
+    }
+
+    fn unlink(&self, link: Self::Link) {
+        (**self).unlink(link)
+    }
+
+    fn activate(&self, link: &mut Self::Link) {
+        (**self).activate(link)
+    }
+
+    fn deactivate(&self, link: &mut Self::Link) {
+        (**self).deactivate(link)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, C: SetCtxt + ?Sized + 'a> SetCtxt for Box<C> {
+    type Link = C::Link;
+
+    fn link<P: Props>(&self, props: P) -> Self::Link {
+        (**self).link(props)
+    }
+
+    fn unlink(&self, link: Self::Link) {
+        (**self).unlink(link)
+    }
+
+    fn activate(&self, link: &mut Self::Link) {
+        (**self).activate(link)
+    }
+
+    fn deactivate(&self, link: &mut Self::Link) {
+        (**self).deactivate(link)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'a, C: SetCtxt + ?Sized + 'a> SetCtxt for std::sync::Arc<C> {
+    type Link = C::Link;
+
+    fn link<P: Props>(&self, props: P) -> Self::Link {
+        (**self).link(props)
+    }
+
+    fn unlink(&self, link: Self::Link) {
+        (**self).unlink(link)
+    }
+
+    fn activate(&self, link: &mut Self::Link) {
+        (**self).activate(link)
+    }
+
+    fn deactivate(&self, link: &mut Self::Link) {
+        (**self).deactivate(link)
+    }
+}
+
 mod internal {
     use core::{marker::PhantomData, mem, ops::ControlFlow};
 
     use crate::{props::ErasedProps, Key, Props, Value};
 
-    pub trait DispatchCtxt {
+    pub trait DispatchGetCtxt {
         fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot));
     }
 
-    pub trait SealedCtxt {
-        fn erase_ctxt(&self) -> crate::internal::Erased<&dyn DispatchCtxt>;
+    pub trait SealedGetCtxt {
+        fn erase_get_ctxt(&self) -> crate::internal::Erased<&dyn DispatchGetCtxt>;
     }
 
     pub struct Slot<T: ?Sized>(*const T, PhantomData<fn(&mut T)>);
@@ -160,38 +241,150 @@ mod internal {
     }
 }
 
-pub trait ErasedCtxt: internal::SealedCtxt {}
+pub trait ErasedGetCtxt: internal::SealedGetCtxt {}
 
-impl<C: Ctxt> ErasedCtxt for C {}
+impl<C: GetCtxt> ErasedGetCtxt for C {}
 
-impl<C: Ctxt> internal::SealedCtxt for C {
-    fn erase_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchCtxt> {
+impl<C: GetCtxt> internal::SealedGetCtxt for C {
+    fn erase_get_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchGetCtxt> {
         crate::internal::Erased(self)
     }
 }
 
-impl<C: Ctxt> internal::DispatchCtxt for C {
+impl<C: GetCtxt> internal::DispatchGetCtxt for C {
     fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot)) {
         self.with_props(move |props| with(unsafe { ErasedSlot::new(&props) }))
     }
 }
 
-impl<'a> Ctxt for dyn ErasedCtxt + 'a {
+impl<'a> GetCtxt for dyn ErasedGetCtxt + 'a {
     type Props = ErasedSlot;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         let mut f = Some(with);
 
-        self.erase_ctxt()
+        self.erase_get_ctxt()
             .0
             .dispatch_with_ctxt(&mut |props| f.take().expect("called multiple times")(&props));
     }
 }
 
-impl<'a> Ctxt for dyn ErasedCtxt + Send + Sync + 'a {
-    type Props = ErasedSlot;
+impl<'a> GetCtxt for dyn ErasedGetCtxt + Send + Sync + 'a {
+    type Props = <dyn ErasedGetCtxt + 'a as GetCtxt>::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        (self as &(dyn ErasedCtxt + 'a)).with_props(with)
+        (self as &(dyn ErasedGetCtxt + 'a)).with_props(with)
     }
 }
+
+#[cfg(feature = "std")]
+mod std_support {
+    use core::any::Any;
+
+    use crate::props::ErasedProps;
+
+    use super::*;
+
+    mod internal {
+        use crate::props::ErasedProps;
+
+        use super::ErasedLink;
+
+        pub trait DispatchSetCtxt {
+            fn dispatch_link(&self, props: &dyn ErasedProps) -> ErasedLink;
+            fn dispatch_unlink(&self, link: ErasedLink);
+
+            fn dispatch_activate(&self, link: &mut ErasedLink);
+            fn dispatch_deactivate(&self, link: &mut ErasedLink);
+        }
+
+        pub trait SealedSetCtxt {
+            fn erase_set_ctxt(&self) -> crate::internal::Erased<&dyn DispatchSetCtxt>;
+        }
+    }
+
+    pub struct ErasedLink(Box<dyn Any>);
+
+    pub trait ErasedSetCtxt: internal::SealedSetCtxt {}
+
+    impl<C: SetCtxt> ErasedSetCtxt for C where C::Link: 'static {}
+
+    impl<C: SetCtxt> internal::SealedSetCtxt for C
+    where
+        C::Link: 'static,
+    {
+        fn erase_set_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchSetCtxt> {
+            crate::internal::Erased(self)
+        }
+    }
+
+    impl<C: SetCtxt> internal::DispatchSetCtxt for C
+    where
+        C::Link: 'static,
+    {
+        fn dispatch_link(&self, props: &dyn ErasedProps) -> ErasedLink {
+            ErasedLink(Box::new(self.link(props)))
+        }
+
+        fn dispatch_unlink(&self, link: ErasedLink) {
+            if let Ok(link) = link.0.downcast() {
+                self.unlink(*link)
+            }
+        }
+
+        fn dispatch_activate(&self, link: &mut ErasedLink) {
+            if let Some(link) = link.0.downcast_mut() {
+                self.activate(link)
+            }
+        }
+
+        fn dispatch_deactivate(&self, link: &mut ErasedLink) {
+            if let Some(link) = link.0.downcast_mut() {
+                self.deactivate(link)
+            }
+        }
+    }
+
+    impl<'a> SetCtxt for dyn ErasedSetCtxt + 'a {
+        type Link = ErasedLink;
+
+        fn link<P: Props>(&self, props: P) -> Self::Link {
+            self.erase_set_ctxt().0.dispatch_link(&props)
+        }
+
+        fn unlink(&self, link: Self::Link) {
+            self.erase_set_ctxt().0.dispatch_unlink(link)
+        }
+
+        fn activate(&self, link: &mut Self::Link) {
+            self.erase_set_ctxt().0.dispatch_activate(link)
+        }
+
+        fn deactivate(&self, link: &mut Self::Link) {
+            self.erase_set_ctxt().0.dispatch_deactivate(link)
+        }
+    }
+
+    impl<'a> SetCtxt for dyn ErasedSetCtxt + Send + Sync + 'a {
+        type Link = <dyn ErasedSetCtxt + 'a as SetCtxt>::Link;
+
+        fn link<P: Props>(&self, props: P) -> Self::Link {
+            (self as &(dyn ErasedSetCtxt + 'a)).link(props)
+        }
+
+        fn unlink(&self, link: Self::Link) {
+            (self as &(dyn ErasedSetCtxt + 'a)).unlink(link)
+        }
+
+        fn activate(&self, link: &mut Self::Link) {
+            (self as &(dyn ErasedSetCtxt + 'a)).activate(link)
+        }
+
+        fn deactivate(&self, link: &mut Self::Link) {
+            (self as &(dyn ErasedSetCtxt + 'a)).deactivate(link)
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+pub use std_support::*;

@@ -26,14 +26,22 @@ pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
-    adapt::*, ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target,
-    template::Template, time::Timestamp, value::*,
+    adapt::*,
+    ctxt::{GetCtxt, SetCtxt},
+    event::*,
+    filter::Filter,
+    key::*,
+    props::Props,
+    target::Target,
+    template::Template,
+    time::Timestamp,
+    value::*,
 };
 
 pub fn emit(
     to: impl Target,
     when: impl Filter,
-    with: impl Ctxt,
+    with: impl GetCtxt,
     lvl: Level,
     ts: Option<Timestamp>,
     tpl: Template,
@@ -41,7 +49,7 @@ pub fn emit(
 ) {
     let evt = Event::new(lvl, ts.or_else(now), tpl, props);
 
-    with.chain(CTXT.get().by_ref()).with_props(|ctxt| {
+    with.chain(GET_CTXT.get().by_ref()).with_props(|ctxt| {
         let evt = evt.chain(ctxt);
 
         if when.chain(FILTER.get().by_ref()).matches_event(&evt) {
@@ -61,7 +69,7 @@ pub mod __private {
 }
 
 #[cfg(feature = "std")]
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 #[cfg(not(feature = "std"))]
 struct StaticCell<T>(T);
@@ -85,14 +93,24 @@ pub fn to(target: impl Target + Send + Sync + 'static) {
 }
 
 #[cfg(feature = "std")]
-static CTXT: OnceLock<Box<dyn ctxt::ErasedCtxt + Send + Sync>> = OnceLock::new();
+static GET_CTXT: OnceLock<Arc<dyn ctxt::ErasedGetCtxt + Send + Sync>> = OnceLock::new();
 
 #[cfg(not(feature = "std"))]
-static CTXT: StaticCell<props::Empty> = StaticCell(props::Empty);
+static GET_CTXT: StaticCell<props::Empty> = StaticCell(props::Empty);
 
 #[cfg(feature = "std")]
-pub fn with(ctxt: impl Ctxt + Send + Sync + 'static) {
-    let _ = CTXT.set(Box::new(ctxt));
+pub fn with(ctxt: impl GetCtxt + Send + Sync + 'static) {
+    let _ = GET_CTXT.set(Arc::new(ctxt));
+}
+
+#[cfg(feature = "std")]
+static SET_CTXT: OnceLock<Arc<dyn ctxt::ErasedSetCtxt + Send + Sync>> = OnceLock::new();
+
+#[cfg(feature = "std")]
+pub fn with_dyanmic(ctxt: impl GetCtxt + SetCtxt + Send + Sync + 'static) {
+    let ctxt = Arc::new(ctxt);
+    let _ = GET_CTXT.set(ctxt.clone());
+    let _ = SET_CTXT.set(ctxt.clone());
 }
 
 #[cfg(feature = "std")]

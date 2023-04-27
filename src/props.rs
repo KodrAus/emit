@@ -82,6 +82,19 @@ impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
 
 pub struct Empty;
 
+impl Empty {
+    pub fn chain<U>(self, other: U) -> Chain<Self, U> {
+        Chain {
+            first: self,
+            second: other,
+        }
+    }
+
+    pub fn by_ref<'a>(&'a self) -> ByRef<'a, Self> {
+        ByRef(self)
+    }
+}
+
 impl Props for Empty {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
 }
