@@ -1,9 +1,6 @@
 use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
-use crate::{
-    props::{ByRef, Chain, ErasedProps},
-    Key, Props, Template, Timestamp, Value,
-};
+use crate::{props::ErasedProps, ByRef, Chain, Key, Props, Template, Timestamp, Value};
 
 #[derive(Clone, Copy)]
 pub enum Level {

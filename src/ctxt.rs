@@ -1,4 +1,7 @@
-use crate::props::{self, Props};
+use crate::{
+    props::{self, Props},
+    ByRef, Chain,
+};
 
 use self::internal::{ErasedSlot, Slot};
 
@@ -50,23 +53,24 @@ impl<C: Ctxt> Ctxt for Option<C> {
     }
 }
 
-pub struct Empty;
-
-impl Ctxt for Empty {
-    type Props = props::Empty;
+impl Ctxt for props::Empty {
+    type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        with(&props::Empty)
+        with(self)
     }
 }
 
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
+impl<'a> Ctxt for props::SortedSlice<'a> {
+    type Props = Self;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        with(self)
+    }
 }
 
 impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
-    type Props = props::Chain<Slot<T::Props>, Slot<U::Props>>;
+    type Props = Chain<Slot<T::Props>, Slot<U::Props>>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         self.first.with_props(|first| {
@@ -76,8 +80,6 @@ impl<T: Ctxt, U: Ctxt> Ctxt for Chain<T, U> {
         })
     }
 }
-
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 impl<'a, T: Ctxt + 'a> Ctxt for ByRef<'a, T> {
     type Props = T::Props;

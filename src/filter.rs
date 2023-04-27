@@ -1,4 +1,4 @@
-use crate::{Event, Props};
+use crate::{ByRef, Chain, Event, Props};
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;
@@ -66,18 +66,11 @@ pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
-}
-
 impl<T: Filter, U: Filter> Filter for Chain<T, U> {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         self.first.matches_event(evt) && self.second.matches_event(evt)
     }
 }
-
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 impl<'a, C: Filter + ?Sized> Filter for ByRef<'a, C> {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {

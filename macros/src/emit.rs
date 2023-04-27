@@ -21,9 +21,9 @@ struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut to = Arg::token_stream("to", |expr| Ok(quote!(Some(#expr))));
-        let mut when = Arg::token_stream("when", |expr| Ok(quote!(Some(#expr))));
-        let mut with = Arg::token_stream("with", |expr| Ok(quote!(Some(#expr))));
+        let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
+        let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
+        let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
         let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(Some(#expr))));
 
         args::set_from_field_values(

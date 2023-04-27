@@ -12,21 +12,22 @@ pub use emit_macros::*;
 
 mod macro_hooks;
 
+mod adapt;
 pub mod ctxt;
 mod event;
 pub mod filter;
-pub mod key;
+mod key;
 pub mod props;
 pub mod target;
 pub mod template;
 pub mod time;
-pub mod value;
+mod value;
 pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
-    ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target, template::Template,
-    time::Timestamp, value::*,
+    adapt::*, ctxt::Ctxt, event::*, filter::Filter, key::*, props::Props, target::Target,
+    template::Template, time::Timestamp, value::*,
 };
 
 pub fn emit(

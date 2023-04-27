@@ -1,4 +1,4 @@
-use crate::{Key, Value};
+use crate::{ByRef, Chain, Key, Value};
 
 use core::{borrow::Borrow, ops::ControlFlow};
 
@@ -86,11 +86,6 @@ impl Props for Empty {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
 }
 
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
-}
-
 impl<A: Props, B: Props> Props for Chain<A, B> {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         let mut cf = ControlFlow::Continue(());
@@ -117,11 +112,39 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
     }
 }
 
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
-
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         self.0.for_each(for_each)
+    }
+}
+
+#[repr(transparent)]
+pub struct SortedSlice<'a>([(Key<'a>, Value<'a>)]);
+
+impl SortedSlice<'static> {
+    pub fn new(props: &'static [(Key<'static>, Value<'static>)]) -> &'static Self {
+        Self::new_ref(props)
+    }
+}
+
+impl<'a> SortedSlice<'a> {
+    pub fn new_ref<'b>(props: &'b [(Key<'a>, Value<'a>)]) -> &'b Self {
+        unsafe { &*(props as *const [(Key<'a>, Value<'a>)] as *const SortedSlice<'a>) }
+    }
+}
+
+impl<'a> Props for SortedSlice<'a> {
+    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+        self.0.for_each(for_each)
+    }
+
+    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = Key::new_ref(key.borrow());
+
+        self.0
+            .binary_search_by(|(k, _)| k.cmp(&key))
+            .ok()
+            .map(|i| self.0[i].1.by_ref())
     }
 }
 

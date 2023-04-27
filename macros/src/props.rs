@@ -59,15 +59,17 @@ impl Props {
     }
 
     pub(super) fn match_bound_tokens(&self) -> TokenStream {
-        let key_values = self.key_values.values().map(|kv| &kv.match_bound_tokens);
-
-        quote!(&[#(#key_values),*])
+        Self::sorted_props_tokens(self.key_values.values().map(|kv| &kv.match_bound_tokens))
     }
 
     pub(super) fn props_tokens(&self) -> TokenStream {
-        let key_values = self.key_values.values().map(|kv| &kv.direct_bound_tokens);
+        Self::sorted_props_tokens(self.key_values.values().map(|kv| &kv.direct_bound_tokens))
+    }
 
-        quote!(&[#(#key_values),*])
+    fn sorted_props_tokens<'a>(
+        key_values: impl Iterator<Item = &'a TokenStream> + 'a,
+    ) -> TokenStream {
+        quote!(emit::props::SortedSlice::new_ref(&[#(#key_values),*]))
     }
 
     fn next_match_binding_ident(&mut self, span: Span) -> Ident {

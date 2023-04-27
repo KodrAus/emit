@@ -1,4 +1,4 @@
-use crate::{event::Event, props::Props};
+use crate::{ByRef, Chain, Event, Props};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
@@ -40,19 +40,12 @@ impl<T: Target> Target for Option<T> {
     }
 }
 
-pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
-}
-
 impl<T: Target, U: Target> Target for Chain<T, U> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         self.first.emit_event(evt);
         self.second.emit_event(evt);
     }
 }
-
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
 impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
