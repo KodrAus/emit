@@ -36,6 +36,17 @@ impl Parse for Args {
     }
 }
 
+impl Args {
+    fn to_format_args(&self) -> String {
+        if self.flags.is_empty() {
+            "{}".to_owned()
+        } else {
+            // `:?b` -> `{:?b}`
+            format!("{{:{}}}", self.flags)
+        }
+    }
+}
+
 pub(super) struct RenameHookTokens {
     pub(super) args: TokenStream,
     pub(super) expr: TokenStream,
@@ -47,12 +58,7 @@ pub(super) fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, 
         expr: opts.expr,
         predicate: |ident: &str| ident.starts_with("__private_fmt"),
         to: move |args: &Args| {
-            let fmt = if args.flags.is_empty() {
-                "{}".to_owned()
-            } else {
-                // `:?b` -> `{:?b}`
-                format!("{{:{}}}", args.flags)
-            };
+            let fmt = args.to_format_args();
 
             let to_ident = quote!(__private_fmt_as);
             let to_arg = quote!(|v, f| {
@@ -64,4 +70,29 @@ pub(super) fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, 
             (to_ident, to_arg)
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags_to_fmt() {
+        for (args, expected) in [
+            (Args { flags: "".to_owned() }, "{}"),
+        ] {
+            assert_eq!(expected, args.to_format_args());
+        }
+    }
+
+    #[test]
+    fn hook() {
+        for (args, expr, expected) in [
+            (quote!(), quote!(), quote!())
+        ] {
+            let actual = rename_hook_tokens(RenameHookTokens { args, expr }).unwrap();
+
+            assert_eq!(expected.to_string(), actual.to_string());
+        }
+    }
 }

@@ -21,22 +21,13 @@ pub(super) struct RenameHookTokens<P, T> {
 pub(super) fn rename_hook_tokens<T: Parse>(
     opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> (TokenStream, TokenStream)>,
 ) -> Result<TokenStream, syn::Error> {
-    let expr = syn::parse2::<Expr>(opts.expr)?;
+    let mut expr = syn::parse2::<Expr>(opts.expr)?;
 
     let (to_ident_tokens, to_arg_tokens) = (opts.to)(&syn::parse2::<T>(opts.args)?);
 
     let to_ident = syn::parse2(to_ident_tokens)?;
     let to_args = parse_comma_separated2(to_arg_tokens)?;
 
-    Ok(rename_capture(expr, opts.predicate, to_ident, to_args))
-}
-
-fn rename_capture(
-    mut expr: Expr,
-    predicate: impl Fn(&str) -> bool,
-    to_ident: Ident,
-    to_args: Punctuated<Expr, Token![,]>,
-) -> TokenStream {
     struct RenameVisitor<F> {
         scratch: String,
         predicate: F,
@@ -66,13 +57,13 @@ fn rename_capture(
 
     RenameVisitor {
         scratch: String::new(),
-        predicate,
+        predicate: opts.predicate,
         to_ident,
         to_args,
     }
     .visit_expr_mut(&mut expr);
 
-    expr.to_token_stream()
+    Ok(expr.to_token_stream())
 }
 
 #[cfg(test)]
@@ -84,17 +75,17 @@ mod tests {
         let cases = vec![
             (
                 (
-                    quote!(__private_capture!(a)),
-                    quote!(__private_capture_as_debug),
+                    quote!(a.__private_capture()),
+                    (quote!(__private_capture_as_debug), quote!()),
                 ),
-                quote!(__private_capture_as_debug!(a)),
+                quote!(a.__private_capture_as_debug()),
             ),
             (
                 (
-                    quote!(log::__private_capture!(a: 42)),
-                    quote!(__private_capture_as_debug),
+                    quote!(("a", 42.__private_capture())),
+                    (quote!(__private_capture_as_debug), quote!(x, y, Z { z })),
                 ),
-                quote!(log::__private_capture_as_debug!(a: 42)),
+                quote!(("a", 42.__private_capture_as_debug(x, y, Z { z }))),
             ),
         ];
 
@@ -103,7 +94,7 @@ mod tests {
                 args: quote!({}),
                 expr,
                 predicate: |ident: &str| ident.starts_with("__private"),
-                to: |_: &Expr| (to, quote!()),
+                to: |_: &Expr| to,
             })
             .unwrap();
 

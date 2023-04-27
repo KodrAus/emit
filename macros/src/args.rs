@@ -128,3 +128,23 @@ pub fn set_from_field_values<'a, const N: usize>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bool_arg() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn str_arg() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn token_stream_arg() {
+        unimplemented!()
+    }
+}

@@ -92,96 +92,89 @@ mod tests {
                 quote!("Text and {b: 17} and {a} and {#[as_debug] c} and {d: String::from(\"short lived\")} and {#[cfg(disabled)] e}"),
                 quote!({
                     extern crate emit;
-
                     match (
-                        {emit::__private_capture!(b: 17) },
-                        {emit::__private_capture!(a) },
                         {
-                            #[as_debug]
-                            emit::__private_capture!(c)
+                            extern crate emit;
+                            use emit::__private::__PrivateCaptureHook;
+                            ("b", (17).__private_capture_as_default())
                         },
-                        {emit::__private_capture!(d: String::from("short lived")) },
-                        #[cfg(disabled)]
-                        {emit::__private_capture!(e) },
-                        #[cfg(not(disabled))]
-                        ()
+                        {
+                            extern crate emit;
+                            use emit::__private::__PrivateCaptureHook;
+                            ("a", (a).__private_capture_as_default())
+                        },
+                        #[as_debug]
+                        {
+                            extern crate emit;
+                            use emit::__private::__PrivateCaptureHook;
+                            ("c", (c).__private_capture_as_default())
+                        },
+                        {
+                            extern crate emit;
+                            use emit::__private::__PrivateCaptureHook;
+                            ("d", (String::from ("short lived")).__private_capture_as_default())
+                        },
+                        #[cfg (disabled)]
+                        {
+                            extern crate emit;
+                            use emit::__private::__PrivateCaptureHook;
+                            ("e", (e).__private_capture_as_default())
+                        },
+                        #[cfg(not(disabled))] ()
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
-                            let event = emit::RawEvent {
-                                ts: emit::Timestamp::now(),
-                                lvl: emit::Level::Info,
-                                props: &[
-                                    (__tmp1.0, __tmp1.1.by_ref()),
-                                    (__tmp0.0, __tmp0.1.by_ref()),
-                                    (__tmp2.0, __tmp2.1.by_ref()),
-                                    (__tmp3.0, __tmp3.1.by_ref()),
-                                    #[cfg(disabled)]
-                                    (__tmp4.0, __tmp4.1.by_ref())
-                                ],
-                                tpl: emit::template::Template::new(&[
-                                    emit::template::Part::Text("Text and "),
-                                    emit::template::Part::Hole ( "b"),
-                                    emit::template::Part::Text(" and "),
-                                    emit::template::Part::Hole ( "a"),
-                                    emit::template::Part::Text(" and "),
-                                    emit::template::Part::Hole ( "c" ),
-                                    emit::template::Part::Text(" and "),
-                                    emit::template::Part::Hole ( "d" ),
-                                    emit::template::Part::Text(" and "),
-                                    #[cfg(disabled)]
-                                    emit::template::Part::Hole ( "e" )
+                            emit::emit(
+                                emit::target::Discard,
+                                emit::filter::Always,
+                                emit::ctxt::Empty,
+                                emit::Level::Info, None,
+                                emit::Template::new_ref(&[
+                                    emit::template::Part::text ("Text and "),
+                                    {
+                                        extern crate emit;
+                                        use emit::__private::__PrivateFmtHook;
+                                        emit::template::Part::hole ("b").__private_fmt_as_default()
+                                    },
+                                    emit::template::Part::text (" and "),
+                                    {
+                                        extern crate emit;
+                                        use emit::__private::__PrivateFmtHook;
+                                        emit::template::Part::hole ("a").__private_fmt_as_default()
+                                    },
+                                    emit::template::Part::text (" and "),
+                                    #[as_debug]
+                                    {
+                                        extern crate emit;
+                                        use emit::__private::__PrivateFmtHook;
+                                        emit::template::Part::hole ("c").__private_fmt_as_default()
+                                    },
+                                    emit::template::Part::text (" and "),
+                                    {
+                                        extern crate emit;
+                                        use emit::__private::__PrivateFmtHook;
+                                        emit::template::Part::hole ("d").__private_fmt_as_default()
+                                    },
+                                    emit::template::Part::text (" and "),
+                                    #[cfg (disabled)]
+                                    {
+                                        extern crate emit;
+                                        use emit::__private::__PrivateFmtHook;
+                                        emit::template::Part::hole ("e").__private_fmt_as_default()
+                                    }
                                 ]),
-                            };
-
-                            emit::__private_emit!({
-                                to: None,
-                                key_value_cfgs: [
-                                    #[cfg(not(emit_rt__private_false))],
-                                    #[cfg(not(emit_rt__private_false))],
-                                    #[cfg(not(emit_rt__private_false))],
-                                    #[cfg(not(emit_rt__private_false))],
+                                &[
+                                    (emit::Key::new (__tmp1.0), __tmp1.1.by_ref()),
+                                    (emit::Key::new (__tmp0.0), __tmp0.1.by_ref()),
+                                    (emit::Key::new (__tmp2.0), __tmp2.1.by_ref()),
+                                    (emit::Key::new (__tmp3.0), __tmp3.1.by_ref()),
                                     #[cfg(disabled)]
+                                    (emit::Key::new (__tmp4.0), __tmp4.1.by_ref())
                                 ],
-                                keys: ["a", "b", "c", "d", #[cfg(disabled)] "e"],
-                                values: [&__tmp1, &__tmp0, &__tmp2, &__tmp3, #[cfg(disabled)] &__tmp4],
-                                event: &event,
-                            })
+                            )
                         }
                     }
                 }),
             ),
-            (
-                quote!(to: log, "Text and {a}", a: 42),
-                quote!({
-                    extern crate emit;
-
-                    match (
-                        { emit::__private_capture!(a: 42) }
-                    ) {
-                        (__tmp0) => {
-                            let event = emit::Event {
-                                ts: emit::Timestamp::now(),
-                                lvl: emit::Level::Info,
-                                props: &[(__tmp0.0, __tmp0.1.by_ref())],
-                                tpl: emit::template::Template::new(&[
-                                    emit::template::Part::Text("Text and "),
-                                    emit::template::Part::Hole ( "a")
-                                ]),
-                            };
-
-                            emit::__private_emit!({
-                                to: Some(log),
-                                key_value_cfgs: [
-                                    #[cfg(not(emit_rt__private_false))]
-                                ],
-                                keys: ["a"],
-                                values: [&__tmp0],
-                                event: &event,
-                            })
-                        }
-                    }
-                })
-            )
         ];
 
         for (expr, expected) in cases {

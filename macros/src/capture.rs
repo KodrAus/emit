@@ -74,34 +74,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expand_capture() {
+    fn key_value_with_hook_tokens() {
         let cases = vec![
             (
-                quote!(a),
-                quote!(__private_capture_as_default),
-                quote!({
+                quote!(#[a] #[b] a),
+                quote!(#[a] #[b] {
                     extern crate emit;
                     use emit::__private::__PrivateCaptureHook;
                     ("a", (a).__private_capture_as_default())
                 }),
             ),
             (
-                quote!(a: 42),
-                quote!(__private_capture_as_default),
-                quote!({
+                quote!(#[a] #[b] a: 42),
+                quote!(#[a] #[b] {
                     extern crate emit;
                     use emit::__private::__PrivateCaptureHook;
                     ("a", (42).__private_capture_as_default())
                 }),
             ),
+            (
+                quote!(#[a] #[b] err: 42),
+                quote!(#[a] #[b] {
+                    extern crate emit;
+                    use emit::__private::__PrivateCaptureHook;
+                    ("err", (42).__private_capture_as_error())
+                }),
+            ),
         ];
 
-        for (expr, fn_name, expected) in cases {
-            let actual = expand_tokens(ExpandTokens {
-                expr,
-                fn_name: |_| fn_name.clone(),
-            })
-            .unwrap();
+        for (expr, expected) in cases {
+            let fv = syn::parse2::<FieldValue>(expr).unwrap();
+            let attrs = &fv.attrs;
+
+            let actual = key_value_with_hook(attrs, &fv);
 
             assert_eq!(expected.to_string(), actual.to_string());
         }
