@@ -124,30 +124,3 @@ fn now() -> Option<time::Timestamp> {
         None
     }
 }
-
-/*
-#[doc(inline)]
-pub use emit_macros::*;
-
-#[cfg(feature = "std")]
-use crate::std::sync::OnceLock;
-
-/**
-A type that receives and emits event records.
-*/
-pub type Emitter = fn(&Event);
-
-/**
-The global implicit emitter.
-*/
-#[cfg(feature = "std")]
-static EMITTER: OnceLock<Emitter> = OnceLock::new();
-
-/**
-Set the default target to emit to.
-*/
-#[cfg(feature = "std")]
-pub fn to(emitter: Emitter) {
-    drop(EMITTER.set(emitter));
-}
-*/
