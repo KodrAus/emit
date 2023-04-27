@@ -77,28 +77,44 @@ mod tests {
     fn key_value_with_hook_tokens() {
         let cases = vec![
             (
-                quote!(#[a] #[b] a),
-                quote!(#[a] #[b] {
-                    extern crate emit;
-                    use emit::__private::__PrivateCaptureHook;
-                    ("a", (a).__private_capture_as_default())
-                }),
+                quote!(
+                    #[a]
+                    #[b]
+                    a
+                ),
+                quote!(
+                    #[a]
+                    #[b]
+                    {
+                        extern crate emit;
+                        use emit::__private::__PrivateCaptureHook;
+                        ("a", (a).__private_capture_as_default())
+                    }
+                ),
             ),
             (
                 quote!(#[a] #[b] a: 42),
-                quote!(#[a] #[b] {
-                    extern crate emit;
-                    use emit::__private::__PrivateCaptureHook;
-                    ("a", (42).__private_capture_as_default())
-                }),
+                quote!(
+                    #[a]
+                    #[b]
+                    {
+                        extern crate emit;
+                        use emit::__private::__PrivateCaptureHook;
+                        ("a", (42).__private_capture_as_default())
+                    }
+                ),
             ),
             (
                 quote!(#[a] #[b] err: 42),
-                quote!(#[a] #[b] {
-                    extern crate emit;
-                    use emit::__private::__PrivateCaptureHook;
-                    ("err", (42).__private_capture_as_error())
-                }),
+                quote!(
+                    #[a]
+                    #[b]
+                    {
+                        extern crate emit;
+                        use emit::__private::__PrivateCaptureHook;
+                        ("err", (42).__private_capture_as_error())
+                    }
+                ),
             ),
         ];
 

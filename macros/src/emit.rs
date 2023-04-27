@@ -64,7 +64,7 @@ pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Erro
     Ok(quote!({
         extern crate emit;
 
-        match (#((#props_match_value_tokens)),*) {
+        match (#(#props_match_value_tokens),*) {
             (#(#props_match_binding_tokens),*) => {
                 emit::#receiver_tokens(
                     #to_tokens,
@@ -116,9 +116,11 @@ mod tests {
                         },
                         #[cfg (disabled)]
                         {
-                            extern crate emit;
-                            use emit::__private::__PrivateCaptureHook;
-                            ("e", (e).__private_capture_as_default())
+                            {
+                                extern crate emit;
+                                use emit::__private::__PrivateCaptureHook;
+                                ("e", (e).__private_capture_as_default())
+                            }
                         },
                         #[cfg(not(disabled))] ()
                     ) {
@@ -157,9 +159,11 @@ mod tests {
                                     emit::template::Part::text (" and "),
                                     #[cfg (disabled)]
                                     {
-                                        extern crate emit;
-                                        use emit::__private::__PrivateFmtHook;
-                                        emit::template::Part::hole ("e").__private_fmt_as_default()
+                                        {
+                                            extern crate emit;
+                                            use emit::__private::__PrivateFmtHook;
+                                            emit::template::Part::hole ("e").__private_fmt_as_default()
+                                        }
                                     }
                                 ]),
                                 &[

@@ -78,18 +78,27 @@ mod tests {
 
     #[test]
     fn flags_to_fmt() {
-        for (args, expected) in [
-            (Args { flags: "".to_owned() }, "{}"),
-        ] {
+        for (args, expected) in [(
+            Args {
+                flags: "".to_owned(),
+            },
+            "{}",
+        )] {
             assert_eq!(expected, args.to_format_args());
         }
     }
 
     #[test]
     fn hook() {
-        for (args, expr, expected) in [
-            (quote!(), quote!(), quote!())
-        ] {
+        for (args, expr, expected) in [(
+            quote!(),
+            quote!(hole.__private_fmt_default()),
+            quote!(hole.__private_fmt_as(|v, f| {
+                extern crate emit;
+                use emit::__private::core::fmt;
+                emit::__private::core::write!(f, "{}", v)
+            })),
+        )] {
             let actual = rename_hook_tokens(RenameHookTokens { args, expr }).unwrap();
 
             assert_eq!(expected.to_string(), actual.to_string());

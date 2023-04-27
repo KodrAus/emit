@@ -78,7 +78,7 @@ pub(super) fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props
         let template_parts = &template_visitor.parts;
 
         quote!(emit::Template::new_ref(&[
-            #((#template_parts)),*
+            #(#template_parts),*
         ]))
     };
 
