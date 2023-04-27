@@ -8,8 +8,8 @@ use crate::{
     util::FieldValueKey,
 };
 
-pub(super) struct Args {
-    pub(super) inspect: bool,
+pub struct Args {
+    pub inspect: bool,
 }
 
 impl Parse for Args {
@@ -27,7 +27,7 @@ impl Parse for Args {
     }
 }
 
-pub(super) fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
+pub fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
     let fn_name = match &*fv.key_name() {
         // Default to capturing the well-known error identifier as an error
         "err" => quote_spanned!(fv.span()=> __private_capture_as_error),
@@ -47,13 +47,13 @@ pub(super) fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> Token
     )
 }
 
-pub(super) struct RenameHookTokens<T> {
-    pub(super) args: TokenStream,
-    pub(super) expr: TokenStream,
-    pub(super) to: T,
+pub struct RenameHookTokens<T> {
+    pub args: TokenStream,
+    pub expr: TokenStream,
+    pub to: T,
 }
 
-pub(super) fn rename_hook_tokens(
+pub fn rename_hook_tokens(
     opts: RenameHookTokens<impl FnOnce(&Args) -> TokenStream>,
 ) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {

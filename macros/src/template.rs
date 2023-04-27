@@ -8,7 +8,7 @@ use syn::{
 
 use crate::{fmt, props::Props, util::FieldValueKey};
 
-pub(super) fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn::Error> {
+pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn::Error> {
     let template =
         fv_template::ct::Template::parse2(input).map_err(|e| syn::Error::new(e.span(), e))?;
 
@@ -85,7 +85,7 @@ pub(super) fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props
     Ok((args, Template { template_tokens }, props))
 }
 
-pub(super) struct Template {
+pub struct Template {
     template_tokens: TokenStream,
 }
 

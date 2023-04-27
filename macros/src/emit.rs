@@ -6,10 +6,10 @@ use crate::{
     template,
 };
 
-pub(super) struct ExpandTokens {
-    pub(super) receiver: TokenStream,
-    pub(super) level: TokenStream,
-    pub(super) input: TokenStream,
+pub struct ExpandTokens {
+    pub receiver: TokenStream,
+    pub level: TokenStream,
+    pub input: TokenStream,
 }
 
 struct Args {
@@ -40,7 +40,7 @@ impl Parse for Args {
     }
 }
 
-pub(super) fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
+pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let (args, template, props) = template::parse2::<Args>(opts.input)?;
 
     let props_match_input_tokens = props.match_input_tokens();

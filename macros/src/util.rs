@@ -5,7 +5,7 @@ use syn::{
     Attribute, ExprLit, FieldValue, Lit, LitStr, MacroDelimiter, Member, Meta, MetaList,
 };
 
-pub(super) trait FieldValueKey {
+pub trait FieldValueKey {
     fn key_expr(&self) -> ExprLit;
 
     fn key_name(&self) -> String {
@@ -28,7 +28,7 @@ impl FieldValueKey for FieldValue {
     }
 }
 
-pub(super) trait AttributeCfg {
+pub trait AttributeCfg {
     fn is_cfg(&self) -> bool;
     fn invert_cfg(&self) -> Option<Attribute>;
 }
@@ -70,7 +70,7 @@ impl AttributeCfg for Attribute {
     }
 }
 
-pub(super) fn parse_comma_separated2<T: Parse>(
+pub fn parse_comma_separated2<T: Parse>(
     tokens: TokenStream,
 ) -> Result<Punctuated<T, Token![,]>, syn::Error> {
     struct ParsePunctuated<T> {

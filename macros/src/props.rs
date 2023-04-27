@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Default)]
-pub(super) struct Props {
+pub struct Props {
     match_value_tokens: Vec<TokenStream>,
     match_binding_tokens: Vec<TokenStream>,
     key_values: BTreeMap<String, KeyValue>,
@@ -30,7 +30,7 @@ impl Parse for Props {
     }
 }
 
-pub(super) struct KeyValue {
+pub struct KeyValue {
     match_bound_tokens: TokenStream,
     direct_bound_tokens: TokenStream,
     span: Span,
@@ -40,29 +40,29 @@ pub(super) struct KeyValue {
 }
 
 impl KeyValue {
-    pub(super) fn span(&self) -> Span {
+    pub fn span(&self) -> Span {
         self.span.clone()
     }
 }
 
 impl Props {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(super) fn match_input_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+    pub fn match_input_tokens(&self) -> impl Iterator<Item = &TokenStream> {
         self.match_value_tokens.iter()
     }
 
-    pub(super) fn match_binding_tokens(&self) -> impl Iterator<Item = &TokenStream> {
+    pub fn match_binding_tokens(&self) -> impl Iterator<Item = &TokenStream> {
         self.match_binding_tokens.iter()
     }
 
-    pub(super) fn match_bound_tokens(&self) -> TokenStream {
+    pub fn match_bound_tokens(&self) -> TokenStream {
         Self::sorted_props_tokens(self.key_values.values().map(|kv| &kv.match_bound_tokens))
     }
 
-    pub(super) fn props_tokens(&self) -> TokenStream {
+    pub fn props_tokens(&self) -> TokenStream {
         Self::sorted_props_tokens(self.key_values.values().map(|kv| &kv.direct_bound_tokens))
     }
 
@@ -79,15 +79,15 @@ impl Props {
         i
     }
 
-    pub(super) fn get(&self, label: &str) -> Option<&KeyValue> {
+    pub fn get(&self, label: &str) -> Option<&KeyValue> {
         self.key_values.get(label)
     }
 
-    pub(super) fn iter<'a>(&'a self) -> impl Iterator<Item = &'a KeyValue> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a KeyValue> + 'a {
         self.key_values.values()
     }
 
-    pub(super) fn push(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
+    pub fn push(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
         let mut attrs = vec![];
         let mut cfg_attr = None;
 

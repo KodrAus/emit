@@ -6,7 +6,7 @@ use crate::{
     hook,
 };
 
-pub(super) fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
+pub fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
     quote_spanned!(hole.span()=>
         #(#attrs)*
         {
@@ -16,8 +16,8 @@ pub(super) fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> To
     )
 }
 
-pub(super) struct Args {
-    pub(super) flags: String,
+pub struct Args {
+    pub flags: String,
 }
 
 impl Parse for Args {
@@ -46,12 +46,12 @@ impl Args {
     }
 }
 
-pub(super) struct RenameHookTokens {
-    pub(super) args: TokenStream,
-    pub(super) expr: TokenStream,
+pub struct RenameHookTokens {
+    pub args: TokenStream,
+    pub expr: TokenStream,
 }
 
-pub(super) fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Error> {
+pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
         args: opts.args,
         expr: opts.expr,

@@ -3,21 +3,21 @@ use syn::{parse::Parse, FieldValue};
 
 use crate::{args, props::Props, template};
 
-pub(super) struct ExpandPropsTokens {
-    pub(super) input: TokenStream,
+pub struct ExpandPropsTokens {
+    pub input: TokenStream,
 }
 
-pub(super) fn expand_props_tokens(opts: ExpandPropsTokens) -> Result<TokenStream, syn::Error> {
+pub fn expand_props_tokens(opts: ExpandPropsTokens) -> Result<TokenStream, syn::Error> {
     let props = syn::parse2::<Props>(opts.input)?;
 
     Ok(props.props_tokens())
 }
 
-pub(super) struct ExpandTemplateTokens {
-    pub(super) input: TokenStream,
+pub struct ExpandTemplateTokens {
+    pub input: TokenStream,
 }
 
-pub(super) struct TemplateArgs {}
+pub struct TemplateArgs {}
 
 impl Parse for TemplateArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -30,9 +30,7 @@ impl Parse for TemplateArgs {
     }
 }
 
-pub(super) fn expand_template_tokens(
-    opts: ExpandTemplateTokens,
-) -> Result<TokenStream, syn::Error> {
+pub fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
     let (_, template, props) = template::parse2::<TemplateArgs>(opts.input)?;
 
     // Ensure that a standalone template only specifies identifiers

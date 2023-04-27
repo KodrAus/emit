@@ -4,7 +4,7 @@ Compile-time log filtering.
 
 use std::env;
 
-pub(super) fn matches_build_filter() -> bool {
+pub fn matches_build_filter() -> bool {
     match (env::var("EMIT_FILTER"), env::var("CARGO_CRATE_NAME")) {
         (Ok(filter), Ok(this_crate)) => matches(&filter, &this_crate),
         _ => true,

@@ -11,14 +11,14 @@ use syn::{
 
 use crate::util::parse_comma_separated2;
 
-pub(super) struct RenameHookTokens<P, T> {
-    pub(super) args: TokenStream,
-    pub(super) expr: TokenStream,
-    pub(super) predicate: P,
-    pub(super) to: T,
+pub struct RenameHookTokens<P, T> {
+    pub args: TokenStream,
+    pub expr: TokenStream,
+    pub predicate: P,
+    pub to: T,
 }
 
-pub(super) fn rename_hook_tokens<T: Parse>(
+pub fn rename_hook_tokens<T: Parse>(
     opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> (TokenStream, TokenStream)>,
 ) -> Result<TokenStream, syn::Error> {
     let mut hook = syn::parse2::<Hook>(opts.expr)?;
