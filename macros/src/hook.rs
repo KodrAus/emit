@@ -21,7 +21,7 @@ pub(super) struct RenameHookTokens<P, T> {
 pub(super) fn rename_hook_tokens<T: Parse>(
     opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> (TokenStream, TokenStream)>,
 ) -> Result<TokenStream, syn::Error> {
-    let mut expr = syn::parse2::<Expr>(opts.expr)?;
+    let mut hook = syn::parse2::<Hook>(opts.expr)?;
 
     let (to_ident_tokens, to_arg_tokens) = (opts.to)(&syn::parse2::<T>(opts.args)?);
 
@@ -61,9 +61,46 @@ pub(super) fn rename_hook_tokens<T: Parse>(
         to_ident,
         to_args,
     }
-    .visit_expr_mut(&mut expr);
+    .visit_expr_mut(&mut hook.expr);
 
-    Ok(expr.to_token_stream())
+    Ok(hook.to_token_stream())
+}
+
+/**
+An expression with an optional trailing comma.
+
+When reformatting the expression, the comma is discarded.
+*/
+struct Hook {
+    expr: Expr,
+}
+
+impl Parse for Hook {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut items = input.parse_terminated(Expr::parse, Token![,])?;
+
+        let expr = items
+            .pop()
+            .ok_or_else(|| syn::Error::new(input.span(), "missing expression"))?
+            .into_value();
+
+        if !items.is_empty() {
+            return Err(syn::Error::new(
+                input.span(),
+                "expected a single expression",
+            ));
+        }
+
+        Ok(Hook { expr })
+    }
+}
+
+impl ToTokens for Hook {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Hook { expr } = self;
+
+        tokens.extend(quote!(#expr));
+    }
 }
 
 #[cfg(test)]
