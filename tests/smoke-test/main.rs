@@ -30,3 +30,8 @@ fn main() {
         x: 15,
     );
 }
+
+#[emit::with("Hello!", a)]
+fn in_ctxt(a: i32) {
+    let _ = a + 1;
+}

@@ -34,7 +34,7 @@ impl Parse for Args {
         Ok(Args {
             to: to.take().unwrap_or_else(|| quote!(emit::target::Discard)),
             when: when.take().unwrap_or_else(|| quote!(emit::filter::Always)),
-            with: with.take().unwrap_or_else(|| quote!(emit::ctxt::Empty)),
+            with: with.take().unwrap_or_else(|| quote!(emit::props::Empty)),
             ts: ts.take().unwrap_or_else(|| quote!(None)),
         })
     }
@@ -120,7 +120,7 @@ mod tests {
                             emit::emit(
                                 emit::target::Discard,
                                 emit::filter::Always,
-                                emit::ctxt::Empty,
+                                emit::props::Empty,
                                 emit::Level::Info, None,
                                 emit::Template::new_ref(&[
                                     emit::template::Part::text ("Text and "),

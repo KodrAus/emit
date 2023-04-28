@@ -70,6 +70,32 @@ impl GetCtxt for props::Empty {
     }
 }
 
+impl<C: SetCtxt> SetCtxt for Option<C> {
+    type Link = Option<C::Link>;
+
+    fn link<P: Props>(&self, props: P) -> Self::Link {
+        self.as_ref().map(|ctxt| ctxt.link(props))
+    }
+
+    fn unlink(&self, link: Self::Link) {
+        if let (Some(ctxt), Some(link)) = (self, link) {
+            ctxt.unlink(link)
+        }
+    }
+
+    fn activate(&self, link: &mut Self::Link) {
+        if let (Some(ctxt), Some(link)) = (self, link) {
+            ctxt.activate(link)
+        }
+    }
+
+    fn deactivate(&self, link: &mut Self::Link) {
+        if let (Some(ctxt), Some(link)) = (self, link) {
+            ctxt.deactivate(link)
+        }
+    }
+}
+
 impl<'a> GetCtxt for props::SortedSlice<'a> {
     type Props = Self;
 

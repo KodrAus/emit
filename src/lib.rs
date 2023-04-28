@@ -64,7 +64,7 @@ mod internal {
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook};
+    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook, __PrivateLink};
     pub use core;
 }
 
@@ -111,6 +111,11 @@ pub fn with_dyanmic(ctxt: impl GetCtxt + SetCtxt + Send + Sync + 'static) {
     let ctxt = Arc::new(ctxt);
     let _ = GET_CTXT.set(ctxt.clone());
     let _ = SET_CTXT.set(ctxt.clone());
+}
+
+#[cfg(feature = "std")]
+pub fn linker() -> impl SetCtxt {
+    SET_CTXT.get()
 }
 
 #[cfg(feature = "std")]
