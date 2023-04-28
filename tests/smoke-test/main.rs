@@ -20,6 +20,18 @@ fn main() {
         println!("{:?}", evt);
     }));
 
+    emit::with_linker(ctxt::ThreadLocalCtxt);
+
+    in_ctxt(78);
+}
+
+#[emit::with("Hello!", a, ax: 13)]
+fn in_ctxt(a: i32) {
+    in_ctxt2(5);
+}
+
+#[emit::with("Hello!", b, bx: 90)]
+fn in_ctxt2(b: i32) {
     // Emit an info event to the global receiver
     emit::info!(
         with: emit::props! {
@@ -31,7 +43,63 @@ fn main() {
     );
 }
 
-#[emit::with("Hello!", a)]
-fn in_ctxt(a: i32) {
-    let _ = a + 1;
+mod ctxt {
+    use std::{
+        cell::RefCell,
+        ops::ControlFlow::{self, *},
+    };
+
+    thread_local! {
+        static ACTIVE: RefCell<ThreadLocalProps> = RefCell::new(ThreadLocalProps(Vec::new()));
+    }
+
+    pub struct ThreadLocalCtxt;
+
+    pub struct ThreadLocalProps(Vec<(String, String)>);
+
+    impl emit::Props for ThreadLocalProps {
+        fn for_each<'a, F: FnMut(emit::Key<'a>, emit::Value<'a>) -> ControlFlow<()>>(
+            &'a self,
+            mut for_each: F,
+        ) {
+            for (k, v) in &self.0 {
+                if let Break(()) = for_each(emit::Key::from(&**k), emit::Value::from(&**v)) {
+                    break;
+                }
+            }
+        }
+    }
+
+    impl emit::GetCtxt for ThreadLocalCtxt {
+        type Props = ThreadLocalProps;
+
+        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+            ACTIVE.with(|props| with(&*props.borrow()))
+        }
+    }
+
+    impl emit::LinkCtxt for ThreadLocalCtxt {
+        type Link = ThreadLocalProps;
+
+        fn link<P: emit::Props>(&self, props: P) -> Self::Link {
+            let mut owned = ACTIVE.with(|props| props.borrow().0.clone());
+
+            props.for_each(|k, v| {
+                owned.push((k.to_string(), v.to_string()));
+                Continue(())
+            });
+
+            ThreadLocalProps(owned)
+        }
+
+        fn unlink(&self, _: Self::Link) {}
+
+        fn activate(&self, link: &mut Self::Link) {
+            ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
+        }
+
+        fn deactivate(&self, link: &mut Self::Link) {
+            ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
+        }
+    }
 }

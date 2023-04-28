@@ -27,7 +27,7 @@ pub mod well_known;
 #[doc(inline)]
 pub use self::{
     adapt::*,
-    ctxt::{GetCtxt, SetCtxt},
+    ctxt::{GetCtxt, LinkCtxt},
     event::*,
     filter::Filter,
     key::*,
@@ -47,13 +47,11 @@ pub fn emit(
     tpl: Template,
     props: impl Props,
 ) {
-    let evt = Event::new(lvl, ts.or_else(now), tpl, props);
+    with.chain(global_ctxt()).with_props(|ctxt| {
+        let evt = Event::new(lvl, ts.or_else(now), tpl, props.chain(ctxt));
 
-    with.chain(GET_CTXT.get().by_ref()).with_props(|ctxt| {
-        let evt = evt.chain(ctxt);
-
-        if when.chain(FILTER.get().by_ref()).matches_event(&evt) {
-            to.chain(TARGET.get().by_ref()).emit_event(&evt);
+        if when.chain(global_filter()).matches_event(&evt) {
+            to.chain(global_target()).emit_event(&evt);
         }
     })
 }
@@ -64,7 +62,7 @@ mod internal {
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook, __PrivateLink};
+    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook};
     pub use core;
 }
 
@@ -93,6 +91,11 @@ pub fn to(target: impl Target + Send + Sync + 'static) {
 }
 
 #[cfg(feature = "std")]
+pub fn global_target() -> impl Target {
+    TARGET.get()
+}
+
+#[cfg(feature = "std")]
 static GET_CTXT: OnceLock<Arc<dyn ctxt::ErasedGetCtxt + Send + Sync>> = OnceLock::new();
 
 #[cfg(not(feature = "std"))]
@@ -104,18 +107,26 @@ pub fn with(ctxt: impl GetCtxt + Send + Sync + 'static) {
 }
 
 #[cfg(feature = "std")]
-static SET_CTXT: OnceLock<Arc<dyn ctxt::ErasedSetCtxt + Send + Sync>> = OnceLock::new();
-
-#[cfg(feature = "std")]
-pub fn with_dyanmic(ctxt: impl GetCtxt + SetCtxt + Send + Sync + 'static) {
-    let ctxt = Arc::new(ctxt);
-    let _ = GET_CTXT.set(ctxt.clone());
-    let _ = SET_CTXT.set(ctxt.clone());
+pub fn global_ctxt() -> impl GetCtxt {
+    GET_CTXT.get()
 }
 
 #[cfg(feature = "std")]
-pub fn linker() -> impl SetCtxt {
-    SET_CTXT.get()
+static LINK_CTXT: OnceLock<Arc<dyn ctxt::ErasedLinkCtxt + Send + Sync>> = OnceLock::new();
+
+#[cfg(feature = "std")]
+pub fn with_linker<C: GetCtxt + LinkCtxt + Send + Sync + 'static>(ctxt: C)
+where
+    <C as LinkCtxt>::Link: Send,
+{
+    let ctxt = Arc::new(ctxt);
+    let _ = GET_CTXT.set(ctxt.clone());
+    let _ = LINK_CTXT.set(ctxt.clone());
+}
+
+#[cfg(feature = "std")]
+pub fn global_linker() -> impl LinkCtxt {
+    LINK_CTXT.get()
 }
 
 #[cfg(feature = "std")]
@@ -127,6 +138,11 @@ static FILTER: StaticCell<filter::Always> = StaticCell(filter::Always);
 #[cfg(feature = "std")]
 pub fn when(filter: impl Filter + Send + Sync + 'static) {
     let _ = FILTER.set(Box::new(filter));
+}
+
+#[cfg(feature = "std")]
+pub fn global_filter() -> impl Filter {
+    FILTER.get()
 }
 
 #[cfg(feature = "std")]

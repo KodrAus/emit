@@ -87,3 +87,16 @@ pub fn parse_comma_separated2<T: Parse>(
 
     Ok(syn::parse2::<ParsePunctuated<T>>(tokens)?.value)
 }
+
+pub trait ResultToTokens {
+    fn unwrap_or_compile_error(self) -> proc_macro::TokenStream;
+}
+
+impl ResultToTokens for Result<TokenStream, syn::Error> {
+    fn unwrap_or_compile_error(self) -> proc_macro::TokenStream {
+        proc_macro::TokenStream::from(match self {
+            Ok(item) => item,
+            Err(err) => err.into_compile_error(),
+        })
+    }
+}

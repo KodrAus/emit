@@ -1,8 +1,20 @@
-use core::borrow::Borrow;
+use core::{borrow::Borrow, fmt};
 
 pub struct Key<'k> {
     value_ref: &'k str,
     value_static: Option<&'static str>,
+}
+
+impl<'k> fmt::Debug for Key<'k> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl<'k> fmt::Display for Key<'k> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self.as_str(), f)
+    }
 }
 
 impl<'k> Key<'k> {

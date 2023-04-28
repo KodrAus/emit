@@ -11,10 +11,7 @@ use serde::Serialize;
 #[cfg(feature = "sval")]
 use sval::Value;
 
-use crate::{
-    template::{Formatter, Part},
-    Props, SetCtxt,
-};
+use crate::template::{Formatter, Part};
 
 /**
 Similar to `log`'s `ToValue` trait, but with a generic pivot parameter.
@@ -267,40 +264,6 @@ impl<'a> __PrivateFmtHook for Part<'a> {
 
     fn __private_fmt_as(self, formatter: Formatter) -> Self {
         self.with_formatter(formatter)
-    }
-}
-
-pub struct __PrivateLink<C: SetCtxt> {
-    ctxt: C,
-    link: Option<C::Link>,
-}
-
-impl<C: SetCtxt> Drop for __PrivateLink<C> {
-    fn drop(&mut self) {
-        if let Some(mut link) = self.link.take() {
-            self.ctxt.deactivate(&mut link);
-            self.ctxt.unlink(link);
-        }
-    }
-}
-
-impl<C: SetCtxt> __PrivateLink<C> {
-    pub fn new(ctxt: C, props: impl Props) -> Self {
-        let link = Some(ctxt.link(props));
-
-        __PrivateLink { ctxt, link }
-    }
-
-    pub fn activate(&mut self) {
-        if let Some(ref mut link) = self.link {
-            self.ctxt.activate(link);
-        }
-    }
-
-    pub fn deactivate(&mut self) {
-        if let Some(ref mut link) = self.link {
-            self.ctxt.deactivate(link);
-        }
     }
 }
 

@@ -22,9 +22,11 @@ mod filter;
 mod fmt;
 mod hook;
 mod props;
-mod set;
 mod template;
 mod util;
+mod with;
+
+use util::ResultToTokens;
 
 /**
 Emit a debug record.
@@ -93,20 +95,16 @@ pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .unwrap_or_compile_error()
 }
 
-fn emit(
-    level: proc_macro2::TokenStream,
-    item: proc_macro2::TokenStream,
+#[proc_macro_attribute]
+pub fn fmt(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    if filter::matches_build_filter() {
-        emit::expand_tokens(emit::ExpandTokens {
-            receiver: quote!(emit),
-            level,
-            input: item,
-        })
-        .unwrap_or_compile_error()
-    } else {
-        proc_macro::TokenStream::new()
-    }
+    fmt::rename_hook_tokens(fmt::RenameHookTokens {
+        args: TokenStream::from(args),
+        expr: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
 }
 
 #[proc_macro_attribute]
@@ -114,7 +112,7 @@ pub fn with(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    set::expand_tokens(set::ExpandTokens {
+    with::expand_tokens(with::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })
@@ -129,18 +127,12 @@ pub fn as_debug(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture::rename_hook_tokens(capture::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-        to: |args: &capture::Args| {
-            if args.inspect {
-                quote!(__private_capture_as_debug)
-            } else {
-                quote!(__private_capture_anon_as_debug)
-            }
-        },
-    })
-    .unwrap_or_compile_error()
+    capture_as(
+        TokenStream::from(args),
+        TokenStream::from(item),
+        quote!(__private_capture_as_debug),
+        quote!(__private_capture_anon_as_debug),
+    )
 }
 
 /**
@@ -151,18 +143,12 @@ pub fn as_display(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture::rename_hook_tokens(capture::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-        to: |args: &capture::Args| {
-            if args.inspect {
-                quote!(__private_capture_as_display)
-            } else {
-                quote!(__private_capture_anon_as_display)
-            }
-        },
-    })
-    .unwrap_or_compile_error()
+    capture_as(
+        TokenStream::from(args),
+        TokenStream::from(item),
+        quote!(__private_capture_as_display),
+        quote!(__private_capture_anon_as_display),
+    )
 }
 
 /**
@@ -175,18 +161,12 @@ pub fn as_sval(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "sval")]
     {
-        capture::rename_hook_tokens(capture::RenameHookTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            to: |args: &capture::Args| {
-                if args.inspect {
-                    quote!(__private_capture_as_sval)
-                } else {
-                    quote!(__private_capture_anon_as_sval)
-                }
-            },
-        })
-        .unwrap_or_compile_error()
+        capture_as(
+            TokenStream::from(args),
+            TokenStream::from(item),
+            quote!(__private_capture_as_sval),
+            quote!(__private_capture_anon_as_sval),
+        )
     }
     #[cfg(not(feature = "sval"))]
     {
@@ -209,18 +189,12 @@ pub fn as_serde(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "serde")]
     {
-        capture::rename_hook_tokens(capture::RenameHookTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            to: |args: &capture::Args| {
-                if args.inspect {
-                    quote!(__private_capture_as_serde)
-                } else {
-                    quote!(__private_capture_anon_as_serde)
-                }
-            },
-        })
-        .unwrap_or_compile_error()
+        capture_as(
+            TokenStream::from(args),
+            TokenStream::from(item),
+            quote!(__private_capture_as_serde),
+            quote!(__private_capture_anon_as_serde),
+        )
     }
     #[cfg(not(feature = "serde"))]
     {
@@ -243,12 +217,12 @@ pub fn as_error(
 ) -> proc_macro::TokenStream {
     #[cfg(feature = "std")]
     {
-        capture::rename_hook_tokens(capture::RenameHookTokens {
-            args: TokenStream::from(args),
-            expr: TokenStream::from(item),
-            to: |_: &capture::Args| quote!(__private_capture_as_error),
-        })
-        .unwrap_or_compile_error()
+        capture_as(
+            TokenStream::from(args),
+            TokenStream::from(item),
+            quote!(__private_capture_as_error),
+            quote!(__private_capture_as_error),
+        )
     }
     #[cfg(not(feature = "std"))]
     {
@@ -261,27 +235,35 @@ pub fn as_error(
     }
 }
 
-#[proc_macro_attribute]
-pub fn fmt(
-    args: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
+fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
+    if filter::matches_build_filter() {
+        emit::expand_tokens(emit::ExpandTokens {
+            receiver: quote!(emit),
+            level,
+            input: item,
+        })
+        .unwrap_or_compile_error()
+    } else {
+        proc_macro::TokenStream::new()
+    }
+}
+
+fn capture_as(
+    args: TokenStream,
+    expr: TokenStream,
+    as_fn: TokenStream,
+    as_anon_fn: TokenStream,
 ) -> proc_macro::TokenStream {
-    fmt::rename_hook_tokens(fmt::RenameHookTokens {
+    capture::rename_hook_tokens(capture::RenameHookTokens {
         args: TokenStream::from(args),
-        expr: TokenStream::from(item),
+        expr: TokenStream::from(expr),
+        to: |args: &capture::Args| {
+            if args.inspect {
+                as_fn
+            } else {
+                as_anon_fn
+            }
+        },
     })
     .unwrap_or_compile_error()
-}
-
-trait TokenStreamExt {
-    fn unwrap_or_compile_error(self) -> proc_macro::TokenStream;
-}
-
-impl TokenStreamExt for Result<TokenStream, syn::Error> {
-    fn unwrap_or_compile_error(self) -> proc_macro::TokenStream {
-        proc_macro::TokenStream::from(match self {
-            Ok(item) => item,
-            Err(err) => err.into_compile_error(),
-        })
-    }
 }
