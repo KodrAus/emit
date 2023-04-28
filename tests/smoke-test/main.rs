@@ -1,6 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!(
         "{}",
         emit::tpl!(
@@ -22,16 +23,18 @@ fn main() {
 
     emit::with_linker(ctxt::ThreadLocalCtxt);
 
-    in_ctxt(78);
+    in_ctxt(78).await;
 }
 
 #[emit::with("Hello!", a, ax: 13)]
-fn in_ctxt(a: i32) {
-    in_ctxt2(5);
+async fn in_ctxt(a: i32) {
+    in_ctxt2(5).await;
+
+    emit::info!("an event!");
 }
 
 #[emit::with("Hello!", b, bx: 90)]
-fn in_ctxt2(b: i32) {
+async fn in_ctxt2(b: i32) {
     // Emit an info event to the global receiver
     emit::info!(
         with: emit::props! {
@@ -81,7 +84,7 @@ mod ctxt {
     impl emit::LinkCtxt for ThreadLocalCtxt {
         type Link = ThreadLocalProps;
 
-        fn link<P: emit::Props>(&self, props: P) -> Self::Link {
+        fn prepare<P: emit::Props>(&self, props: P) -> Self::Link {
             let mut owned = ACTIVE.with(|props| props.borrow().0.clone());
 
             props.for_each(|k, v| {
@@ -92,13 +95,11 @@ mod ctxt {
             ThreadLocalProps(owned)
         }
 
-        fn unlink(&self, _: Self::Link) {}
-
-        fn activate(&self, link: &mut Self::Link) {
+        fn link(&self, link: &mut Self::Link) {
             ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
         }
 
-        fn deactivate(&self, link: &mut Self::Link) {
+        fn unlink(&self, link: &mut Self::Link) {
             ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
         }
     }

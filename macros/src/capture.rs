@@ -86,7 +86,7 @@ mod tests {
                     #[b]
                     {
                         use emit::__private::__PrivateCaptureHook;
-                        ("a", (a).__private_capture_as_default())
+                        (emit::Key::new("a"), (a).__private_capture_as_default())
                     }
                 ),
             ),
@@ -97,7 +97,7 @@ mod tests {
                     #[b]
                     {
                         use emit::__private::__PrivateCaptureHook;
-                        ("a", (42).__private_capture_as_default())
+                        (emit::Key::new("a"), (42).__private_capture_as_default())
                     }
                 ),
             ),
@@ -108,7 +108,7 @@ mod tests {
                     #[b]
                     {
                         use emit::__private::__PrivateCaptureHook;
-                        ("err", (42).__private_capture_as_error())
+                        (emit::Key::new("err"), (42).__private_capture_as_error())
                     }
                 ),
             ),

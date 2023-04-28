@@ -11,3 +11,7 @@ path = "main.rs"
 [dependencies.emit]
 features = ["std"]
 path = "../../"
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "macros", "rt-multi-thread"]

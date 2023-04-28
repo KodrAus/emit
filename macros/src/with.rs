@@ -26,7 +26,9 @@ impl Parse for Args {
         )?;
 
         Ok(Args {
-            linker: linker.take().unwrap_or_else(|| quote!(emit::linker())),
+            linker: linker
+                .take()
+                .unwrap_or_else(|| quote!(emit::global_linker())),
         })
     }
 }
@@ -56,10 +58,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         }) => {
-            return Err(syn::Error::new(
-                item.span(),
-                "async functions aren't supported yet",
-            ))
+            **block = syn::parse2::<Block>(inject_async(&props, linker_tokens, quote!(#block)))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
@@ -71,13 +70,18 @@ fn inject_sync(props: &Props, linker_tokens: TokenStream, body: TokenStream) -> 
     let props_tokens = props.props_tokens();
 
     quote!({
-        let __link = {
-            let mut __link = emit::ctxt::LinkGuard::new(#linker_tokens, #props_tokens);
-            __link.activate();
-            __link
-        };
+        let mut __link = emit::ctxt::Link::new(#linker_tokens, #props_tokens);
+        let __link_guard = __link.link();
 
         #body
+    })
+}
+
+fn inject_async(props: &Props, linker_tokens: TokenStream, body: TokenStream) -> TokenStream {
+    let props_tokens = props.props_tokens();
+
+    quote!({
+        emit::ctxt::LinkFuture::new(#linker_tokens, #props_tokens, async #body).await
     })
 }
 
@@ -86,12 +90,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn inject_sync() {
-        todo!()
+    fn inject_fn_sync() {
+        for (args, item, expected) in [(
+            quote!("{a}"),
+            quote!(
+                fn some_fn(a: i32) {
+                    a + 1;
+                }
+            ),
+            quote!(
+                fn some_fn(a: i32) {
+                    let mut __link = emit::ctxt::Link::new(
+                        emit::global_linker(),
+                        emit::props::SortedSlice::new_ref(&[{
+                            use emit::__private::__PrivateCaptureHook;
+                            (emit::Key::new("a"), (a).__private_capture_as_default())
+                        }]),
+                    );
+                    let __link_guard = __link.link();
+
+                    {
+                        a + 1;
+                    }
+                }
+            ),
+        )] {
+            let actual = expand_tokens(ExpandTokens { input: args, item }).unwrap();
+
+            assert_eq!(expected.to_string(), actual.to_string());
+        }
     }
 
     #[test]
-    fn inject_async() {
-        todo!()
+    fn inject_fn_async() {
+        for (args, item, expected) in [(
+            quote!("{a}"),
+            quote!(
+                async fn some_fn(a: i32) {
+                    a + 1;
+                }
+            ),
+            quote!(
+                async fn some_fn(a: i32) {
+                    emit::ctxt::LinkFuture::new(
+                        emit::global_linker(),
+                        emit::props::SortedSlice::new_ref(&[{
+                            use emit::__private::__PrivateCaptureHook;
+                            (emit::Key::new("a"), (a).__private_capture_as_default())
+                        }]),
+                        async {
+                            a + 1;
+                        },
+                    )
+                    .await
+                }
+            ),
+        )] {
+            let actual = expand_tokens(ExpandTokens { input: args, item }).unwrap();
+
+            assert_eq!(expected.to_string(), actual.to_string());
+        }
     }
 }

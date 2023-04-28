@@ -92,26 +92,26 @@ mod tests {
                     match (
                         {
                             use emit::__private::__PrivateCaptureHook;
-                            ("b", (17).__private_capture_as_default())
+                            (emit::Key::new("b"), (17).__private_capture_as_default())
                         },
                         {
                             use emit::__private::__PrivateCaptureHook;
-                            ("a", (a).__private_capture_as_default())
+                            (emit::Key::new("a"), (a).__private_capture_as_default())
                         },
                         #[as_debug]
                         {
                             use emit::__private::__PrivateCaptureHook;
-                            ("c", (c).__private_capture_as_default())
+                            (emit::Key::new("c"), (c).__private_capture_as_default())
                         },
                         {
                             use emit::__private::__PrivateCaptureHook;
-                            ("d", (String::from ("short lived")).__private_capture_as_default())
+                            (emit::Key::new("d"), (String::from ("short lived")).__private_capture_as_default())
                         },
                         #[cfg (disabled)]
                         {
                             {
                                 use emit::__private::__PrivateCaptureHook;
-                                ("e", (e).__private_capture_as_default())
+                                (emit::Key::new("e"), (e).__private_capture_as_default())
                             }
                         },
                         #[cfg(not(disabled))] ()
@@ -153,14 +153,14 @@ mod tests {
                                         }
                                     }
                                 ]),
-                                &[
-                                    (emit::Key::new (__tmp1.0), __tmp1.1.by_ref()),
-                                    (emit::Key::new (__tmp0.0), __tmp0.1.by_ref()),
-                                    (emit::Key::new (__tmp2.0), __tmp2.1.by_ref()),
-                                    (emit::Key::new (__tmp3.0), __tmp3.1.by_ref()),
+                                emit::props::SortedSlice::new_ref(&[
+                                    (__tmp1.0.by_ref(), __tmp1.1.by_ref()),
+                                    (__tmp0.0.by_ref(), __tmp0.1.by_ref()),
+                                    (__tmp2.0.by_ref(), __tmp2.1.by_ref()),
+                                    (__tmp3.0.by_ref(), __tmp3.1.by_ref()),
                                     #[cfg(disabled)]
-                                    (emit::Key::new (__tmp4.0), __tmp4.1.by_ref())
-                                ],
+                                    (__tmp4.0.by_ref(), __tmp4.1.by_ref())
+                                ]),
                             )
                         }
                     }

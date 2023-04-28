@@ -1,3 +1,10 @@
+use core::{
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
 use crate::{
     props::{self, Props},
     ByRef, Chain,
@@ -112,58 +119,47 @@ pub fn from_props<P: Props>(props: P) -> FromProps<P> {
     FromProps(props)
 }
 
-pub trait LinkCtxt {
+pub trait LinkCtxt: GetCtxt {
     type Link;
 
-    fn link<P: Props>(&self, props: P) -> Self::Link;
-    fn unlink(&self, link: Self::Link);
+    fn prepare<P: Props>(&self, props: P) -> Self::Link;
 
-    fn activate(&self, link: &mut Self::Link);
-    fn deactivate(&self, link: &mut Self::Link);
+    fn link(&self, link: &mut Self::Link);
+    fn unlink(&self, link: &mut Self::Link);
 }
 
 impl<'a, C: LinkCtxt + ?Sized> LinkCtxt for &'a C {
     type Link = C::Link;
 
-    fn link<P: Props>(&self, props: P) -> Self::Link {
-        (**self).link(props)
+    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+        (**self).prepare(props)
     }
 
-    fn unlink(&self, link: Self::Link) {
+    fn link(&self, link: &mut Self::Link) {
+        (**self).link(link)
+    }
+
+    fn unlink(&self, link: &mut Self::Link) {
         (**self).unlink(link)
-    }
-
-    fn activate(&self, link: &mut Self::Link) {
-        (**self).activate(link)
-    }
-
-    fn deactivate(&self, link: &mut Self::Link) {
-        (**self).deactivate(link)
     }
 }
 
 impl<C: LinkCtxt> LinkCtxt for Option<C> {
     type Link = Option<C::Link>;
 
-    fn link<P: Props>(&self, props: P) -> Self::Link {
-        self.as_ref().map(|ctxt| ctxt.link(props))
+    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+        self.as_ref().map(|ctxt| ctxt.prepare(props))
     }
 
-    fn unlink(&self, link: Self::Link) {
+    fn link(&self, link: &mut Self::Link) {
+        if let (Some(ctxt), Some(link)) = (self, link) {
+            ctxt.link(link)
+        }
+    }
+
+    fn unlink(&self, link: &mut Self::Link) {
         if let (Some(ctxt), Some(link)) = (self, link) {
             ctxt.unlink(link)
-        }
-    }
-
-    fn activate(&self, link: &mut Self::Link) {
-        if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.activate(link)
-        }
-    }
-
-    fn deactivate(&self, link: &mut Self::Link) {
-        if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.deactivate(link)
         }
     }
 }
@@ -172,20 +168,16 @@ impl<C: LinkCtxt> LinkCtxt for Option<C> {
 impl<'a, C: LinkCtxt + ?Sized + 'a> LinkCtxt for Box<C> {
     type Link = C::Link;
 
-    fn link<P: Props>(&self, props: P) -> Self::Link {
-        (**self).link(props)
+    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+        (**self).prepare(props)
     }
 
-    fn unlink(&self, link: Self::Link) {
+    fn link(&self, link: &mut Self::Link) {
+        (**self).link(link)
+    }
+
+    fn unlink(&self, link: &mut Self::Link) {
         (**self).unlink(link)
-    }
-
-    fn activate(&self, link: &mut Self::Link) {
-        (**self).activate(link)
-    }
-
-    fn deactivate(&self, link: &mut Self::Link) {
-        (**self).deactivate(link)
     }
 }
 
@@ -193,54 +185,74 @@ impl<'a, C: LinkCtxt + ?Sized + 'a> LinkCtxt for Box<C> {
 impl<'a, C: LinkCtxt + ?Sized + 'a> LinkCtxt for std::sync::Arc<C> {
     type Link = C::Link;
 
-    fn link<P: Props>(&self, props: P) -> Self::Link {
-        (**self).link(props)
+    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+        (**self).prepare(props)
     }
 
-    fn unlink(&self, link: Self::Link) {
+    fn link(&self, link: &mut Self::Link) {
+        (**self).link(link)
+    }
+
+    fn unlink(&self, link: &mut Self::Link) {
         (**self).unlink(link)
     }
-
-    fn activate(&self, link: &mut Self::Link) {
-        (**self).activate(link)
-    }
-
-    fn deactivate(&self, link: &mut Self::Link) {
-        (**self).deactivate(link)
-    }
 }
 
-pub struct LinkGuard<C: LinkCtxt> {
+pub struct Link<C: LinkCtxt> {
+    link: C::Link,
     ctxt: C,
-    link: Option<C::Link>,
 }
 
-impl<C: LinkCtxt> Drop for LinkGuard<C> {
-    fn drop(&mut self) {
-        if let Some(mut link) = self.link.take() {
-            self.ctxt.deactivate(&mut link);
-            self.ctxt.unlink(link);
-        }
-    }
-}
-
-impl<C: LinkCtxt> LinkGuard<C> {
+impl<C: LinkCtxt> Link<C> {
     pub fn new(ctxt: C, props: impl Props) -> Self {
-        let link = Some(ctxt.link(props));
+        let link = ctxt.prepare(props);
 
-        LinkGuard { ctxt, link }
+        Link { ctxt, link }
     }
 
-    pub fn activate(&mut self) {
-        if let Some(ref mut link) = self.link {
-            self.ctxt.activate(link);
+    pub fn link(&mut self) -> LinkGuard<C> {
+        self.ctxt.link(&mut self.link);
+
+        LinkGuard {
+            link: self,
+            _marker: PhantomData,
         }
     }
+}
 
-    pub fn deactivate(&mut self) {
-        if let Some(ref mut link) = self.link {
-            self.ctxt.deactivate(link);
+pub struct LinkGuard<'a, C: LinkCtxt> {
+    link: &'a mut Link<C>,
+    _marker: PhantomData<*mut fn()>,
+}
+
+impl<'a, C: LinkCtxt> Drop for LinkGuard<'a, C> {
+    fn drop(&mut self) {
+        self.link.ctxt.unlink(&mut self.link.link);
+    }
+}
+
+pub struct LinkFuture<C: LinkCtxt, F> {
+    link: Link<C>,
+    future: F,
+}
+
+impl<C: LinkCtxt, F> LinkFuture<C, F> {
+    pub fn new(ctxt: C, props: impl Props, future: F) -> Self {
+        LinkFuture {
+            link: Link::new(ctxt, props),
+            future,
         }
+    }
+}
+
+impl<C: LinkCtxt, F: Future> Future for LinkFuture<C, F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let unpinned = unsafe { Pin::get_unchecked_mut(self) };
+
+        let __guard = unpinned.link.link();
+        unsafe { Pin::new_unchecked(&mut unpinned.future) }.poll(cx)
     }
 }
 
@@ -257,7 +269,7 @@ mod internal {
         fn erase_get_ctxt(&self) -> crate::internal::Erased<&dyn DispatchGetCtxt>;
     }
 
-    pub struct Slot<T: ?Sized>(*const T, PhantomData<fn(&mut T)>);
+    pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
     impl<T: ?Sized> Slot<T> {
         pub(super) unsafe fn new(v: &T) -> Slot<T> {
@@ -351,11 +363,10 @@ mod std_support {
         use super::ErasedLink;
 
         pub trait DispatchLinkCtxt {
-            fn dispatch_link(&self, props: &dyn ErasedProps) -> ErasedLink;
-            fn dispatch_unlink(&self, link: ErasedLink);
+            fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedLink;
 
-            fn dispatch_activate(&self, link: &mut ErasedLink);
-            fn dispatch_deactivate(&self, link: &mut ErasedLink);
+            fn dispatch_link(&self, link: &mut ErasedLink);
+            fn dispatch_unlink(&self, link: &mut ErasedLink);
         }
 
         pub trait SealedLinkCtxt {
@@ -365,7 +376,7 @@ mod std_support {
 
     pub struct ErasedLink(Box<dyn Any + Send>);
 
-    pub trait ErasedLinkCtxt: internal::SealedLinkCtxt {}
+    pub trait ErasedLinkCtxt: internal::SealedLinkCtxt + ErasedGetCtxt {}
 
     impl<C: LinkCtxt> ErasedLinkCtxt for C where C::Link: Send + 'static {}
 
@@ -382,66 +393,72 @@ mod std_support {
     where
         C::Link: Send + 'static,
     {
-        fn dispatch_link(&self, props: &dyn ErasedProps) -> ErasedLink {
-            ErasedLink(Box::new(self.link(props)))
+        fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedLink {
+            ErasedLink(Box::new(self.prepare(props)))
         }
 
-        fn dispatch_unlink(&self, link: ErasedLink) {
-            if let Ok(link) = link.0.downcast() {
-                self.unlink(*link)
-            }
-        }
-
-        fn dispatch_activate(&self, link: &mut ErasedLink) {
+        fn dispatch_link(&self, link: &mut ErasedLink) {
             if let Some(link) = link.0.downcast_mut() {
-                self.activate(link)
+                self.link(link)
             }
         }
 
-        fn dispatch_deactivate(&self, link: &mut ErasedLink) {
+        fn dispatch_unlink(&self, link: &mut ErasedLink) {
             if let Some(link) = link.0.downcast_mut() {
-                self.deactivate(link)
+                self.unlink(link)
             }
+        }
+    }
+
+    impl<'a> GetCtxt for dyn ErasedLinkCtxt + 'a {
+        type Props = ErasedSlot;
+
+        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+            let mut f = Some(with);
+
+            self.erase_get_ctxt()
+                .0
+                .dispatch_with_ctxt(&mut |props| f.take().expect("called multiple times")(&props));
         }
     }
 
     impl<'a> LinkCtxt for dyn ErasedLinkCtxt + 'a {
         type Link = ErasedLink;
 
-        fn link<P: Props>(&self, props: P) -> Self::Link {
-            self.erase_set_ctxt().0.dispatch_link(&props)
+        fn prepare<P: Props>(&self, props: P) -> Self::Link {
+            self.erase_set_ctxt().0.dispatch_prepare(&props)
         }
 
-        fn unlink(&self, link: Self::Link) {
+        fn link(&self, link: &mut Self::Link) {
+            self.erase_set_ctxt().0.dispatch_link(link)
+        }
+
+        fn unlink(&self, link: &mut Self::Link) {
             self.erase_set_ctxt().0.dispatch_unlink(link)
         }
+    }
 
-        fn activate(&self, link: &mut Self::Link) {
-            self.erase_set_ctxt().0.dispatch_activate(link)
-        }
+    impl<'a> GetCtxt for dyn ErasedLinkCtxt + Send + Sync + 'a {
+        type Props = <dyn ErasedLinkCtxt + 'a as GetCtxt>::Props;
 
-        fn deactivate(&self, link: &mut Self::Link) {
-            self.erase_set_ctxt().0.dispatch_deactivate(link)
+        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+            (self as &(dyn ErasedLinkCtxt + 'a)).with_props(with)
         }
     }
 
     impl<'a> LinkCtxt for dyn ErasedLinkCtxt + Send + Sync + 'a {
         type Link = <dyn ErasedLinkCtxt + 'a as LinkCtxt>::Link;
 
-        fn link<P: Props>(&self, props: P) -> Self::Link {
-            (self as &(dyn ErasedLinkCtxt + 'a)).link(props)
+        fn prepare<P: Props>(&self, props: P) -> Self::Link {
+            (self as &(dyn ErasedLinkCtxt + 'a)).prepare(props)
         }
 
-        fn unlink(&self, link: Self::Link) {
+        fn link(&self, link: &mut Self::Link) {
+            (self as &(dyn ErasedLinkCtxt + 'a)).link(link)
+        }
+
+        fn unlink(&self, link: &mut Self::Link) {
             (self as &(dyn ErasedLinkCtxt + 'a)).unlink(link)
-        }
-
-        fn activate(&self, link: &mut Self::Link) {
-            (self as &(dyn ErasedLinkCtxt + 'a)).activate(link)
-        }
-
-        fn deactivate(&self, link: &mut Self::Link) {
-            (self as &(dyn ErasedLinkCtxt + 'a)).deactivate(link)
         }
     }
 }
