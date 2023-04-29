@@ -1,4 +1,6 @@
-use crate::{ByRef, Chain, Event, Props};
+use crate::{Event, Props};
+
+pub use crate::adapt::{ByRef, Chain, Discard};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
@@ -52,8 +54,6 @@ impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
         self.0.emit_event(evt)
     }
 }
-
-pub struct Discard;
 
 impl Target for Discard {
     fn emit_event<P: Props>(&self, _: &Event<P>) {}

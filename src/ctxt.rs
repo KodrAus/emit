@@ -5,12 +5,11 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::{
-    props::{self, Props},
-    ByRef, Chain,
-};
+use crate::props::{self, Props};
 
 use self::internal::{ErasedSlot, Slot};
+
+pub use crate::adapt::{ByRef, Chain, Discard, Empty};
 
 pub trait GetCtxt {
     type Props: Props + ?Sized;
@@ -69,7 +68,7 @@ impl<C: GetCtxt> GetCtxt for Option<C> {
     }
 }
 
-impl GetCtxt for props::Empty {
+impl GetCtxt for Empty {
     type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -254,6 +253,24 @@ impl<C: LinkCtxt, F: Future> Future for LinkFuture<C, F> {
         let __guard = unpinned.link.link();
         unsafe { Pin::new_unchecked(&mut unpinned.future) }.poll(cx)
     }
+}
+
+impl GetCtxt for Discard {
+    type Props = Empty;
+
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        with(&Empty)
+    }
+}
+
+impl LinkCtxt for Discard {
+    type Link = ();
+
+    fn prepare<P: Props>(&self, _: P) -> Self::Link {}
+
+    fn link(&self, _: &mut Self::Link) {}
+
+    fn unlink(&self, _: &mut Self::Link) {}
 }
 
 mod internal {

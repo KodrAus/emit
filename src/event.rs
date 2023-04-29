@@ -1,9 +1,10 @@
 use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
 use crate::{
-    props::{self, ErasedProps},
+    adapt::{ByRef, Chain, Empty},
+    props::ErasedProps,
     template::Render,
-    well_known, ByRef, Chain, Key, Props, Template, Timestamp, Value,
+    well_known, Key, Props, Template, Timestamp, Value,
 };
 
 #[derive(Clone, Copy)]
@@ -87,7 +88,7 @@ impl<'a, P: Props> Event<'a, P> {
         self.tpl.render().with_props(&self.props)
     }
 
-    pub fn tpl<'b>(&'b self) -> Render<'b, props::Empty> {
+    pub fn tpl<'b>(&'b self) -> Render<'b, Empty> {
         self.tpl.render()
     }
 

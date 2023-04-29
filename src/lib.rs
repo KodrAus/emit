@@ -26,7 +26,6 @@ pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
-    adapt::*,
     ctxt::{GetCtxt, LinkCtxt},
     event::*,
     filter::Filter,
@@ -90,7 +89,6 @@ pub fn to(target: impl Target + Send + Sync + 'static) {
     let _ = TARGET.set(Box::new(target));
 }
 
-#[cfg(feature = "std")]
 pub fn global_target() -> impl Target {
     TARGET.get()
 }
@@ -106,13 +104,15 @@ pub fn with(ctxt: impl GetCtxt + Send + Sync + 'static) {
     let _ = GET_CTXT.set(Arc::new(ctxt));
 }
 
-#[cfg(feature = "std")]
 pub fn global_ctxt() -> impl GetCtxt {
     GET_CTXT.get()
 }
 
 #[cfg(feature = "std")]
 static LINK_CTXT: OnceLock<Arc<dyn ctxt::ErasedLinkCtxt + Send + Sync>> = OnceLock::new();
+
+#[cfg(not(feature = "std"))]
+static LINK_CTXT: StaticCell<ctxt::Discard> = StaticCell(ctxt::Discard);
 
 #[cfg(feature = "std")]
 pub fn with_linker<C: GetCtxt + LinkCtxt + Send + Sync + 'static>(ctxt: C)
@@ -124,7 +124,6 @@ where
     let _ = LINK_CTXT.set(ctxt.clone());
 }
 
-#[cfg(feature = "std")]
 pub fn global_linker() -> impl LinkCtxt {
     LINK_CTXT.get()
 }
@@ -140,7 +139,6 @@ pub fn when(filter: impl Filter + Send + Sync + 'static) {
     let _ = FILTER.set(Box::new(filter));
 }
 
-#[cfg(feature = "std")]
 pub fn global_filter() -> impl Filter {
     FILTER.get()
 }
