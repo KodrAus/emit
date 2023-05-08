@@ -42,7 +42,7 @@ async fn in_ctxt2(b: i32) {
             request_id: "abc",
         },
         "something went wrong at {#[emit::as_debug] id: 42} with {x}!",
-        #[emit::fmt(flags: "04")]
+        #[emit::fmt("04")]
         x: 15,
     );
 }
@@ -74,7 +74,7 @@ mod ctxt {
         }
     }
 
-    impl emit::PropsCtxt for ThreadLocalCtxt {
+    impl emit::ctxt::PropsCtxt for ThreadLocalCtxt {
         type Props = ThreadLocalProps;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -82,7 +82,7 @@ mod ctxt {
         }
     }
 
-    impl emit::ScopeCtxt for ThreadLocalCtxt {
+    impl emit::ctxt::ScopeCtxt for ThreadLocalCtxt {
         type Scope = ThreadLocalProps;
 
         fn prepare<P: emit::Props>(&self, props: P) -> Self::Scope {

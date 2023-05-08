@@ -67,7 +67,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn new(lvl: Level, ts: Option<Timestamp>, tpl: Template<'a>, props: P) -> Self {
+    pub fn new(ts: Option<Timestamp>, lvl: Level, tpl: Template<'a>, props: P) -> Self {
         Event {
             ts,
             lvl,

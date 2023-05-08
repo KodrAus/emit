@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use syn::{parse::Parse, spanned::Spanned, Attribute, ExprLit, FieldValue};
+use syn::{parse::Parse, spanned::Spanned, Attribute, ExprLit, FieldValue, LitStr};
 
 use crate::{
     args::{self, Arg},
@@ -22,6 +22,15 @@ pub struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Accept a standalone string as a shorthand for the flags argument
+        if input.peek(LitStr) {
+            let flags: LitStr = input.parse()?;
+
+            return Ok(Args {
+                flags: flags.value(),
+            });
+        }
+
         let mut flags = Arg::str("flags");
 
         args::set_from_field_values(
@@ -40,7 +49,7 @@ impl Args {
         if self.flags.is_empty() {
             "{}".to_owned()
         } else {
-            // `:?b` -> `{:?b}`
+            // `?b` -> `{:?b}`
             format!("{{:{}}}", self.flags)
         }
     }
@@ -88,14 +97,32 @@ mod tests {
 
     #[test]
     fn hook() {
-        for (args, expr, expected) in [(
-            quote!(),
-            quote!(hole.__private_fmt_default()),
-            quote!(hole.__private_fmt_as(|v, f| {
-                use emit::__private::core::fmt;
-                emit::__private::core::write!(f, "{}", v)
-            })),
-        )] {
+        for (args, expr, expected) in [
+            (
+                quote!(),
+                quote!(hole.__private_fmt_default()),
+                quote!(hole.__private_fmt_as(|v, f| {
+                    use emit::__private::core::fmt;
+                    emit::__private::core::write!(f, "{}", v)
+                })),
+            ),
+            (
+                quote!(flags: "?"),
+                quote!(hole.__private_fmt_default()),
+                quote!(hole.__private_fmt_as(|v, f| {
+                    use emit::__private::core::fmt;
+                    emit::__private::core::write!(f, "{:?}", v)
+                })),
+            ),
+            (
+                quote!("?"),
+                quote!(hole.__private_fmt_default()),
+                quote!(hole.__private_fmt_as(|v, f| {
+                    use emit::__private::core::fmt;
+                    emit::__private::core::write!(f, "{:?}", v)
+                })),
+            ),
+        ] {
             let actual = rename_hook_tokens(RenameHookTokens { args, expr }).unwrap();
 
             assert_eq!(expected.to_string(), actual.to_string());

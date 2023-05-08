@@ -3,7 +3,7 @@ use crate::{
 };
 
 #[cfg(feature = "std")]
-use crate::{ctxt::ErasedScopeCtxt, filter::ErasedFilter, target::ErasedTarget};
+use crate::{ctxt::ErasedScopeCtxt, filter::ErasedFilter, target::ErasedTarget, time::ErasedTime};
 
 #[cfg(feature = "std")]
 use std::sync::OnceLock;
@@ -14,7 +14,7 @@ static AMBIENT: OnceLock<
         Box<dyn ErasedTarget + Send + Sync>,
         Box<dyn ErasedFilter + Send + Sync>,
         Box<dyn ErasedScopeCtxt + Send + Sync>,
-        Box<dyn Time + Send + Sync>,
+        Box<dyn ErasedTime + Send + Sync>,
     >,
 > = OnceLock::new();
 
@@ -93,7 +93,7 @@ mod std_support {
         target: Option<Box<dyn ErasedTarget + Send + Sync>>,
         filter: Option<Box<dyn ErasedFilter + Send + Sync>>,
         ctxt: Option<Box<dyn ErasedScopeCtxt + Send + Sync>>,
-        time: Option<Box<dyn Time + Send + Sync>>,
+        time: Option<Box<dyn ErasedTime + Send + Sync>>,
     }
 
     impl Setup {

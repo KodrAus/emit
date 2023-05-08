@@ -131,6 +131,17 @@ impl<'a> SortedSlice<'a> {
     pub fn new_ref<'b>(props: &'b [(Key<'a>, Value<'a>)]) -> &'b Self {
         unsafe { &*(props as *const [(Key<'a>, Value<'a>)] as *const SortedSlice<'a>) }
     }
+
+    pub fn by_ref<'b>(&'b self) -> ByRef<'b, Self> {
+        ByRef(self)
+    }
+
+    pub fn chain<'b, U>(&'b self, other: U) -> Chain<&'b Self, U> {
+        Chain {
+            first: self,
+            second: other,
+        }
+    }
 }
 
 impl<'a> Props for SortedSlice<'a> {

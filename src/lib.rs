@@ -9,7 +9,6 @@ for events.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use emit_macros::*;
-use time::Time;
 
 mod macro_hooks;
 
@@ -28,37 +27,38 @@ pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
-    ambient::*,
+    ambient::*, event::*, key::*, props::Props, target::Target, template::Template,
+    time::Timestamp, value::*,
+};
+
+use self::{
     ctxt::{PropsCtxt, ScopeCtxt},
-    event::*,
     filter::Filter,
-    key::*,
-    props::Props,
-    target::Target,
-    template::Template,
-    time::Timestamp,
-    value::*,
+    time::Time,
 };
 
 pub fn emit(
     to: impl Target,
     when: impl Filter,
     with: impl PropsCtxt,
+    ts: impl Time,
     lvl: Level,
-    ts: Option<Timestamp>,
     tpl: Template,
     props: impl Props,
 ) {
     let ambient = ambient::get();
 
-    with.chain(&ambient).with_props(|scope| {
-        let ts = ts.or_else(|| ambient.timestamp());
-        let evt = Event::new(lvl, ts, tpl, props.chain(scope));
+    ctxt::from_props(props)
+        .chain(with)
+        .chain(&ambient)
+        .with_props(|props| {
+            let ts = ts.timestamp().or_else(|| ambient.timestamp());
+            let evt = Event::new(ts, lvl, tpl, props);
 
-        if when.chain(&ambient).matches_event(&evt) {
-            to.chain(&ambient).emit_event(&evt);
-        }
-    })
+            if when.chain(&ambient).matches_event(&evt) {
+                to.chain(&ambient).emit_event(&evt);
+            }
+        })
 }
 
 #[cfg(feature = "std")]

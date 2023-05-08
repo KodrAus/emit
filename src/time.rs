@@ -1,9 +1,23 @@
 use core::{fmt, time::Duration};
 
-pub use crate::adapt::Empty;
+pub use crate::adapt::{ByRef, Chain, Empty};
 
 pub trait Time {
     fn timestamp(&self) -> Option<Timestamp>;
+
+    fn by_ref<'a>(&'a self) -> ByRef<'a, Self> {
+        ByRef(self)
+    }
+
+    fn chain<U: Time>(self, other: U) -> Chain<Self, U>
+    where
+        Self: Sized,
+    {
+        Chain {
+            first: self,
+            second: other,
+        }
+    }
 }
 
 impl<'a, T: Time + ?Sized> Time for &'a T {
@@ -42,6 +56,13 @@ impl Timestamp {
     pub fn new(elapsed_since_unix_epoch: Duration) -> Self {
         Timestamp(elapsed_since_unix_epoch)
     }
+
+    #[cfg(feature = "std")]
+    pub fn now() -> Self {
+        crate::ambient::get()
+            .timestamp()
+            .unwrap_or_else(SystemClock::now)
+    }
 }
 
 impl Time for Timestamp {
@@ -56,14 +77,59 @@ impl Time for Empty {
     }
 }
 
+mod internal {
+    use super::Timestamp;
+
+    pub trait DispatchTime {
+        fn dispatch_timestamp(&self) -> Option<Timestamp>;
+    }
+
+    pub trait SealedTime {
+        fn erase_time(&self) -> crate::internal::Erased<&dyn DispatchTime>;
+    }
+}
+
+pub trait ErasedTime: internal::SealedTime {}
+
+impl<T: Time> ErasedTime for T {}
+
+impl<T: Time> internal::SealedTime for T {
+    fn erase_time(&self) -> crate::internal::Erased<&dyn internal::DispatchTime> {
+        crate::internal::Erased(self)
+    }
+}
+
+impl<T: Time> internal::DispatchTime for T {
+    fn dispatch_timestamp(&self) -> Option<Timestamp> {
+        self.timestamp()
+    }
+}
+
+impl<'a> Time for dyn ErasedTime + 'a {
+    fn timestamp(&self) -> Option<Timestamp> {
+        self.erase_time().0.dispatch_timestamp()
+    }
+}
+
+impl<'a> Time for dyn ErasedTime + Send + Sync + 'a {
+    fn timestamp(&self) -> Option<Timestamp> {
+        (self as &(dyn ErasedTime + 'a)).timestamp()
+    }
+}
+
 #[cfg(feature = "std")]
 pub(crate) struct SystemClock;
 
 #[cfg(feature = "std")]
+impl SystemClock {
+    fn now() -> Timestamp {
+        Timestamp::new(std::time::UNIX_EPOCH.elapsed().unwrap_or_default())
+    }
+}
+
+#[cfg(feature = "std")]
 impl Time for SystemClock {
     fn timestamp(&self) -> Option<Timestamp> {
-        Some(Timestamp::new(
-            std::time::UNIX_EPOCH.elapsed().unwrap_or_default(),
-        ))
+        Some(Self::now())
     }
 }

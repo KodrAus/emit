@@ -201,6 +201,24 @@ impl<C: ScopeCtxt> ScopeCtxt for Option<C> {
     }
 }
 
+impl<T: ScopeCtxt, U: ScopeCtxt> ScopeCtxt for Chain<T, U> {
+    type Scope = (T::Scope, U::Scope);
+
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
+        (self.first.prepare(&props), self.second.prepare(&props))
+    }
+
+    fn enter(&self, scope: &mut Self::Scope) {
+        self.first.enter(&mut scope.0);
+        self.second.enter(&mut scope.1);
+    }
+
+    fn exit(&self, scope: &mut Self::Scope) {
+        self.second.exit(&mut scope.1);
+        self.first.exit(&mut scope.0);
+    }
+}
+
 #[cfg(feature = "std")]
 impl<'a, C: ScopeCtxt + ?Sized + 'a> ScopeCtxt for Box<C> {
     type Scope = C::Scope;

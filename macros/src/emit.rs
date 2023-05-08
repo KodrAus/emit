@@ -24,7 +24,7 @@ impl Parse for Args {
         let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
         let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
         let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
-        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(Some(#expr))));
+        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(#expr)));
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
@@ -35,7 +35,7 @@ impl Parse for Args {
             to: to.take().unwrap_or_else(|| quote!(emit::target::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::filter::Empty)),
             with: with.take().unwrap_or_else(|| quote!(emit::props::Empty)),
-            ts: ts.take().unwrap_or_else(|| quote!(None)),
+            ts: ts.take().unwrap_or_else(|| quote!(emit::time::Empty)),
         })
     }
 }
@@ -68,8 +68,8 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                     #to_tokens,
                     #when_tokens,
                     #with_tokens,
-                    #level_tokens,
                     #ts_tokens,
+                    #level_tokens,
                     #template_tokens,
                     #props_tokens,
                 )
@@ -118,10 +118,11 @@ mod tests {
                     ) {
                         (__tmp0, __tmp1, __tmp2, __tmp3, __tmp4) => {
                             emit::emit(
-                                emit::target::Discard,
-                                emit::filter::Always,
+                                emit::target::Empty,
+                                emit::filter::Empty,
                                 emit::props::Empty,
-                                emit::Level::Info, None,
+                                emit::Level::Info,
+                                None,
                                 emit::Template::new_ref(&[
                                     emit::template::Part::text ("Text and "),
                                     {
