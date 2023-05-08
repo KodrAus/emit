@@ -5,39 +5,9 @@ pub struct Chain<T, U> {
 
 pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
 
-pub struct Discard;
-
-impl Discard {
-    pub fn chain<U>(self, other: U) -> Chain<Self, U> {
-        Chain {
-            first: self,
-            second: other,
-        }
-    }
-
-    pub fn by_ref<'a>(&'a self) -> ByRef<'a, Self> {
-        ByRef(self)
-    }
-}
-
 pub struct Empty;
 
 impl Empty {
-    pub fn chain<U>(self, other: U) -> Chain<Self, U> {
-        Chain {
-            first: self,
-            second: other,
-        }
-    }
-
-    pub fn by_ref<'a>(&'a self) -> ByRef<'a, Self> {
-        ByRef(self)
-    }
-}
-
-pub struct Always;
-
-impl Always {
     pub fn chain<U>(self, other: U) -> Chain<Self, U> {
         Chain {
             first: self,

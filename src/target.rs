@@ -1,6 +1,6 @@
 use crate::{Event, Props};
 
-pub use crate::adapt::{ByRef, Chain, Discard};
+pub use crate::adapt::{ByRef, Chain, Empty};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
@@ -37,7 +37,7 @@ impl<T: Target> Target for Option<T> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         match self {
             Some(target) => target.emit_event(evt),
-            None => Discard.emit_event(evt),
+            None => Empty.emit_event(evt),
         }
     }
 }
@@ -55,7 +55,7 @@ impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
     }
 }
 
-impl Target for Discard {
+impl Target for Empty {
     fn emit_event<P: Props>(&self, _: &Event<P>) {}
 }
 

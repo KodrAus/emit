@@ -17,11 +17,12 @@ async fn main() {
         })
     );
 
-    emit::to(emit::target::from_fn(|evt| {
-        println!("{:?}", evt);
-    }));
-
-    emit::with(ctxt::ThreadLocalCtxt);
+    emit::setup()
+        .to(emit::target::from_fn(|evt| {
+            println!("{:?}", evt);
+        }))
+        .with(ctxt::ThreadLocalCtxt)
+        .init();
 
     in_ctxt(78).await;
 }

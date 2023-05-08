@@ -9,7 +9,7 @@ use crate::props::{self, Props};
 
 use self::internal::{ErasedSlot, Slot};
 
-pub use crate::adapt::{ByRef, Chain, Discard, Empty};
+pub use crate::adapt::{ByRef, Chain, Empty};
 
 pub trait PropsCtxt {
     type Props: Props + ?Sized;
@@ -293,18 +293,12 @@ impl<C: ScopeCtxt, F: Future> Future for ScopeFuture<C, F> {
     }
 }
 
-impl PropsCtxt for Discard {
-    type Props = Empty;
+impl ScopeCtxt for Empty {
+    type Scope = Empty;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        with(&Empty)
+    fn prepare<P: Props>(&self, _: P) -> Self::Scope {
+        Empty
     }
-}
-
-impl ScopeCtxt for Discard {
-    type Scope = ();
-
-    fn prepare<P: Props>(&self, _: P) -> Self::Scope {}
 
     fn enter(&self, _: &mut Self::Scope) {}
 

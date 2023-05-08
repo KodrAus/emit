@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{props, Props, Value};
+use crate::{adapt::Empty, Props, Value};
 
 #[derive(Clone)]
 pub struct Template<'a>(&'a [Part<'a>]);
@@ -30,10 +30,10 @@ impl<'a> Template<'a> {
         Template(self.0)
     }
 
-    pub fn render<'b>(&'b self) -> Render<'b, props::Empty> {
+    pub fn render<'b>(&'b self) -> Render<'b, Empty> {
         Render {
             tpl: self.by_ref(),
-            props: props::Empty,
+            props: Empty,
         }
     }
 }

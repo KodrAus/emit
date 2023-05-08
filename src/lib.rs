@@ -9,11 +9,12 @@ for events.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use emit_macros::*;
+use time::Time;
 
 mod macro_hooks;
 
-mod ambient;
 mod adapt;
+mod ambient;
 pub mod ctxt;
 mod event;
 pub mod filter;
@@ -27,6 +28,7 @@ pub mod well_known;
 
 #[doc(inline)]
 pub use self::{
+    ambient::*,
     ctxt::{PropsCtxt, ScopeCtxt},
     event::*,
     filter::Filter,
@@ -47,13 +49,26 @@ pub fn emit(
     tpl: Template,
     props: impl Props,
 ) {
-    with.chain(ambient_ctxt()).with_props(|scope| {
-        let evt = Event::new(lvl, ts.or_else(now), tpl, props.chain(scope));
+    let ambient = ambient::get();
 
-        if when.chain(ambient_filter()).matches_event(&evt) {
-            to.chain(ambient_target()).emit_event(&evt);
+    with.chain(&ambient).with_props(|scope| {
+        let ts = ts.or_else(|| ambient.timestamp());
+        let evt = Event::new(lvl, ts, tpl, props.chain(scope));
+
+        if when.chain(&ambient).matches_event(&evt) {
+            to.chain(&ambient).emit_event(&evt);
         }
     })
+}
+
+#[cfg(feature = "std")]
+pub fn ctxt() -> impl ScopeCtxt {
+    ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn setup() -> Setup {
+    Setup::default()
 }
 
 mod internal {

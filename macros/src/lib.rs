@@ -22,9 +22,9 @@ mod filter;
 mod fmt;
 mod hook;
 mod props;
+mod scope;
 mod template;
 mod util;
-mod scope;
 
 use util::ResultToTokens;
 

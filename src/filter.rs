@@ -1,6 +1,6 @@
 use crate::{Event, Props};
 
-pub use crate::adapt::{Always, ByRef, Chain};
+pub use crate::adapt::{ByRef, Chain, Empty};
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;
@@ -37,12 +37,12 @@ impl<F: Filter> Filter for Option<F> {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         match self {
             Some(filter) => filter.matches_event(evt),
-            None => Always.matches_event(evt),
+            None => Empty.matches_event(evt),
         }
     }
 }
 
-impl Filter for Always {
+impl Filter for Empty {
     fn matches_event<P: Props>(&self, _: &Event<P>) -> bool {
         true
     }

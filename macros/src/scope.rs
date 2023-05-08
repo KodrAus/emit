@@ -13,22 +13,20 @@ pub struct ExpandTokens {
 }
 
 struct Args {
-    ctxt: TokenStream,
+    with: TokenStream,
 }
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut ctxt = Arg::token_stream("ctxt", |expr| Ok(quote!(#expr)));
+        let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut ctxt],
+            [&mut with],
         )?;
 
         Ok(Args {
-            ctxt: ctxt
-                .take()
-                .unwrap_or_else(|| quote!(emit::ambient_ctxt())),
+            with: with.take().unwrap_or_else(|| quote!(emit::ctxt())),
         })
     }
 }
@@ -36,7 +34,7 @@ impl Parse for Args {
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let (args, _, props) = template::parse2::<Args>(opts.input)?;
 
-    let ctxt_tokens = args.ctxt;
+    let with_tokens = args.with;
 
     let mut item = syn::parse2::<Item>(opts.item)?;
     match &mut item {
@@ -48,7 +46,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         }) => {
-            **block = syn::parse2::<Block>(inject_sync(&props, ctxt_tokens, quote!(#block)))?;
+            **block = syn::parse2::<Block>(inject_sync(&props, with_tokens, quote!(#block)))?;
         }
         // An asynchronous function
         Item::Fn(ItemFn {
@@ -58,7 +56,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         }) => {
-            **block = syn::parse2::<Block>(inject_async(&props, ctxt_tokens, quote!(#block)))?;
+            **block = syn::parse2::<Block>(inject_async(&props, with_tokens, quote!(#block)))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
@@ -66,22 +64,22 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     Ok(quote!(#item))
 }
 
-fn inject_sync(props: &Props, ctxt_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_sync(props: &Props, with_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        let mut __scope = emit::ctxt::ScopeCtxt::scope(#ctxt_tokens, #props_tokens);
+        let mut __scope = emit::ctxt::ScopeCtxt::scope(#with_tokens, #props_tokens);
         let __scope_guard = __scope.enter();
 
         #body
     })
 }
 
-fn inject_async(props: &Props, ctxt_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_async(props: &Props, with_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        emit::ctxt::ScopeCtxt::scope_future(#ctxt_tokens, #props_tokens, async #body).await
+        emit::ctxt::ScopeCtxt::scope_future(#with_tokens, #props_tokens, async #body).await
     })
 }
 
@@ -101,7 +99,7 @@ mod tests {
             quote!(
                 fn some_fn(a: i32) {
                     let mut __link = emit::ctxt::Link::new(
-                        emit::ambient_ctxt(),
+                        emit::ambient_with(),
                         emit::props::SortedSlice::new_ref(&[{
                             use emit::__private::__PrivateCaptureHook;
                             (emit::Key::new("a"), (a).__private_capture_as_default())
@@ -133,7 +131,7 @@ mod tests {
             quote!(
                 async fn some_fn(a: i32) {
                     emit::ctxt::LinkFuture::new(
-                        emit::ambient_ctxt(),
+                        emit::ambient_with(),
                         emit::props::SortedSlice::new_ref(&[{
                             use emit::__private::__PrivateCaptureHook;
                             (emit::Key::new("a"), (a).__private_capture_as_default())
