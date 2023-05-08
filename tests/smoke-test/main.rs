@@ -21,19 +21,19 @@ async fn main() {
         println!("{:?}", evt);
     }));
 
-    emit::with_linker(ctxt::ThreadLocalCtxt);
+    emit::with(ctxt::ThreadLocalCtxt);
 
     in_ctxt(78).await;
 }
 
-#[emit::with("Hello!", a, ax: 13)]
+#[emit::scope("Hello!", a, ax: 13)]
 async fn in_ctxt(a: i32) {
     in_ctxt2(5).await;
 
     emit::info!("an event!");
 }
 
-#[emit::with("Hello!", b, bx: 90)]
+#[emit::scope("Hello!", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     // Emit an info event to the global receiver
     emit::info!(
@@ -73,7 +73,7 @@ mod ctxt {
         }
     }
 
-    impl emit::GetCtxt for ThreadLocalCtxt {
+    impl emit::PropsCtxt for ThreadLocalCtxt {
         type Props = ThreadLocalProps;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -81,10 +81,10 @@ mod ctxt {
         }
     }
 
-    impl emit::LinkCtxt for ThreadLocalCtxt {
-        type Link = ThreadLocalProps;
+    impl emit::ScopeCtxt for ThreadLocalCtxt {
+        type Scope = ThreadLocalProps;
 
-        fn prepare<P: emit::Props>(&self, props: P) -> Self::Link {
+        fn prepare<P: emit::Props>(&self, props: P) -> Self::Scope {
             let mut owned = ACTIVE.with(|props| props.borrow().0.clone());
 
             props.for_each(|k, v| {
@@ -95,11 +95,11 @@ mod ctxt {
             ThreadLocalProps(owned)
         }
 
-        fn link(&self, link: &mut Self::Link) {
+        fn enter(&self, link: &mut Self::Scope) {
             ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
         }
 
-        fn unlink(&self, link: &mut Self::Link) {
+        fn exit(&self, link: &mut Self::Scope) {
             ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
         }
     }

@@ -24,7 +24,7 @@ mod hook;
 mod props;
 mod template;
 mod util;
-mod with;
+mod scope;
 
 use util::ResultToTokens;
 
@@ -108,11 +108,11 @@ pub fn fmt(
 }
 
 #[proc_macro_attribute]
-pub fn with(
+pub fn scope(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    with::expand_tokens(with::ExpandTokens {
+    scope::expand_tokens(scope::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })

@@ -46,6 +46,14 @@ impl Time for Timestamp {
     }
 }
 
+pub(crate) enum Unsupported {}
+
+impl Time for Unsupported {
+    fn get(&self) -> Timestamp {
+        unreachable!()
+    }
+}
+
 #[cfg(feature = "std")]
 pub(crate) struct SystemClock;
 

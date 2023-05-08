@@ -11,7 +11,7 @@ use self::internal::{ErasedSlot, Slot};
 
 pub use crate::adapt::{ByRef, Chain, Discard, Empty};
 
-pub trait GetCtxt {
+pub trait PropsCtxt {
     type Props: Props + ?Sized;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F);
@@ -20,7 +20,7 @@ pub trait GetCtxt {
         ByRef(self)
     }
 
-    fn chain<U: GetCtxt>(self, other: U) -> Chain<Self, U>
+    fn chain<U: PropsCtxt>(self, other: U) -> Chain<Self, U>
     where
         Self: Sized,
     {
@@ -31,7 +31,7 @@ pub trait GetCtxt {
     }
 }
 
-impl<'a, C: GetCtxt + ?Sized> GetCtxt for &'a C {
+impl<'a, C: PropsCtxt + ?Sized> PropsCtxt for &'a C {
     type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -40,7 +40,7 @@ impl<'a, C: GetCtxt + ?Sized> GetCtxt for &'a C {
 }
 
 #[cfg(feature = "std")]
-impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for Box<C> {
+impl<'a, C: PropsCtxt + ?Sized + 'a> PropsCtxt for Box<C> {
     type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -49,7 +49,7 @@ impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for Box<C> {
 }
 
 #[cfg(feature = "std")]
-impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for std::sync::Arc<C> {
+impl<'a, C: PropsCtxt + ?Sized + 'a> PropsCtxt for std::sync::Arc<C> {
     type Props = C::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -57,7 +57,7 @@ impl<'a, C: GetCtxt + ?Sized + 'a> GetCtxt for std::sync::Arc<C> {
     }
 }
 
-impl<C: GetCtxt> GetCtxt for Option<C> {
+impl<C: PropsCtxt> PropsCtxt for Option<C> {
     type Props = Option<Slot<C::Props>>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -68,7 +68,7 @@ impl<C: GetCtxt> GetCtxt for Option<C> {
     }
 }
 
-impl GetCtxt for Empty {
+impl PropsCtxt for Empty {
     type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -76,7 +76,7 @@ impl GetCtxt for Empty {
     }
 }
 
-impl<'a> GetCtxt for props::SortedSlice<'a> {
+impl<'a> PropsCtxt for props::SortedSlice<'a> {
     type Props = Self;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -84,7 +84,7 @@ impl<'a> GetCtxt for props::SortedSlice<'a> {
     }
 }
 
-impl<T: GetCtxt, U: GetCtxt> GetCtxt for Chain<T, U> {
+impl<T: PropsCtxt, U: PropsCtxt> PropsCtxt for Chain<T, U> {
     type Props = Chain<Slot<T::Props>, Slot<U::Props>>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -96,7 +96,7 @@ impl<T: GetCtxt, U: GetCtxt> GetCtxt for Chain<T, U> {
     }
 }
 
-impl<'a, T: GetCtxt + 'a> GetCtxt for ByRef<'a, T> {
+impl<'a, T: PropsCtxt + 'a> PropsCtxt for ByRef<'a, T> {
     type Props = T::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -106,7 +106,7 @@ impl<'a, T: GetCtxt + 'a> GetCtxt for ByRef<'a, T> {
 
 pub struct FromProps<P>(P);
 
-impl<P: Props> GetCtxt for FromProps<P> {
+impl<P: Props> PropsCtxt for FromProps<P> {
     type Props = P;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -118,144 +118,182 @@ pub fn from_props<P: Props>(props: P) -> FromProps<P> {
     FromProps(props)
 }
 
-pub trait LinkCtxt: GetCtxt {
-    type Link;
+pub struct ReadOnly<C>(C);
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Link;
+impl<C: PropsCtxt> PropsCtxt for ReadOnly<C> {
+    type Props = C::Props;
 
-    fn link(&self, link: &mut Self::Link);
-    fn unlink(&self, link: &mut Self::Link);
+    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        self.0.with_props(with)
+    }
 }
 
-impl<'a, C: LinkCtxt + ?Sized> LinkCtxt for &'a C {
-    type Link = C::Link;
+impl<C: PropsCtxt> ScopeCtxt for ReadOnly<C> {
+    type Scope = ();
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+    fn prepare<P: Props>(&self, _: P) -> Self::Scope {}
+
+    fn enter(&self, _: &mut Self::Scope) {}
+
+    fn exit(&self, _: &mut Self::Scope) {}
+}
+
+pub fn read_only<C: PropsCtxt>(ctxt: C) -> ReadOnly<C> {
+    ReadOnly(ctxt)
+}
+
+pub trait ScopeCtxt: PropsCtxt {
+    type Scope;
+
+    fn scope<P: Props>(self, props: P) -> Scope<Self>
+    where
+        Self: Sized,
+    {
+        Scope::new(self, props)
+    }
+
+    fn scope_future<P: Props, F: Future>(self, props: P, future: F) -> ScopeFuture<Self, F>
+    where
+        Self: Sized,
+    {
+        ScopeFuture::new(self, props, future)
+    }
+
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope;
+
+    fn enter(&self, scope: &mut Self::Scope);
+    fn exit(&self, scope: &mut Self::Scope);
+}
+
+impl<'a, C: ScopeCtxt + ?Sized> ScopeCtxt for &'a C {
+    type Scope = C::Scope;
+
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
         (**self).prepare(props)
     }
 
-    fn link(&self, link: &mut Self::Link) {
-        (**self).link(link)
+    fn enter(&self, link: &mut Self::Scope) {
+        (**self).enter(link)
     }
 
-    fn unlink(&self, link: &mut Self::Link) {
-        (**self).unlink(link)
+    fn exit(&self, link: &mut Self::Scope) {
+        (**self).exit(link)
     }
 }
 
-impl<C: LinkCtxt> LinkCtxt for Option<C> {
-    type Link = Option<C::Link>;
+impl<C: ScopeCtxt> ScopeCtxt for Option<C> {
+    type Scope = Option<C::Scope>;
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
         self.as_ref().map(|ctxt| ctxt.prepare(props))
     }
 
-    fn link(&self, link: &mut Self::Link) {
+    fn enter(&self, link: &mut Self::Scope) {
         if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.link(link)
+            ctxt.enter(link)
         }
     }
 
-    fn unlink(&self, link: &mut Self::Link) {
+    fn exit(&self, link: &mut Self::Scope) {
         if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.unlink(link)
+            ctxt.exit(link)
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl<'a, C: LinkCtxt + ?Sized + 'a> LinkCtxt for Box<C> {
-    type Link = C::Link;
+impl<'a, C: ScopeCtxt + ?Sized + 'a> ScopeCtxt for Box<C> {
+    type Scope = C::Scope;
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
         (**self).prepare(props)
     }
 
-    fn link(&self, link: &mut Self::Link) {
-        (**self).link(link)
+    fn enter(&self, link: &mut Self::Scope) {
+        (**self).enter(link)
     }
 
-    fn unlink(&self, link: &mut Self::Link) {
-        (**self).unlink(link)
+    fn exit(&self, link: &mut Self::Scope) {
+        (**self).exit(link)
     }
 }
 
 #[cfg(feature = "std")]
-impl<'a, C: LinkCtxt + ?Sized + 'a> LinkCtxt for std::sync::Arc<C> {
-    type Link = C::Link;
+impl<'a, C: ScopeCtxt + ?Sized + 'a> ScopeCtxt for std::sync::Arc<C> {
+    type Scope = C::Scope;
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Link {
+    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
         (**self).prepare(props)
     }
 
-    fn link(&self, link: &mut Self::Link) {
-        (**self).link(link)
+    fn enter(&self, link: &mut Self::Scope) {
+        (**self).enter(link)
     }
 
-    fn unlink(&self, link: &mut Self::Link) {
-        (**self).unlink(link)
+    fn exit(&self, link: &mut Self::Scope) {
+        (**self).exit(link)
     }
 }
 
-pub struct Link<C: LinkCtxt> {
-    link: C::Link,
+pub struct Scope<C: ScopeCtxt> {
+    scope: C::Scope,
     ctxt: C,
 }
 
-impl<C: LinkCtxt> Link<C> {
-    pub fn new(ctxt: C, props: impl Props) -> Self {
-        let link = ctxt.prepare(props);
+impl<C: ScopeCtxt> Scope<C> {
+    fn new(ctxt: C, props: impl Props) -> Self {
+        let scope = ctxt.prepare(props);
 
-        Link { ctxt, link }
+        Scope { ctxt, scope }
     }
 
-    pub fn link(&mut self) -> LinkGuard<C> {
-        self.ctxt.link(&mut self.link);
+    pub fn enter(&mut self) -> ScopeGuard<C> {
+        self.ctxt.enter(&mut self.scope);
 
-        LinkGuard {
-            link: self,
+        ScopeGuard {
+            scope: self,
             _marker: PhantomData,
         }
     }
 }
 
-pub struct LinkGuard<'a, C: LinkCtxt> {
-    link: &'a mut Link<C>,
+pub struct ScopeGuard<'a, C: ScopeCtxt> {
+    scope: &'a mut Scope<C>,
     _marker: PhantomData<*mut fn()>,
 }
 
-impl<'a, C: LinkCtxt> Drop for LinkGuard<'a, C> {
+impl<'a, C: ScopeCtxt> Drop for ScopeGuard<'a, C> {
     fn drop(&mut self) {
-        self.link.ctxt.unlink(&mut self.link.link);
+        self.scope.ctxt.exit(&mut self.scope.scope);
     }
 }
 
-pub struct LinkFuture<C: LinkCtxt, F> {
-    link: Link<C>,
+pub struct ScopeFuture<C: ScopeCtxt, F> {
+    scope: Scope<C>,
     future: F,
 }
 
-impl<C: LinkCtxt, F> LinkFuture<C, F> {
-    pub fn new(ctxt: C, props: impl Props, future: F) -> Self {
-        LinkFuture {
-            link: Link::new(ctxt, props),
+impl<C: ScopeCtxt, F> ScopeFuture<C, F> {
+    fn new(scope: C, props: impl Props, future: F) -> Self {
+        ScopeFuture {
+            scope: Scope::new(scope, props),
             future,
         }
     }
 }
 
-impl<C: LinkCtxt, F: Future> Future for LinkFuture<C, F> {
+impl<C: ScopeCtxt, F: Future> Future for ScopeFuture<C, F> {
     type Output = F::Output;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let unpinned = unsafe { Pin::get_unchecked_mut(self) };
 
-        let __guard = unpinned.link.link();
+        let __guard = unpinned.scope.enter();
         unsafe { Pin::new_unchecked(&mut unpinned.future) }.poll(cx)
     }
 }
 
-impl GetCtxt for Discard {
+impl PropsCtxt for Discard {
     type Props = Empty;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
@@ -263,14 +301,14 @@ impl GetCtxt for Discard {
     }
 }
 
-impl LinkCtxt for Discard {
-    type Link = ();
+impl ScopeCtxt for Discard {
+    type Scope = ();
 
-    fn prepare<P: Props>(&self, _: P) -> Self::Link {}
+    fn prepare<P: Props>(&self, _: P) -> Self::Scope {}
 
-    fn link(&self, _: &mut Self::Link) {}
+    fn enter(&self, _: &mut Self::Scope) {}
 
-    fn unlink(&self, _: &mut Self::Link) {}
+    fn exit(&self, _: &mut Self::Scope) {}
 }
 
 mod internal {
@@ -278,12 +316,12 @@ mod internal {
 
     use crate::{props::ErasedProps, Key, Props, Value};
 
-    pub trait DispatchGetCtxt {
-        fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot));
+    pub trait DispatchPropsCtxt {
+        fn dispatch_with_props(&self, with: &mut dyn FnMut(ErasedSlot));
     }
 
-    pub trait SealedGetCtxt {
-        fn erase_get_ctxt(&self) -> crate::internal::Erased<&dyn DispatchGetCtxt>;
+    pub trait SealedPropsCtxt {
+        fn erase_props_ctxt(&self) -> crate::internal::Erased<&dyn DispatchPropsCtxt>;
     }
 
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
@@ -330,39 +368,39 @@ mod internal {
     }
 }
 
-pub trait ErasedGetCtxt: internal::SealedGetCtxt {}
+pub trait ErasedPropsCtxt: internal::SealedPropsCtxt {}
 
-impl<C: GetCtxt> ErasedGetCtxt for C {}
+impl<C: PropsCtxt> ErasedPropsCtxt for C {}
 
-impl<C: GetCtxt> internal::SealedGetCtxt for C {
-    fn erase_get_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchGetCtxt> {
+impl<C: PropsCtxt> internal::SealedPropsCtxt for C {
+    fn erase_props_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchPropsCtxt> {
         crate::internal::Erased(self)
     }
 }
 
-impl<C: GetCtxt> internal::DispatchGetCtxt for C {
-    fn dispatch_with_ctxt(&self, with: &mut dyn FnMut(ErasedSlot)) {
+impl<C: PropsCtxt> internal::DispatchPropsCtxt for C {
+    fn dispatch_with_props(&self, with: &mut dyn FnMut(ErasedSlot)) {
         self.with_props(move |props| with(unsafe { ErasedSlot::new(&props) }))
     }
 }
 
-impl<'a> GetCtxt for dyn ErasedGetCtxt + 'a {
+impl<'a> PropsCtxt for dyn ErasedPropsCtxt + 'a {
     type Props = ErasedSlot;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         let mut f = Some(with);
 
-        self.erase_get_ctxt()
+        self.erase_props_ctxt()
             .0
-            .dispatch_with_ctxt(&mut |props| f.take().expect("called multiple times")(&props));
+            .dispatch_with_props(&mut |props| f.take().expect("called multiple times")(&props));
     }
 }
 
-impl<'a> GetCtxt for dyn ErasedGetCtxt + Send + Sync + 'a {
-    type Props = <dyn ErasedGetCtxt + 'a as GetCtxt>::Props;
+impl<'a> PropsCtxt for dyn ErasedPropsCtxt + Send + Sync + 'a {
+    type Props = <dyn ErasedPropsCtxt + 'a as PropsCtxt>::Props;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        (self as &(dyn ErasedGetCtxt + 'a)).with_props(with)
+        (self as &(dyn ErasedPropsCtxt + 'a)).with_props(with)
     }
 }
 
@@ -377,105 +415,105 @@ mod std_support {
     mod internal {
         use crate::props::ErasedProps;
 
-        use super::ErasedLink;
+        use super::ErasedScope;
 
-        pub trait DispatchLinkCtxt {
-            fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedLink;
+        pub trait DispatchScopeCtxt {
+            fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedScope;
 
-            fn dispatch_link(&self, link: &mut ErasedLink);
-            fn dispatch_unlink(&self, link: &mut ErasedLink);
+            fn dispatch_enter(&self, link: &mut ErasedScope);
+            fn dispatch_exit(&self, link: &mut ErasedScope);
         }
 
-        pub trait SealedLinkCtxt {
-            fn erase_set_ctxt(&self) -> crate::internal::Erased<&dyn DispatchLinkCtxt>;
+        pub trait SealedScopeCtxt {
+            fn erase_scope_ctxt(&self) -> crate::internal::Erased<&dyn DispatchScopeCtxt>;
         }
     }
 
-    pub struct ErasedLink(Box<dyn Any + Send>);
+    pub struct ErasedScope(Box<dyn Any + Send>);
 
-    pub trait ErasedLinkCtxt: internal::SealedLinkCtxt + ErasedGetCtxt {}
+    pub trait ErasedScopeCtxt: internal::SealedScopeCtxt + ErasedPropsCtxt {}
 
-    impl<C: LinkCtxt> ErasedLinkCtxt for C where C::Link: Send + 'static {}
+    impl<C: ScopeCtxt> ErasedScopeCtxt for C where C::Scope: Send + 'static {}
 
-    impl<C: LinkCtxt> internal::SealedLinkCtxt for C
+    impl<C: ScopeCtxt> internal::SealedScopeCtxt for C
     where
-        C::Link: Send + 'static,
+        C::Scope: Send + 'static,
     {
-        fn erase_set_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchLinkCtxt> {
+        fn erase_scope_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchScopeCtxt> {
             crate::internal::Erased(self)
         }
     }
 
-    impl<C: LinkCtxt> internal::DispatchLinkCtxt for C
+    impl<C: ScopeCtxt> internal::DispatchScopeCtxt for C
     where
-        C::Link: Send + 'static,
+        C::Scope: Send + 'static,
     {
-        fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedLink {
-            ErasedLink(Box::new(self.prepare(props)))
+        fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedScope {
+            ErasedScope(Box::new(self.prepare(props)))
         }
 
-        fn dispatch_link(&self, link: &mut ErasedLink) {
+        fn dispatch_enter(&self, link: &mut ErasedScope) {
             if let Some(link) = link.0.downcast_mut() {
-                self.link(link)
+                self.enter(link)
             }
         }
 
-        fn dispatch_unlink(&self, link: &mut ErasedLink) {
+        fn dispatch_exit(&self, link: &mut ErasedScope) {
             if let Some(link) = link.0.downcast_mut() {
-                self.unlink(link)
+                self.exit(link)
             }
         }
     }
 
-    impl<'a> GetCtxt for dyn ErasedLinkCtxt + 'a {
+    impl<'a> PropsCtxt for dyn ErasedScopeCtxt + 'a {
         type Props = ErasedSlot;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
             let mut f = Some(with);
 
-            self.erase_get_ctxt()
+            self.erase_props_ctxt()
                 .0
-                .dispatch_with_ctxt(&mut |props| f.take().expect("called multiple times")(&props));
+                .dispatch_with_props(&mut |props| f.take().expect("called multiple times")(&props));
         }
     }
 
-    impl<'a> LinkCtxt for dyn ErasedLinkCtxt + 'a {
-        type Link = ErasedLink;
+    impl<'a> ScopeCtxt for dyn ErasedScopeCtxt + 'a {
+        type Scope = ErasedScope;
 
-        fn prepare<P: Props>(&self, props: P) -> Self::Link {
-            self.erase_set_ctxt().0.dispatch_prepare(&props)
+        fn prepare<P: Props>(&self, props: P) -> Self::Scope {
+            self.erase_scope_ctxt().0.dispatch_prepare(&props)
         }
 
-        fn link(&self, link: &mut Self::Link) {
-            self.erase_set_ctxt().0.dispatch_link(link)
+        fn enter(&self, link: &mut Self::Scope) {
+            self.erase_scope_ctxt().0.dispatch_enter(link)
         }
 
-        fn unlink(&self, link: &mut Self::Link) {
-            self.erase_set_ctxt().0.dispatch_unlink(link)
+        fn exit(&self, link: &mut Self::Scope) {
+            self.erase_scope_ctxt().0.dispatch_exit(link)
         }
     }
 
-    impl<'a> GetCtxt for dyn ErasedLinkCtxt + Send + Sync + 'a {
-        type Props = <dyn ErasedLinkCtxt + 'a as GetCtxt>::Props;
+    impl<'a> PropsCtxt for dyn ErasedScopeCtxt + Send + Sync + 'a {
+        type Props = <dyn ErasedScopeCtxt + 'a as PropsCtxt>::Props;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-            (self as &(dyn ErasedLinkCtxt + 'a)).with_props(with)
+            (self as &(dyn ErasedScopeCtxt + 'a)).with_props(with)
         }
     }
 
-    impl<'a> LinkCtxt for dyn ErasedLinkCtxt + Send + Sync + 'a {
-        type Link = <dyn ErasedLinkCtxt + 'a as LinkCtxt>::Link;
+    impl<'a> ScopeCtxt for dyn ErasedScopeCtxt + Send + Sync + 'a {
+        type Scope = <dyn ErasedScopeCtxt + 'a as ScopeCtxt>::Scope;
 
-        fn prepare<P: Props>(&self, props: P) -> Self::Link {
-            (self as &(dyn ErasedLinkCtxt + 'a)).prepare(props)
+        fn prepare<P: Props>(&self, props: P) -> Self::Scope {
+            (self as &(dyn ErasedScopeCtxt + 'a)).prepare(props)
         }
 
-        fn link(&self, link: &mut Self::Link) {
-            (self as &(dyn ErasedLinkCtxt + 'a)).link(link)
+        fn enter(&self, link: &mut Self::Scope) {
+            (self as &(dyn ErasedScopeCtxt + 'a)).enter(link)
         }
 
-        fn unlink(&self, link: &mut Self::Link) {
-            (self as &(dyn ErasedLinkCtxt + 'a)).unlink(link)
+        fn exit(&self, link: &mut Self::Scope) {
+            (self as &(dyn ErasedScopeCtxt + 'a)).exit(link)
         }
     }
 }
