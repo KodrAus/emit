@@ -4,6 +4,7 @@ use crate::{
     adapt::{ByRef, Chain, Empty},
     props::ErasedProps,
     template::Render,
+    time::Time,
     well_known, Key, Props, Template, Timestamp, Value,
 };
 
@@ -67,9 +68,9 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn new(ts: Option<Timestamp>, lvl: Level, tpl: Template<'a>, props: P) -> Self {
+    pub fn new(ts: impl Time, lvl: Level, tpl: Template<'a>, props: P) -> Self {
         Event {
-            ts,
+            ts: ts.timestamp(),
             lvl,
             tpl,
             props,

@@ -36,6 +36,18 @@ impl<'a, T: Time> Time for Option<T> {
     }
 }
 
+impl<'a, T: Time + ?Sized> Time for ByRef<'a, T> {
+    fn timestamp(&self) -> Option<Timestamp> {
+        self.0.timestamp()
+    }
+}
+
+impl<T: Time, U: Time> Time for Chain<T, U> {
+    fn timestamp(&self) -> Option<Timestamp> {
+        self.first.timestamp().or_else(|| self.second.timestamp())
+    }
+}
+
 #[cfg(feature = "std")]
 impl<'a, T: Time + ?Sized + 'a> Time for Box<T> {
     fn timestamp(&self) -> Option<Timestamp> {

@@ -52,7 +52,7 @@ pub fn emit(
         .chain(with)
         .chain(&ambient)
         .with_props(|props| {
-            let ts = ts.timestamp().or_else(|| ambient.timestamp());
+            let ts = ts.chain(ambient.timestamp());
             let evt = Event::new(ts, lvl, tpl, props);
 
             if when.chain(&ambient).matches_event(&evt) {
