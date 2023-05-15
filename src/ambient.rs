@@ -1,9 +1,7 @@
-use crate::{
-    adapt::Empty, time::Time, Event, Filter, Props, PropsCtxt, ScopeCtxt, Target, Timestamp,
-};
+use crate::{adapt::Empty, time::Time, Ctxt, Event, Filter, Props, Target, Timestamp};
 
 #[cfg(feature = "std")]
-use crate::{ctxt::ErasedScopeCtxt, filter::ErasedFilter, target::ErasedTarget, time::ErasedTime};
+use crate::{ctxt::ErasedCtxt, filter::ErasedFilter, target::ErasedTarget, time::ErasedTime};
 
 #[cfg(feature = "std")]
 use std::sync::OnceLock;
@@ -13,12 +11,12 @@ static AMBIENT: OnceLock<
     Ambient<
         Box<dyn ErasedTarget + Send + Sync>,
         Box<dyn ErasedFilter + Send + Sync>,
-        Box<dyn ErasedScopeCtxt + Send + Sync>,
+        Box<dyn ErasedCtxt + Send + Sync>,
         Box<dyn ErasedTime + Send + Sync>,
     >,
 > = OnceLock::new();
 
-pub(crate) fn get() -> Option<&'static (impl Target + Filter + ScopeCtxt + Time)> {
+pub(crate) fn get() -> Option<&'static (impl Target + Filter + Ctxt + Time)> {
     #[cfg(feature = "std")]
     {
         AMBIENT.get()
@@ -48,20 +46,13 @@ impl<TTarget, TFilter: Filter, TCtxt, TTime> Filter for Ambient<TTarget, TFilter
     }
 }
 
-impl<TTarget, TFilter, TCtxt: PropsCtxt, TTime> PropsCtxt
-    for Ambient<TTarget, TFilter, TCtxt, TTime>
-{
+impl<TTarget, TFilter, TCtxt: Ctxt, TTime> Ctxt for Ambient<TTarget, TFilter, TCtxt, TTime> {
     type Props = TCtxt::Props;
+    type Scope = TCtxt::Scope;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         self.ctxt.with_props(with)
     }
-}
-
-impl<TTarget, TFilter, TCtxt: ScopeCtxt, TTime> ScopeCtxt
-    for Ambient<TTarget, TFilter, TCtxt, TTime>
-{
-    type Scope = TCtxt::Scope;
 
     fn prepare<P: Props>(&self, props: P) -> Self::Scope {
         self.ctxt.prepare(props)
@@ -86,13 +77,13 @@ impl<TTarget, TFilter, TCtxt, TTime: Time> Time for Ambient<TTarget, TFilter, TC
 mod std_support {
     use super::*;
 
-    use crate::time::SystemClock;
+    use crate::{ctxt::thread_local::ThreadLocalCtxt, time::SystemClock};
 
     #[derive(Default)]
     pub struct Setup {
         target: Option<Box<dyn ErasedTarget + Send + Sync>>,
         filter: Option<Box<dyn ErasedFilter + Send + Sync>>,
-        ctxt: Option<Box<dyn ErasedScopeCtxt + Send + Sync>>,
+        ctxt: Option<Box<dyn ErasedCtxt + Send + Sync>>,
         time: Option<Box<dyn ErasedTime + Send + Sync>>,
     }
 
@@ -115,7 +106,7 @@ mod std_support {
             }
         }
 
-        pub fn with<C: ScopeCtxt + Send + Sync + 'static>(self, ctxt: C) -> Self
+        pub fn with<C: Ctxt + Send + Sync + 'static>(self, ctxt: C) -> Self
         where
             C::Scope: Send + 'static,
         {
@@ -130,7 +121,7 @@ mod std_support {
         pub fn init(self) {
             let target = self.target.unwrap_or_else(|| Box::new(Empty));
             let filter = self.filter.unwrap_or_else(|| Box::new(Empty));
-            let ctxt = self.ctxt.unwrap_or_else(|| Box::new(Empty));
+            let ctxt = self.ctxt.unwrap_or_else(|| Box::new(ThreadLocalCtxt));
             let time = self.time.unwrap_or_else(|| Box::new(SystemClock));
 
             let _ = AMBIENT.set(Ambient {

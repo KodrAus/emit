@@ -21,7 +21,6 @@ async fn main() {
         .to(emit::target::from_fn(|evt| {
             println!("{:?}", evt);
         }))
-        .with(ctxt::ThreadLocalCtxt)
         .init();
 
     in_ctxt(78).await;
@@ -45,63 +44,4 @@ async fn in_ctxt2(b: i32) {
         #[emit::fmt("04")]
         x: 15,
     );
-}
-
-mod ctxt {
-    use std::{
-        cell::RefCell,
-        ops::ControlFlow::{self, *},
-    };
-
-    thread_local! {
-        static ACTIVE: RefCell<ThreadLocalProps> = RefCell::new(ThreadLocalProps(Vec::new()));
-    }
-
-    pub struct ThreadLocalCtxt;
-
-    pub struct ThreadLocalProps(Vec<(String, String)>);
-
-    impl emit::Props for ThreadLocalProps {
-        fn for_each<'a, F: FnMut(emit::Key<'a>, emit::Value<'a>) -> ControlFlow<()>>(
-            &'a self,
-            mut for_each: F,
-        ) {
-            for (k, v) in &self.0 {
-                if let Break(()) = for_each(emit::Key::from(&**k), emit::Value::from(&**v)) {
-                    break;
-                }
-            }
-        }
-    }
-
-    impl emit::ctxt::PropsCtxt for ThreadLocalCtxt {
-        type Props = ThreadLocalProps;
-
-        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-            ACTIVE.with(|props| with(&*props.borrow()))
-        }
-    }
-
-    impl emit::ctxt::ScopeCtxt for ThreadLocalCtxt {
-        type Scope = ThreadLocalProps;
-
-        fn prepare<P: emit::Props>(&self, props: P) -> Self::Scope {
-            let mut owned = ACTIVE.with(|props| props.borrow().0.clone());
-
-            props.for_each(|k, v| {
-                owned.push((k.to_string(), v.to_string()));
-                Continue(())
-            });
-
-            ThreadLocalProps(owned)
-        }
-
-        fn enter(&self, link: &mut Self::Scope) {
-            ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
-        }
-
-        fn exit(&self, link: &mut Self::Scope) {
-            ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
-        }
-    }
 }

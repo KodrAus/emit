@@ -8,6 +8,9 @@ for events.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 pub use emit_macros::*;
 
 mod macro_hooks;
@@ -31,16 +34,12 @@ pub use self::{
     time::Timestamp, value::*,
 };
 
-use self::{
-    ctxt::{PropsCtxt, ScopeCtxt},
-    filter::Filter,
-    time::Time,
-};
+use self::{ctxt::Ctxt, filter::Filter, time::Time};
 
 pub fn emit(
     to: impl Target,
     when: impl Filter,
-    with: impl PropsCtxt,
+    with: impl Props,
     ts: impl Time,
     lvl: Level,
     tpl: Template,
@@ -48,21 +47,20 @@ pub fn emit(
 ) {
     let ambient = ambient::get();
 
-    ctxt::from_props(props)
-        .chain(with)
-        .chain(&ambient)
-        .with_props(|props| {
-            let ts = ts.chain(ambient.timestamp());
-            let evt = Event::new(ts, lvl, tpl, props);
+    ambient.with_props(|ctxt| {
+        let props = props.chain(with).chain(ctxt);
 
-            if when.chain(&ambient).matches_event(&evt) {
-                to.chain(&ambient).emit_event(&evt);
-            }
-        })
+        let ts = ts.chain(ambient.timestamp());
+        let evt = Event::new(ts, lvl, tpl, props);
+
+        if when.chain(&ambient).matches_event(&evt) {
+            to.chain(&ambient).emit_event(&evt);
+        }
+    });
 }
 
 #[cfg(feature = "std")]
-pub fn ctxt() -> impl ScopeCtxt {
+pub fn ctxt() -> impl Ctxt {
     ambient::get()
 }
 
