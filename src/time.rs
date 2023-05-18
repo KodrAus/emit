@@ -1,23 +1,9 @@
 use core::{fmt, time::Duration};
 
-pub use crate::adapt::{ByRef, Chain, Empty};
+pub use crate::adapt::Empty;
 
 pub trait Time {
     fn timestamp(&self) -> Option<Timestamp>;
-
-    fn by_ref<'a>(&'a self) -> ByRef<'a, Self> {
-        ByRef(self)
-    }
-
-    fn chain<U: Time>(self, other: U) -> Chain<Self, U>
-    where
-        Self: Sized,
-    {
-        Chain {
-            first: self,
-            second: other,
-        }
-    }
 }
 
 impl<'a, T: Time + ?Sized> Time for &'a T {
@@ -33,18 +19,6 @@ impl<'a, T: Time> Time for Option<T> {
         } else {
             Empty.timestamp()
         }
-    }
-}
-
-impl<'a, T: Time + ?Sized> Time for ByRef<'a, T> {
-    fn timestamp(&self) -> Option<Timestamp> {
-        self.0.timestamp()
-    }
-}
-
-impl<T: Time, U: Time> Time for Chain<T, U> {
-    fn timestamp(&self) -> Option<Timestamp> {
-        self.first.timestamp().or_else(|| self.second.timestamp())
     }
 }
 

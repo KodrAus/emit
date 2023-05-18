@@ -21,6 +21,7 @@ mod emit;
 mod filter;
 mod fmt;
 mod hook;
+mod key;
 mod props;
 mod scope;
 mod template;
@@ -115,6 +116,18 @@ pub fn scope(
     scope::expand_tokens(scope::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+#[proc_macro_attribute]
+pub fn key(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    key::rename_hook_tokens(key::RenameHookTokens {
+        args: TokenStream::from(args),
+        expr: TokenStream::from(item),
     })
     .unwrap_or_compile_error()
 }

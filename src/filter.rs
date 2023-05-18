@@ -1,23 +1,9 @@
 use crate::{Event, Props};
 
-pub use crate::adapt::{ByRef, Chain, Empty};
+pub use crate::adapt::Empty;
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;
-
-    fn chain<U: Filter>(self, other: U) -> Chain<Self, U>
-    where
-        Self: Sized,
-    {
-        Chain {
-            first: self,
-            second: other,
-        }
-    }
-
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
-    }
 }
 
 impl<'a, F: Filter + ?Sized> Filter for &'a F {
@@ -64,18 +50,6 @@ impl<F: Fn(&Event) -> bool> Filter for FromFn<F> {
 
 pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
     FromFn(f)
-}
-
-impl<T: Filter, U: Filter> Filter for Chain<T, U> {
-    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.first.matches_event(evt) && self.second.matches_event(evt)
-    }
-}
-
-impl<'a, C: Filter + ?Sized> Filter for ByRef<'a, C> {
-    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.0.matches_event(evt)
-    }
 }
 
 mod internal {

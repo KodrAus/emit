@@ -1,23 +1,9 @@
 use crate::{Event, Props};
 
-pub use crate::adapt::{ByRef, Chain, Empty};
+pub use crate::adapt::Empty;
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
-
-    fn chain<U: Target>(self, other: U) -> Chain<Self, U>
-    where
-        Self: Sized,
-    {
-        Chain {
-            first: self,
-            second: other,
-        }
-    }
-
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
-    }
 }
 
 impl<'a, T: Target + ?Sized> Target for &'a T {
@@ -39,19 +25,6 @@ impl<T: Target> Target for Option<T> {
             Some(target) => target.emit_event(evt),
             None => Empty.emit_event(evt),
         }
-    }
-}
-
-impl<T: Target, U: Target> Target for Chain<T, U> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        self.first.emit_event(evt);
-        self.second.emit_event(evt);
-    }
-}
-
-impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        self.0.emit_event(evt)
     }
 }
 

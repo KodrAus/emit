@@ -16,45 +16,37 @@ pub struct Arg<T> {
 
 impl Arg<bool> {
     pub fn bool(key: &'static str) -> Self {
-        Arg {
-            key,
-            set: Box::new(move |expr| {
-                if let Expr::Lit(ExprLit {
-                    lit: Lit::Bool(l), ..
-                }) = expr
-                {
-                    Ok(l.value)
-                } else {
-                    Err(syn::Error::new(
-                        expr.span(),
-                        format_args!("`{}` requires a boolean value", key),
-                    ))
-                }
-            }),
-            value: None,
-        }
+        Arg::new(key, move |expr| {
+            if let Expr::Lit(ExprLit {
+                lit: Lit::Bool(l), ..
+            }) = expr
+            {
+                Ok(l.value)
+            } else {
+                Err(syn::Error::new(
+                    expr.span(),
+                    format_args!("`{}` requires a boolean value", key),
+                ))
+            }
+        })
     }
 }
 
 impl Arg<String> {
     pub fn str(key: &'static str) -> Self {
-        Arg {
-            key,
-            set: Box::new(move |expr| {
-                if let Expr::Lit(ExprLit {
-                    lit: Lit::Str(l), ..
-                }) = expr
-                {
-                    Ok(l.value())
-                } else {
-                    Err(syn::Error::new(
-                        expr.span(),
-                        format_args!("`{}` requires a string value", key),
-                    ))
-                }
-            }),
-            value: None,
-        }
+        Arg::new(key, move |expr| {
+            if let Expr::Lit(ExprLit {
+                lit: Lit::Str(l), ..
+            }) = expr
+            {
+                Ok(l.value())
+            } else {
+                Err(syn::Error::new(
+                    expr.span(),
+                    format_args!("`{}` requires a string value", key),
+                ))
+            }
+        })
     }
 }
 
@@ -63,15 +55,22 @@ impl Arg<TokenStream> {
         key: &'static str,
         to_tokens: impl FnMut(&Expr) -> Result<TokenStream, syn::Error> + 'static,
     ) -> Self {
-        Arg {
-            key,
-            set: Box::new(to_tokens),
-            value: None,
-        }
+        Arg::new(key, to_tokens)
     }
 }
 
 impl<T> Arg<T> {
+    pub fn new(
+        key: &'static str,
+        to_custom: impl FnMut(&Expr) -> Result<T, syn::Error> + 'static,
+    ) -> Self {
+        Arg {
+            key,
+            set: Box::new(to_custom),
+            value: None,
+        }
+    }
+
     pub fn take(self) -> Option<T> {
         self.value
     }

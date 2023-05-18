@@ -26,7 +26,7 @@ async fn main() {
     in_ctxt(78).await;
 }
 
-#[emit::scope("Hello!", a, ax: 13)]
+#[emit::scope("Hello!", #[emit::key("service.name")] a, ax: 13)]
 async fn in_ctxt(a: i32) {
     in_ctxt2(5).await;
 

@@ -4,7 +4,7 @@ use syn::{parse::Parse, spanned::Spanned, Attribute, FieldValue};
 
 use crate::{
     args::{self, Arg},
-    hook,
+    hook, key,
     util::FieldValueKey,
 };
 
@@ -38,11 +38,16 @@ pub fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream 
     let key_expr = fv.key_expr();
     let expr = &fv.expr;
 
+    let key_tokens = key::key_with_hook(&[], &key_expr);
+    let value_tokens = quote!({
+        use emit::__private::__PrivateCaptureHook;
+        (#expr).#fn_name()
+    });
+
     quote_spanned!(fv.span()=>
         #(#attrs)*
         {
-            use emit::__private::__PrivateCaptureHook;
-            (emit::Key::new(#key_expr), (#expr).#fn_name())
+            (#key_tokens, #value_tokens)
         }
     )
 }
@@ -85,8 +90,11 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        use emit::__private::__PrivateCaptureHook;
-                        (emit::Key::new("a"), (a).__private_capture_as_default())
+                        use emit::__private::{__PrivateCaptureHook, __PrivateKeyHook};
+                        (
+                            emit::Key::new("a").__private_key_default(),
+                            (a).__private_capture_as_default(),
+                        )
                     }
                 ),
             ),
@@ -96,8 +104,11 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        use emit::__private::__PrivateCaptureHook;
-                        (emit::Key::new("a"), (42).__private_capture_as_default())
+                        use emit::__private::{__PrivateCaptureHook, __PrivateKeyHook};
+                        (
+                            emit::Key::new("a").__private_key_default(),
+                            (42).__private_capture_as_default(),
+                        )
                     }
                 ),
             ),
@@ -107,8 +118,11 @@ mod tests {
                     #[a]
                     #[b]
                     {
-                        use emit::__private::__PrivateCaptureHook;
-                        (emit::Key::new("err"), (42).__private_capture_as_error())
+                        use emit::__private::{__PrivateCaptureHook, __PrivateKeyHook};
+                        (
+                            emit::Key::new("err").__private_key_default(),
+                            (42).__private_capture_as_error(),
+                        )
                     }
                 ),
             ),

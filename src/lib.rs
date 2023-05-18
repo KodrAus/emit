@@ -1,11 +1,3 @@
-/*!
-Emit structured events for programs and people.
-
-`emit` is a front-end for capturing diagnostic data in programs and emitting them to
-some outside observer. You can either configure `tracing` or your own function as the destination
-for events.
-*/
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "alloc")]
@@ -50,11 +42,13 @@ pub fn emit(
     ambient.with_props(|ctxt| {
         let props = props.chain(with).chain(ctxt);
 
-        let ts = ts.chain(ambient.timestamp());
+        let ts = ts.timestamp().or_else(|| ambient.timestamp());
+
         let evt = Event::new(ts, lvl, tpl, props);
 
-        if when.chain(&ambient).matches_event(&evt) {
-            to.chain(&ambient).emit_event(&evt);
+        if when.matches_event(&evt) && ambient.matches_event(&evt) {
+            to.emit_event(&evt);
+            ambient.emit_event(&evt);
         }
     });
 }
@@ -75,6 +69,6 @@ mod internal {
 
 #[doc(hidden)]
 pub mod __private {
-    pub use crate::macro_hooks::{__PrivateCaptureHook, __PrivateFmtHook};
+    pub use crate::macro_hooks::*;
     pub use core;
 }
