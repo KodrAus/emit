@@ -1,6 +1,7 @@
 use core::{
     future::Future,
     marker::PhantomData,
+    mem,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -14,54 +15,57 @@ pub use crate::adapt::{ByRef, Chain, Empty};
 
 pub trait Ctxt {
     type Props: Props + ?Sized;
-    type Scope;
+    type Span;
 
-    fn scope<P: Props>(self, props: P) -> Scope<Self>
+    fn span<P: Props>(self, props: P) -> Span<Self>
     where
         Self: Sized,
     {
-        Scope::new(self, props)
+        Span::new(self, props)
     }
 
-    fn scope_future<P: Props, F: Future>(self, props: P, future: F) -> ScopeFuture<Self, F>
+    fn span_future<P: Props, F: Future>(self, props: P, future: F) -> SpanFuture<Self, F>
     where
         Self: Sized,
     {
-        ScopeFuture::new(self, props, future)
+        SpanFuture::new(self, props, future)
     }
 
+    fn open<P: Props>(&self, props: P) -> Self::Span;
+    fn enter(&self, span: &mut Self::Span);
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F);
-
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope;
-
-    fn enter(&self, scope: &mut Self::Scope);
-    fn exit(&self, scope: &mut Self::Scope);
+    fn exit(&self, span: &mut Self::Span);
+    fn close(&self, span: Self::Span);
 }
 
 impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
     type Props = C::Props;
-    type Scope = C::Scope;
+    type Span = C::Span;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         (**self).with_props(with)
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-        (**self).prepare(props)
+    fn open<P: Props>(&self, props: P) -> Self::Span {
+        (**self).open(props)
     }
 
-    fn enter(&self, link: &mut Self::Scope) {
-        (**self).enter(link)
+    fn enter(&self, span: &mut Self::Span) {
+        (**self).enter(span)
     }
 
-    fn exit(&self, link: &mut Self::Scope) {
-        (**self).exit(link)
+    fn exit(&self, span: &mut Self::Span) {
+        (**self).exit(span)
+    }
+
+    fn close(&self, scope: Self::Span) {
+        (**self).close(scope)
     }
 }
 
 impl<C: Ctxt> Ctxt for Option<C> {
     type Props = Option<internal::Slot<C::Props>>;
-    type Scope = Option<C::Scope>;
+    type Span = Option<C::Span>;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         match self {
@@ -72,19 +76,25 @@ impl<C: Ctxt> Ctxt for Option<C> {
         }
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-        self.as_ref().map(|ctxt| ctxt.prepare(props))
+    fn open<P: Props>(&self, props: P) -> Self::Span {
+        self.as_ref().map(|ctxt| ctxt.open(props))
     }
 
-    fn enter(&self, link: &mut Self::Scope) {
-        if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.enter(link)
+    fn enter(&self, span: &mut Self::Span) {
+        if let (Some(ctxt), Some(span)) = (self, span) {
+            ctxt.enter(span)
         }
     }
 
-    fn exit(&self, link: &mut Self::Scope) {
-        if let (Some(ctxt), Some(link)) = (self, link) {
-            ctxt.exit(link)
+    fn exit(&self, span: &mut Self::Span) {
+        if let (Some(ctxt), Some(span)) = (self, span) {
+            ctxt.exit(span)
+        }
+    }
+
+    fn close(&self, span: Self::Span) {
+        if let (Some(ctxt), Some(span)) = (self, span) {
+            ctxt.close(span)
         }
     }
 }
@@ -92,57 +102,72 @@ impl<C: Ctxt> Ctxt for Option<C> {
 #[cfg(feature = "alloc")]
 impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
     type Props = C::Props;
-    type Scope = C::Scope;
+    type Span = C::Span;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         (**self).with_props(with)
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-        (**self).prepare(props)
+    fn open<P: Props>(&self, props: P) -> Self::Span {
+        (**self).open(props)
     }
 
-    fn enter(&self, link: &mut Self::Scope) {
-        (**self).enter(link)
+    fn enter(&self, span: &mut Self::Span) {
+        (**self).enter(span)
     }
 
-    fn exit(&self, link: &mut Self::Scope) {
-        (**self).exit(link)
+    fn exit(&self, span: &mut Self::Span) {
+        (**self).exit(span)
+    }
+
+    fn close(&self, span: Self::Span) {
+        (**self).close(span)
     }
 }
 
 #[cfg(feature = "alloc")]
 impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::sync::Arc<C> {
     type Props = C::Props;
-    type Scope = C::Scope;
+    type Span = C::Span;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         (**self).with_props(with)
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-        (**self).prepare(props)
+    fn open<P: Props>(&self, props: P) -> Self::Span {
+        (**self).open(props)
     }
 
-    fn enter(&self, link: &mut Self::Scope) {
-        (**self).enter(link)
+    fn enter(&self, span: &mut Self::Span) {
+        (**self).enter(span)
     }
 
-    fn exit(&self, link: &mut Self::Scope) {
-        (**self).exit(link)
+    fn exit(&self, span: &mut Self::Span) {
+        (**self).exit(span)
+    }
+
+    fn close(&self, span: Self::Span) {
+        (**self).close(span)
     }
 }
 
-pub struct Scope<C: Ctxt> {
-    scope: C::Scope,
+pub struct Span<C: Ctxt> {
+    scope: mem::ManuallyDrop<C::Span>,
     ctxt: C,
 }
 
-impl<C: Ctxt> Scope<C> {
-    fn new(ctxt: C, props: impl Props) -> Self {
-        let scope = ctxt.prepare(props);
+impl<C: Ctxt> Drop for Span<C> {
+    fn drop(&mut self) {
+        self.ctxt
+            .close(unsafe { mem::ManuallyDrop::take(&mut self.scope) })
+    }
+}
 
-        Scope { ctxt, scope }
+impl<C: Ctxt> Span<C> {
+    fn new(ctxt: C, props: impl Props) -> Self {
+        let scope = mem::ManuallyDrop::new(ctxt.open(props));
+
+        Span { ctxt, scope }
     }
 
     pub fn enter(&mut self) -> ScopeGuard<C> {
@@ -156,7 +181,7 @@ impl<C: Ctxt> Scope<C> {
 }
 
 pub struct ScopeGuard<'a, C: Ctxt> {
-    scope: &'a mut Scope<C>,
+    scope: &'a mut Span<C>,
     _marker: PhantomData<*mut fn()>,
 }
 
@@ -166,21 +191,21 @@ impl<'a, C: Ctxt> Drop for ScopeGuard<'a, C> {
     }
 }
 
-pub struct ScopeFuture<C: Ctxt, F> {
-    scope: Scope<C>,
+pub struct SpanFuture<C: Ctxt, F> {
+    scope: Span<C>,
     future: F,
 }
 
-impl<C: Ctxt, F> ScopeFuture<C, F> {
+impl<C: Ctxt, F> SpanFuture<C, F> {
     fn new(scope: C, props: impl Props, future: F) -> Self {
-        ScopeFuture {
-            scope: Scope::new(scope, props),
+        SpanFuture {
+            scope: Span::new(scope, props),
             future,
         }
     }
 }
 
-impl<C: Ctxt, F: Future> Future for ScopeFuture<C, F> {
+impl<C: Ctxt, F: Future> Future for SpanFuture<C, F> {
     type Output = F::Output;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -193,19 +218,21 @@ impl<C: Ctxt, F: Future> Future for ScopeFuture<C, F> {
 
 impl Ctxt for Empty {
     type Props = Empty;
-    type Scope = Empty;
+    type Span = Empty;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         with(&Empty)
     }
 
-    fn prepare<P: Props>(&self, _: P) -> Self::Scope {
+    fn open<P: Props>(&self, _: P) -> Self::Span {
         Empty
     }
 
-    fn enter(&self, _: &mut Self::Scope) {}
+    fn enter(&self, _: &mut Self::Span) {}
 
-    fn exit(&self, _: &mut Self::Scope) {}
+    fn exit(&self, _: &mut Self::Span) {}
+
+    fn close(&self, _: Self::Span) {}
 }
 
 mod internal {
@@ -251,10 +278,10 @@ mod alloc_support {
         pub trait DispatchCtxt {
             fn dispatch_with_props(&self, with: &mut dyn FnMut(ErasedSlot));
 
-            fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedScope;
-
-            fn dispatch_enter(&self, link: &mut ErasedScope);
-            fn dispatch_exit(&self, link: &mut ErasedScope);
+            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedScope;
+            fn dispatch_enter(&self, span: &mut ErasedScope);
+            fn dispatch_exit(&self, span: &mut ErasedScope);
+            fn dispatch_close(&self, span: ErasedScope);
         }
 
         pub trait SealedCtxt {
@@ -294,11 +321,11 @@ mod alloc_support {
 
     pub trait ErasedCtxt: internal::SealedCtxt {}
 
-    impl<C: Ctxt> ErasedCtxt for C where C::Scope: Send + 'static {}
+    impl<C: Ctxt> ErasedCtxt for C where C::Span: Send + 'static {}
 
     impl<C: Ctxt> internal::SealedCtxt for C
     where
-        C::Scope: Send + 'static,
+        C::Span: Send + 'static,
     {
         fn erase_scope_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchCtxt> {
             crate::internal::Erased(self)
@@ -307,32 +334,38 @@ mod alloc_support {
 
     impl<C: Ctxt> internal::DispatchCtxt for C
     where
-        C::Scope: Send + 'static,
+        C::Span: Send + 'static,
     {
         fn dispatch_with_props(&self, with: &mut dyn FnMut(internal::ErasedSlot)) {
             self.with_props(move |props| with(unsafe { internal::ErasedSlot::new(&props) }))
         }
 
-        fn dispatch_prepare(&self, props: &dyn ErasedProps) -> ErasedScope {
-            ErasedScope(Box::new(self.prepare(props)))
+        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedScope {
+            ErasedScope(Box::new(self.open(props)))
         }
 
-        fn dispatch_enter(&self, link: &mut ErasedScope) {
-            if let Some(link) = link.0.downcast_mut() {
-                self.enter(link)
+        fn dispatch_enter(&self, span: &mut ErasedScope) {
+            if let Some(span) = span.0.downcast_mut() {
+                self.enter(span)
             }
         }
 
-        fn dispatch_exit(&self, link: &mut ErasedScope) {
-            if let Some(link) = link.0.downcast_mut() {
-                self.exit(link)
+        fn dispatch_exit(&self, span: &mut ErasedScope) {
+            if let Some(span) = span.0.downcast_mut() {
+                self.exit(span)
+            }
+        }
+
+        fn dispatch_close(&self, span: ErasedScope) {
+            if let Ok(span) = span.0.downcast() {
+                self.close(*span)
             }
         }
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + 'a {
         type Props = internal::ErasedSlot;
-        type Scope = ErasedScope;
+        type Span = ErasedScope;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
             let mut f = Some(with);
@@ -342,37 +375,45 @@ mod alloc_support {
                 .dispatch_with_props(&mut |props| f.take().expect("called multiple times")(&props));
         }
 
-        fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-            self.erase_scope_ctxt().0.dispatch_prepare(&props)
+        fn open<P: Props>(&self, props: P) -> Self::Span {
+            self.erase_scope_ctxt().0.dispatch_open(&props)
         }
 
-        fn enter(&self, link: &mut Self::Scope) {
-            self.erase_scope_ctxt().0.dispatch_enter(link)
+        fn enter(&self, span: &mut Self::Span) {
+            self.erase_scope_ctxt().0.dispatch_enter(span)
         }
 
-        fn exit(&self, link: &mut Self::Scope) {
-            self.erase_scope_ctxt().0.dispatch_exit(link)
+        fn exit(&self, span: &mut Self::Span) {
+            self.erase_scope_ctxt().0.dispatch_exit(span)
+        }
+
+        fn close(&self, span: Self::Span) {
+            self.erase_scope_ctxt().0.dispatch_close(span)
         }
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + Send + Sync + 'a {
         type Props = <dyn ErasedCtxt + 'a as Ctxt>::Props;
-        type Scope = <dyn ErasedCtxt + 'a as Ctxt>::Scope;
+        type Span = <dyn ErasedCtxt + 'a as Ctxt>::Span;
 
         fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
             (self as &(dyn ErasedCtxt + 'a)).with_props(with)
         }
 
-        fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-            (self as &(dyn ErasedCtxt + 'a)).prepare(props)
+        fn open<P: Props>(&self, props: P) -> Self::Span {
+            (self as &(dyn ErasedCtxt + 'a)).open(props)
         }
 
-        fn enter(&self, link: &mut Self::Scope) {
-            (self as &(dyn ErasedCtxt + 'a)).enter(link)
+        fn enter(&self, span: &mut Self::Span) {
+            (self as &(dyn ErasedCtxt + 'a)).enter(span)
         }
 
-        fn exit(&self, link: &mut Self::Scope) {
-            (self as &(dyn ErasedCtxt + 'a)).exit(link)
+        fn exit(&self, span: &mut Self::Span) {
+            (self as &(dyn ErasedCtxt + 'a)).exit(span)
+        }
+
+        fn close(&self, span: Self::Span) {
+            (self as &(dyn ErasedCtxt + 'a)).close(span)
         }
     }
 }

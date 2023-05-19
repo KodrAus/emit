@@ -68,8 +68,8 @@ fn inject_sync(props: &Props, with_tokens: TokenStream, body: TokenStream) -> To
     let props_tokens = props.props_tokens();
 
     quote!({
-        let mut __scope = emit::ctxt::Ctxt::scope(#with_tokens, #props_tokens);
-        let __scope_guard = __scope.enter();
+        let mut __span = emit::ctxt::Ctxt::span(#with_tokens, #props_tokens);
+        let __span_guard = __span.enter();
 
         #body
     })
@@ -79,7 +79,7 @@ fn inject_async(props: &Props, with_tokens: TokenStream, body: TokenStream) -> T
     let props_tokens = props.props_tokens();
 
     quote!({
-        emit::ctxt::Ctxt::scope_future(#with_tokens, #props_tokens, async #body).await
+        emit::ctxt::Ctxt::span_future(#with_tokens, #props_tokens, async #body).await
     })
 }
 

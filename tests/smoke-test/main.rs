@@ -26,14 +26,14 @@ async fn main() {
     in_ctxt(78).await;
 }
 
-#[emit::scope("Hello!", #[emit::key("service.name")] a, ax: 13)]
+#[emit::span("Hello!", #[emit::key("service.name")] a, ax: 13)]
 async fn in_ctxt(a: i32) {
     in_ctxt2(5).await;
 
     emit::info!("an event!");
 }
 
-#[emit::scope("Hello!", b, bx: 90)]
+#[emit::span("Hello!", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     // Emit an info event to the global receiver
     emit::info!(

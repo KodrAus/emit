@@ -23,7 +23,7 @@ mod fmt;
 mod hook;
 mod key;
 mod props;
-mod scope;
+mod span;
 mod template;
 mod util;
 
@@ -109,11 +109,11 @@ pub fn fmt(
 }
 
 #[proc_macro_attribute]
-pub fn scope(
+pub fn span(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    scope::expand_tokens(scope::ExpandTokens {
+    span::expand_tokens(span::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })

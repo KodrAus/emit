@@ -48,22 +48,26 @@ impl<TTarget, TFilter: Filter, TCtxt, TTime> Filter for Ambient<TTarget, TFilter
 
 impl<TTarget, TFilter, TCtxt: Ctxt, TTime> Ctxt for Ambient<TTarget, TFilter, TCtxt, TTime> {
     type Props = TCtxt::Props;
-    type Scope = TCtxt::Scope;
+    type Span = TCtxt::Span;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         self.ctxt.with_props(with)
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
-        self.ctxt.prepare(props)
+    fn open<P: Props>(&self, props: P) -> Self::Span {
+        self.ctxt.open(props)
     }
 
-    fn enter(&self, scope: &mut Self::Scope) {
+    fn enter(&self, scope: &mut Self::Span) {
         self.ctxt.enter(scope)
     }
 
-    fn exit(&self, scope: &mut Self::Scope) {
+    fn exit(&self, scope: &mut Self::Span) {
         self.ctxt.exit(scope)
+    }
+
+    fn close(&self, span: Self::Span) {
+        self.ctxt.close(span)
     }
 }
 
@@ -108,7 +112,7 @@ mod std_support {
 
         pub fn with<C: Ctxt + Send + Sync + 'static>(self, ctxt: C) -> Self
         where
-            C::Scope: Send + 'static,
+            C::Span: Send + 'static,
         {
             Setup {
                 target: self.target,

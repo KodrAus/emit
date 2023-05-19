@@ -25,13 +25,13 @@ impl Props for ThreadLocalProps {
 
 impl Ctxt for ThreadLocalCtxt {
     type Props = ThreadLocalProps;
-    type Scope = ThreadLocalProps;
+    type Span = ThreadLocalProps;
 
     fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
         ACTIVE.with(|props| with(&*props.borrow()))
     }
 
-    fn prepare<P: Props>(&self, props: P) -> Self::Scope {
+    fn open<P: Props>(&self, props: P) -> Self::Span {
         let mut owned = ACTIVE.with(|props| props.borrow().0.clone());
 
         props.for_each(|k, v| {
@@ -42,11 +42,13 @@ impl Ctxt for ThreadLocalCtxt {
         ThreadLocalProps(owned)
     }
 
-    fn enter(&self, link: &mut Self::Scope) {
+    fn enter(&self, link: &mut Self::Span) {
         ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
     }
 
-    fn exit(&self, link: &mut Self::Scope) {
+    fn exit(&self, link: &mut Self::Span) {
         ACTIVE.with(|props| std::mem::swap(&mut link.0, &mut props.borrow_mut().0));
     }
+
+    fn close(&self, _: Self::Span) {}
 }
