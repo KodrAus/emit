@@ -2,7 +2,7 @@ use crate::{Key, Value};
 
 use core::{borrow::Borrow, ops::ControlFlow};
 
-pub use crate::adapt::{ByRef, Chain, Empty};
+pub use crate::empty::Empty;
 
 pub trait Props {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F);
@@ -86,6 +86,11 @@ impl Props for Empty {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
 }
 
+pub struct Chain<T, U> {
+    pub(crate) first: T,
+    pub(crate) second: U,
+}
+
 impl<A: Props, B: Props> Props for Chain<A, B> {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
         let mut cf = ControlFlow::Continue(());
@@ -112,6 +117,8 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
     }
 }
 
+pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
+
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         self.0.for_each(for_each)
@@ -130,17 +137,6 @@ impl SortedSlice<'static> {
 impl<'a> SortedSlice<'a> {
     pub fn new_ref<'b>(props: &'b [(Key<'a>, Value<'a>)]) -> &'b Self {
         unsafe { &*(props as *const [(Key<'a>, Value<'a>)] as *const SortedSlice<'a>) }
-    }
-
-    pub fn by_ref<'b>(&'b self) -> ByRef<'b, Self> {
-        ByRef(self)
-    }
-
-    pub fn chain<'b, U>(&'b self, other: U) -> Chain<&'b Self, U> {
-        Chain {
-            first: self,
-            second: other,
-        }
     }
 }
 

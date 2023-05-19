@@ -11,7 +11,7 @@ use crate::props::Props;
 #[cfg(feature = "std")]
 pub mod thread_local;
 
-pub use crate::adapt::{ByRef, Chain, Empty};
+pub use crate::empty::Empty;
 
 pub trait Ctxt {
     type Props: Props + ?Sized;

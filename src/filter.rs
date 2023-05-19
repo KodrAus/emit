@@ -1,6 +1,6 @@
 use crate::{Event, Props};
 
-pub use crate::adapt::Empty;
+pub use crate::empty::Empty;
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;

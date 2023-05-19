@@ -1,6 +1,6 @@
 use core::{fmt, time::Duration};
 
-pub use crate::adapt::Empty;
+pub use crate::empty::Empty;
 
 pub trait Time {
     fn timestamp(&self) -> Option<Timestamp>;

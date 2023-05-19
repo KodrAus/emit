@@ -7,9 +7,9 @@ pub use emit_macros::*;
 
 mod macro_hooks;
 
-mod adapt;
 mod ambient;
 pub mod ctxt;
+mod empty;
 mod event;
 pub mod filter;
 mod key;
@@ -21,6 +21,7 @@ mod value;
 pub mod well_known;
 
 #[doc(inline)]
+#[allow(unused_imports)]
 pub use self::{
     ambient::*, event::*, key::*, props::Props, target::Target, template::Template,
     time::Timestamp, value::*,

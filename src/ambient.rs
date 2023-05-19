@@ -1,4 +1,4 @@
-use crate::{adapt::Empty, time::Time, Ctxt, Event, Filter, Props, Target, Timestamp};
+use crate::{empty::Empty, time::Time, Ctxt, Event, Filter, Props, Target, Timestamp};
 
 #[cfg(feature = "std")]
 use crate::{ctxt::ErasedCtxt, filter::ErasedFilter, target::ErasedTarget, time::ErasedTime};

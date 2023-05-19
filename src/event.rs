@@ -1,8 +1,8 @@
 use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
 use crate::{
-    adapt::{ByRef, Chain, Empty},
-    props::ErasedProps,
+    empty::Empty,
+    props::{ByRef, Chain, ErasedProps},
     template::Render,
     time::Time,
     well_known, Key, Props, Template, Timestamp, Value,
@@ -25,10 +25,10 @@ impl fmt::Debug for Level {
 impl fmt::Display for Level {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Level::Info => "info",
-            Level::Error => "error",
-            Level::Warn => "warn",
-            Level::Debug => "debug",
+            Level::Info => "INFO",
+            Level::Error => "ERROR",
+            Level::Warn => "WARN",
+            Level::Debug => "DEBUG",
         })
     }
 }
