@@ -27,11 +27,29 @@ pub(crate) fn get() -> Option<&'static (impl Target + Filter + Ctxt + Time)> {
     }
 }
 
-struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TTime = Empty> {
+pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TTime = Empty> {
     target: TTarget,
     filter: TFilter,
     ctxt: TCtxt,
     time: TTime,
+}
+
+impl<TTarget, TFilter, TCtxt, TTime> Ambient<TTarget, TFilter, TCtxt, TTime> {
+    pub fn target(&self) -> &TTarget {
+        &self.target
+    }
+
+    pub fn filter(&self) -> &TFilter {
+        &self.filter
+    }
+
+    pub fn ctxt(&self) -> &TCtxt {
+        &self.ctxt
+    }
+
+    pub fn time(&self) -> &TTime {
+        &self.time
+    }
 }
 
 impl<TTarget: Target, TFilter, TCtxt, TTime> Target for Ambient<TTarget, TFilter, TCtxt, TTime> {
@@ -79,8 +97,6 @@ impl<TTarget, TFilter, TCtxt, TTime: Time> Time for Ambient<TTarget, TFilter, TC
 
 #[cfg(feature = "std")]
 mod std_support {
-    use core::marker::PhantomData;
-
     use super::*;
 
     use crate::{ctxt::thread_local::ThreadLocalCtxt, time::SystemClock};
@@ -138,85 +154,32 @@ mod std_support {
     where
         TCtxt::Span: Send + 'static,
     {
-        pub fn init(self) -> Init<TTarget, TFilter, TCtxt, TTime> {
+        pub fn init(
+            self,
+        ) -> Ambient<&'static TTarget, &'static TFilter, &'static TCtxt, &'static TTime> {
             let target = Box::new(self.target);
             let filter = Box::new(self.filter);
             let ctxt = Box::new(self.ctxt);
             let time = Box::new(self.time);
 
-            let _ = AMBIENT.set(Ambient {
-                target,
-                filter,
-                ctxt,
-                time,
-            });
+            AMBIENT
+                .set(Ambient {
+                    target,
+                    filter,
+                    ctxt,
+                    time,
+                })
+                .map_err(|_| "`emit` is already initialized")
+                .unwrap();
 
-            Init(PhantomData)
-        }
-    }
+            let ambient: &'static _ = AMBIENT.get().unwrap();
 
-    pub struct Init<TTarget, TFilter, TCtxt, TTime>(
-        PhantomData<Setup<TTarget, TFilter, TCtxt, TTime>>,
-    );
-
-    impl<TTarget, TFilter, TCtxt, TTime> Init<TTarget, TFilter, TCtxt, TTime> {
-        pub fn target(&self) -> &TTarget {
-            unsafe { &*(&*AMBIENT.get().unwrap().target as *const _ as *const TTarget) }
-        }
-
-        pub fn filter(&self) -> &TFilter {
-            unsafe { &*(&*AMBIENT.get().unwrap().filter as *const _ as *const TFilter) }
-        }
-
-        pub fn ctxt(&self) -> &TCtxt {
-            unsafe { &*(&*AMBIENT.get().unwrap().ctxt as *const _ as *const TCtxt) }
-        }
-
-        pub fn time(&self) -> &TTime {
-            unsafe { &*(&*AMBIENT.get().unwrap().time as *const _ as *const TTime) }
-        }
-    }
-
-    impl<TTarget: Target, TFilter, TCtxt, TTime> Target for Init<TTarget, TFilter, TCtxt, TTime> {
-        fn emit_event<P: Props>(&self, evt: &Event<P>) {
-            self.target().emit_event(evt)
-        }
-    }
-
-    impl<TTarget, TFilter: Filter, TCtxt, TTime> Filter for Init<TTarget, TFilter, TCtxt, TTime> {
-        fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
-            self.filter().matches_event(evt)
-        }
-    }
-
-    impl<TTarget, TFilter, TCtxt: Ctxt, TTime> Ctxt for Init<TTarget, TFilter, TCtxt, TTime> {
-        type Props = TCtxt::Props;
-        type Span = TCtxt::Span;
-
-        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-            self.ctxt().with_props(with)
-        }
-
-        fn open<P: Props>(&self, props: P) -> Self::Span {
-            self.ctxt().open(props)
-        }
-
-        fn enter(&self, scope: &mut Self::Span) {
-            self.ctxt().enter(scope)
-        }
-
-        fn exit(&self, scope: &mut Self::Span) {
-            self.ctxt().exit(scope)
-        }
-
-        fn close(&self, span: Self::Span) {
-            self.ctxt().close(span)
-        }
-    }
-
-    impl<TTarget, TFilter, TCtxt, TTime: Time> Time for Init<TTarget, TFilter, TCtxt, TTime> {
-        fn timestamp(&self) -> Option<Timestamp> {
-            self.time().timestamp()
+            Ambient {
+                target: unsafe { &*(&*ambient.target as *const _ as *const TTarget) },
+                filter: unsafe { &*(&*ambient.filter as *const _ as *const TFilter) },
+                ctxt: unsafe { &*(&*ambient.ctxt as *const _ as *const TCtxt) },
+                time: unsafe { &*(&*ambient.time as *const _ as *const TTime) },
+            }
         }
     }
 }
