@@ -7,6 +7,9 @@ edition = "2021"
 path = "../../"
 features = ["std", "serde"]
 
+[dependencies.emit-batcher]
+path = "../../batcher"
+
 [dependencies.serde]
 version = "1"
 

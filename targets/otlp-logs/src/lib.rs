@@ -7,7 +7,6 @@ use otlp::{
     resource::v1::Resource,
 };
 
-mod batcher;
 mod otlp;
 mod value;
 
@@ -19,10 +18,8 @@ pub fn http(dst: impl Into<String>) -> OtlpTargetBuilder {
     }
 }
 
-type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
-
 pub struct OtlpTarget {
-    sender: batcher::Sender<LogRecord>,
+    sender: emit_batcher::Sender<LogRecord>,
 }
 
 pub struct OtlpTargetBuilder {
@@ -57,7 +54,7 @@ impl OtlpTargetBuilder {
     }
 
     pub fn spawn(self) -> OtlpTarget {
-        let (sender, receiver) = batcher::bounded(1024);
+        let (sender, receiver) = emit_batcher::bounded(1024);
 
         tokio::spawn(async move {
             let client = OtlpClient {
@@ -71,7 +68,12 @@ impl OtlpTargetBuilder {
                 }),
             };
 
-            receiver.exec(move |batch| client.clone().emit(batch)).await
+            receiver
+                .exec(
+                    |delay| tokio::time::sleep(delay),
+                    move |batch| client.clone().emit(batch),
+                )
+                .await
         });
 
         OtlpTarget { sender }
@@ -114,7 +116,10 @@ enum Client {
 }
 
 impl OtlpClient {
-    pub async fn emit(self, batch: Vec<LogRecord>) -> Result<(), batcher::BatchError<LogRecord>> {
+    pub async fn emit(
+        self,
+        batch: Vec<LogRecord>,
+    ) -> Result<(), emit_batcher::BatchError<LogRecord>> {
         let mut request = ExportLogsServiceRequest {
             resource_logs: vec![ResourceLogs {
                 resource: self.resource,
@@ -137,7 +142,7 @@ impl OtlpClient {
                 let mut buf = Vec::new();
                 request
                     .encode(&mut buf)
-                    .map_err(batcher::BatchError::no_retry)?;
+                    .map_err(emit_batcher::BatchError::no_retry)?;
 
                 client
                     .request(reqwest::Method::POST, url)
@@ -146,7 +151,7 @@ impl OtlpClient {
                     .send()
                     .await
                     .map_err(|e| {
-                        batcher::BatchError::retry(
+                        emit_batcher::BatchError::retry(
                             e,
                             request
                                 .resource_logs

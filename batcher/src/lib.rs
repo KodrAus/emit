@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use crate::Error;
+type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub fn bounded<T>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
@@ -89,9 +89,9 @@ impl<T> Sender<T> {
 
 pub struct Receiver<T> {
     idle_delay: Delay,
-    capacity: Capacity,
     retry: Retry,
     retry_delay: Delay,
+    capacity: Capacity,
     shared: Arc<Shared<T>>,
 }
 
@@ -118,9 +118,13 @@ impl<T> BatchError<T> {
 }
 
 impl<T> Receiver<T> {
-    pub async fn exec<F: Future<Output = Result<(), BatchError<T>>>>(
+    pub async fn exec<
+        FBatch: Future<Output = Result<(), BatchError<T>>>,
+        FWait: Future<Output = ()>,
+    >(
         mut self,
-        mut on_batch: impl FnMut(Vec<T>) -> F,
+        mut wait: impl FnMut(Duration) -> FWait,
+        mut on_batch: impl FnMut(Vec<T>) -> FBatch,
     ) -> Result<(), Error> {
         // This variable holds the "next" batch
         // Under the lock all we do is push onto a pre-allocated vec
@@ -186,7 +190,7 @@ impl<T> Receiver<T> {
                             if retryable.len() > 0 && self.retry.next() {
                                 // Delay a bit before trying again; this gives the external service
                                 // a chance to get itself together
-                                tokio::time::sleep(self.retry_delay.next()).await;
+                                wait(self.retry_delay.next()).await;
 
                                 current_batch = Batch {
                                     contents: retryable,
@@ -216,7 +220,7 @@ impl<T> Receiver<T> {
                 }
 
                 // If we didn't see any events, then sleep for a bit
-                tokio::time::sleep(self.idle_delay.next()).await;
+                wait(self.idle_delay.next()).await;
             }
         }
     }
