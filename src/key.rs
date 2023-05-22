@@ -1,4 +1,4 @@
-use core::{borrow::Borrow, fmt};
+use core::{borrow::Borrow, fmt, hash};
 
 #[derive(Clone)]
 pub struct Key<'k> {
@@ -52,6 +52,12 @@ impl<'k> Key<'k> {
 impl<'a> From<&'a str> for Key<'a> {
     fn from(value: &'a str) -> Self {
         Key::new_ref(value)
+    }
+}
+
+impl<'a> hash::Hash for Key<'a> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
     }
 }
 
@@ -151,6 +157,12 @@ mod alloc_support {
     impl<'k> From<&'k OwnedKey> for Key<'k> {
         fn from(key: &'k OwnedKey) -> Self {
             key.by_ref()
+        }
+    }
+
+    impl hash::Hash for OwnedKey {
+        fn hash<H: hash::Hasher>(&self, state: &mut H) {
+            self.as_str().hash(state)
         }
     }
 

@@ -2,31 +2,23 @@
 
 #[tokio::main]
 async fn main() {
-    println!(
-        "{}",
-        emit::tpl!(
-            "something went wrong at {id} with {x}!",
-            #[emit::fmt(flags: "04")]
-            x,
+    let emitter = emit::setup()
+        .to(
+            emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
+                .resource(emit::props! {
+                    #[emit::key("service.name")]
+                    service_name: "smoke-test-rs"
+                })
+                .spawn(),
         )
-        .render()
-        .with_props(emit::props! {
-            #[emit::as_debug]
-            id: 42,
-            x: 15,
-        })
-    );
-
-    emit::setup()
-        .to(emit::target::from_fn(|evt| {
-            println!("{:?}", evt);
-        }))
         .init();
 
     in_ctxt(78).await;
+
+    emitter.target().flush().await;
 }
 
-#[emit::span("Hello!", #[emit::key("service.name")] a, ax: 13)]
+#[emit::span("Hello!", a, ax: 13)]
 async fn in_ctxt(a: i32) {
     in_ctxt2(5).await;
 
@@ -36,7 +28,7 @@ async fn in_ctxt(a: i32) {
 #[emit::span("Hello!", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     // Emit an info event to the global receiver
-    emit::info!(
+    emit::warn!(
         with: emit::props! {
             request_id: "abc",
         },

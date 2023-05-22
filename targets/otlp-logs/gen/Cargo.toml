@@ -1,0 +1,15 @@
+[package]
+name = "emit-otlp-logs-gen"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "gen"
+path = "main.rs"
+
+[dependencies.prost]
+version = "0.11"
+
+[dependencies.prost-build]
+version = "0.11"

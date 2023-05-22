@@ -1,0 +1,21 @@
+[package]
+name = "emit-otlp-logs"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.emit]
+path = "../../"
+features = ["std", "serde"]
+
+[dependencies.serde]
+version = "1"
+
+[dependencies.tokio]
+version = "1"
+features = ["rt-multi-thread", "sync"]
+
+[dependencies.reqwest]
+version = "0.11"
+
+[dependencies.prost]
+version = "0.11"

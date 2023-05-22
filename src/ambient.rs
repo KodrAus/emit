@@ -79,54 +79,70 @@ impl<TTarget, TFilter, TCtxt, TTime: Time> Time for Ambient<TTarget, TFilter, TC
 
 #[cfg(feature = "std")]
 mod std_support {
+    use core::marker::PhantomData;
+
     use super::*;
 
     use crate::{ctxt::thread_local::ThreadLocalCtxt, time::SystemClock};
 
-    #[derive(Default)]
-    pub struct Setup {
-        target: Option<Box<dyn ErasedTarget + Send + Sync>>,
-        filter: Option<Box<dyn ErasedFilter + Send + Sync>>,
-        ctxt: Option<Box<dyn ErasedCtxt + Send + Sync>>,
-        time: Option<Box<dyn ErasedTime + Send + Sync>>,
+    pub struct Setup<TTarget = Empty, TFilter = Empty, TCtxt = ThreadLocalCtxt, TTime = SystemClock> {
+        target: TTarget,
+        filter: TFilter,
+        ctxt: TCtxt,
+        time: TTime,
+    }
+
+    impl Default for Setup {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl Setup {
         pub fn new() -> Self {
             Setup {
-                target: None,
-                filter: None,
-                ctxt: None,
-                time: None,
+                target: Empty,
+                filter: Empty,
+                ctxt: ThreadLocalCtxt,
+                time: SystemClock,
             }
         }
+    }
 
-        pub fn to(self, target: impl Target + Send + Sync + 'static) -> Self {
+    impl<TTarget, TFilter, TCtxt, TTime> Setup<TTarget, TFilter, TCtxt, TTime> {
+        pub fn to<UTarget>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt, TTime> {
             Setup {
-                target: Some(Box::new(target)),
+                target,
                 filter: self.filter,
                 ctxt: self.ctxt,
                 time: self.time,
             }
         }
 
-        pub fn with<C: Ctxt + Send + Sync + 'static>(self, ctxt: C) -> Self
-        where
-            C::Span: Send + 'static,
-        {
+        pub fn with<UCtxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt, TTime> {
             Setup {
                 target: self.target,
                 filter: self.filter,
-                ctxt: Some(Box::new(ctxt)),
+                ctxt,
                 time: self.time,
             }
         }
+    }
 
-        pub fn init(self) {
-            let target = self.target.unwrap_or_else(|| Box::new(Empty));
-            let filter = self.filter.unwrap_or_else(|| Box::new(Empty));
-            let ctxt = self.ctxt.unwrap_or_else(|| Box::new(ThreadLocalCtxt));
-            let time = self.time.unwrap_or_else(|| Box::new(SystemClock));
+    impl<
+            TTarget: Target + Send + Sync + 'static,
+            TFilter: Filter + Send + Sync + 'static,
+            TCtxt: Ctxt + Send + Sync + 'static,
+            TTime: Time + Send + Sync + 'static,
+        > Setup<TTarget, TFilter, TCtxt, TTime>
+    where
+        TCtxt::Span: Send + 'static,
+    {
+        pub fn init(self) -> Init<TTarget, TFilter, TCtxt, TTime> {
+            let target = Box::new(self.target);
+            let filter = Box::new(self.filter);
+            let ctxt = Box::new(self.ctxt);
+            let time = Box::new(self.time);
 
             let _ = AMBIENT.set(Ambient {
                 target,
@@ -134,6 +150,32 @@ mod std_support {
                 ctxt,
                 time,
             });
+
+            Init(PhantomData)
+        }
+    }
+
+    pub struct Init<TTarget, TFilter, TCtxt, TTime>(
+        PhantomData<Setup<TTarget, TFilter, TCtxt, TTime>>,
+    );
+
+    impl<TTarget: 'static, TFilter: 'static, TCtxt: 'static, TTime: 'static>
+        Init<TTarget, TFilter, TCtxt, TTime>
+    {
+        pub fn target(&self) -> &TTarget {
+            unsafe { &*(&*AMBIENT.get().unwrap().target as *const _ as *const TTarget) }
+        }
+
+        pub fn filter(&self) -> &TFilter {
+            unsafe { &*(&*AMBIENT.get().unwrap().filter as *const _ as *const TFilter) }
+        }
+
+        pub fn ctxt(&self) -> &TCtxt {
+            unsafe { &*(&*AMBIENT.get().unwrap().ctxt as *const _ as *const TCtxt) }
+        }
+
+        pub fn time(&self) -> &TTime {
+            unsafe { &*(&*AMBIENT.get().unwrap().time as *const _ as *const TTime) }
         }
     }
 }

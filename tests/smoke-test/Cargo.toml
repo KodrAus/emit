@@ -12,6 +12,9 @@ path = "main.rs"
 features = ["std"]
 path = "../../"
 
+[dependencies.emit-otlp-logs]
+path = "../../targets/otlp-logs"
+
 [dependencies.tokio]
 version = "1"
 features = ["rt", "macros", "rt-multi-thread"]
