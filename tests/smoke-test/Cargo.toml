@@ -9,7 +9,6 @@ name = "emit-smoke-test"
 path = "main.rs"
 
 [dependencies.emit]
-features = ["std"]
 path = "../../"
 
 [dependencies.emit-otlp-logs]

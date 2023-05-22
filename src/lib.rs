@@ -55,7 +55,22 @@ pub fn emit(
 }
 
 #[cfg(feature = "std")]
+pub fn target() -> impl Target {
+    ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn filter() -> impl Filter {
+    ambient::get()
+}
+
+#[cfg(feature = "std")]
 pub fn ctxt() -> impl Ctxt {
+    ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn time() -> impl Time {
     ambient::get()
 }
 

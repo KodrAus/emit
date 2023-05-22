@@ -1,6 +1,5 @@
-use std::{ops::ControlFlow, sync::Arc};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
-use batcher::Batcher;
 use otlp::{
     collector::logs::v1::ExportLogsServiceRequest,
     common::v1::{InstrumentationScope, KeyValue},
@@ -23,7 +22,7 @@ pub fn http(dst: impl Into<String>) -> OtlpTargetBuilder {
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub struct OtlpTarget {
-    batcher: Batcher<LogRecord>,
+    sender: batcher::Sender<LogRecord>,
 }
 
 pub struct OtlpTargetBuilder {
@@ -58,40 +57,36 @@ impl OtlpTargetBuilder {
     }
 
     pub fn spawn(self) -> OtlpTarget {
-        let batcher = Batcher::new(1024);
+        let (sender, receiver) = batcher::bounded(1024);
 
-        tokio::spawn({
-            let receiver = batcher.receiver();
+        tokio::spawn(async move {
+            let client = OtlpClient {
+                resource: self.resource,
+                scope: self.scope,
+                client: Arc::new(match self.dst {
+                    Destination::HttpProto(url) => Client::HttpProto {
+                        url,
+                        client: reqwest::Client::new(),
+                    },
+                }),
+            };
 
-            async move {
-                let client = OtlpClient {
-                    resource: self.resource,
-                    scope: self.scope,
-                    client: Arc::new(match self.dst {
-                        Destination::HttpProto(url) => Client::HttpProto {
-                            url,
-                            client: reqwest::Client::new(),
-                        },
-                    }),
-                };
-
-                receiver.exec(move |batch| client.clone().emit(batch)).await
-            }
+            receiver.exec(move |batch| client.clone().emit(batch)).await
         });
 
-        OtlpTarget { batcher }
+        OtlpTarget { sender }
     }
 }
 
 impl OtlpTarget {
-    pub async fn flush(&self) {
+    pub async fn flush(&self, timeout: Duration) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        self.batcher.watch_next_flush(move || {
+        self.sender.on_next_flush(move || {
             let _ = sender.send(());
         });
 
-        let _ = receiver.await;
+        let _ = tokio::time::timeout(timeout, receiver).await;
     }
 }
 
@@ -99,7 +94,8 @@ impl emit::Target for OtlpTarget {
     fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
         let record = value::to_record(evt);
 
-        self.batcher.send(record);
+        // Non-blocking
+        self.sender.send(record);
     }
 }
 
@@ -118,11 +114,8 @@ enum Client {
 }
 
 impl OtlpClient {
-    pub async fn emit(
-        self,
-        batch: Vec<LogRecord>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let request = ExportLogsServiceRequest {
+    pub async fn emit(self, batch: Vec<LogRecord>) -> Result<(), batcher::BatchError<LogRecord>> {
+        let mut request = ExportLogsServiceRequest {
             resource_logs: vec![ResourceLogs {
                 resource: self.resource,
                 scope_logs: vec![ScopeLogs {
@@ -142,14 +135,29 @@ impl OtlpClient {
                 use prost::Message;
 
                 let mut buf = Vec::new();
-                request.encode(&mut buf)?;
+                request
+                    .encode(&mut buf)
+                    .map_err(batcher::BatchError::no_retry)?;
 
                 client
                     .request(reqwest::Method::POST, url)
                     .header("content-type", "application/x-protobuf")
-                    .body(buf)
+                    .body(buf.clone())
                     .send()
-                    .await?;
+                    .await
+                    .map_err(|e| {
+                        batcher::BatchError::retry(
+                            e,
+                            request
+                                .resource_logs
+                                .pop()
+                                .unwrap()
+                                .scope_logs
+                                .pop()
+                                .unwrap()
+                                .log_records,
+                        )
+                    })?;
             }
         }
 

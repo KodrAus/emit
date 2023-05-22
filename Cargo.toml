@@ -5,6 +5,7 @@ members = [
     "macros",
     "benches",
     "tests/ui",
+    "tests/smoke-test",
 ]
 exclude = [
     "tests/smoke-test"

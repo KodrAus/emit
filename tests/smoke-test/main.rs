@@ -1,5 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
+use std::time::Duration;
+
 #[tokio::main]
 async fn main() {
     let emitter = emit::setup()
@@ -15,7 +17,7 @@ async fn main() {
 
     in_ctxt(78).await;
 
-    emitter.target().flush().await;
+    emitter.target().flush(Duration::from_secs(5)).await;
 }
 
 #[emit::span("Hello!", a, ax: 13)]
