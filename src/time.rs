@@ -104,21 +104,3 @@ impl<'a> Time for dyn ErasedTime + Send + Sync + 'a {
         (self as &(dyn ErasedTime + 'a)).timestamp()
     }
 }
-
-#[cfg(feature = "std")]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct SystemClock;
-
-#[cfg(feature = "std")]
-impl SystemClock {
-    pub fn now() -> Timestamp {
-        Timestamp::new(std::time::UNIX_EPOCH.elapsed().unwrap_or_default())
-    }
-}
-
-#[cfg(feature = "std")]
-impl Time for SystemClock {
-    fn timestamp(&self) -> Option<Timestamp> {
-        Some(Self::now())
-    }
-}

@@ -241,28 +241,3 @@ impl<'a> IdGenerator for dyn ErasedIdGenerator + Send + Sync + 'a {
         (self as &(dyn ErasedIdGenerator + 'a)).span()
     }
 }
-
-#[cfg(feature = "id-generator")]
-mod rng_support {
-    use super::*;
-
-    #[derive(Default, Debug, Clone, Copy)]
-    pub struct RngIdGenerator;
-
-    impl IdGenerator for RngIdGenerator {
-        fn trace(&self) -> Option<TraceId> {
-            use rand::Rng;
-
-            Some(TraceId::from_u128(rand::thread_rng().gen()))
-        }
-
-        fn span(&self) -> Option<SpanId> {
-            use rand::Rng;
-
-            Some(SpanId::from_u64(rand::thread_rng().gen()))
-        }
-    }
-}
-
-#[cfg(feature = "id-generator")]
-pub use rng_support::*;

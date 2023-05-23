@@ -1,12 +1,10 @@
 use crate::{
-    empty::Empty, id::IdGenerator, time::Time, Ctxt, Event, Filter, Id, Props, Target, Timestamp,
+    empty::Empty, id::IdGenerator, platform::Platform, time::Time, Ctxt, Event, Filter, Id, Props,
+    Target, Timestamp,
 };
 
 #[cfg(feature = "std")]
-use crate::{
-    ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdGenerator, target::ErasedTarget,
-    time::ErasedTime,
-};
+use crate::{ctxt::ErasedCtxt, filter::ErasedFilter, target::ErasedTarget};
 
 #[cfg(feature = "std")]
 use std::sync::OnceLock;
@@ -17,13 +15,13 @@ static AMBIENT: OnceLock<
         Box<dyn ErasedTarget + Send + Sync>,
         Box<dyn ErasedFilter + Send + Sync>,
         Box<dyn ErasedCtxt + Send + Sync>,
-        Box<dyn ErasedTime + Send + Sync>,
-        Box<dyn ErasedIdGenerator + Send + Sync>,
     >,
 > = OnceLock::new();
 
-pub(crate) fn get(
-) -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt, impl Time, impl IdGenerator>> {
+#[cfg(feature = "std")]
+static PLATFORM: OnceLock<Platform> = OnceLock::new();
+
+pub(crate) fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt>> {
     #[cfg(feature = "std")]
     {
         AMBIENT.get()
@@ -34,15 +32,14 @@ pub(crate) fn get(
     }
 }
 
-pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TTime = Empty, TId = Empty> {
+pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty> {
     target: TTarget,
     filter: TFilter,
     ctxt: TCtxt,
-    time: TTime,
-    id_generator: TId,
+    platform: &'static Platform,
 }
 
-impl<TTarget, TFilter, TCtxt, TTime, TId> Ambient<TTarget, TFilter, TCtxt, TTime, TId> {
+impl<TTarget, TFilter, TCtxt> Ambient<TTarget, TFilter, TCtxt> {
     pub fn target(&self) -> &TTarget {
         &self.target
     }
@@ -55,34 +52,28 @@ impl<TTarget, TFilter, TCtxt, TTime, TId> Ambient<TTarget, TFilter, TCtxt, TTime
         &self.ctxt
     }
 
-    pub fn time(&self) -> &TTime {
-        &self.time
+    pub fn time<'a>(&'a self) -> impl Time + 'a {
+        &self.platform
     }
 
-    pub fn id_generator(&self) -> &TId {
-        &self.id_generator
+    pub fn id_generator<'a>(&'a self) -> impl IdGenerator + 'a {
+        &self.platform
     }
 }
 
-impl<TTarget: Target, TFilter, TCtxt, TTime, TId> Target
-    for Ambient<TTarget, TFilter, TCtxt, TTime, TId>
-{
+impl<TTarget: Target, TFilter, TCtxt> Target for Ambient<TTarget, TFilter, TCtxt> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         self.target.emit_event(evt)
     }
 }
 
-impl<TTarget, TFilter: Filter, TCtxt, TTime, TId> Filter
-    for Ambient<TTarget, TFilter, TCtxt, TTime, TId>
-{
+impl<TTarget, TFilter: Filter, TCtxt> Filter for Ambient<TTarget, TFilter, TCtxt> {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         self.filter.matches_event(evt)
     }
 }
 
-impl<TTarget, TFilter, TCtxt: Ctxt, TTime, TId> Ctxt
-    for Ambient<TTarget, TFilter, TCtxt, TTime, TId>
-{
+impl<TTarget, TFilter, TCtxt: Ctxt> Ctxt for Ambient<TTarget, TFilter, TCtxt> {
     type Props = TCtxt::Props;
     type Span = TCtxt::Span;
 
@@ -107,23 +98,19 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TTime, TId> Ctxt
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TTime: Time, TId> Time
-    for Ambient<TTarget, TFilter, TCtxt, TTime, TId>
-{
+impl<TTarget, TFilter, TCtxt> Time for Ambient<TTarget, TFilter, TCtxt> {
     fn timestamp(&self) -> Option<Timestamp> {
-        self.time.timestamp()
+        self.platform.timestamp()
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TTime, TId: IdGenerator> IdGenerator
-    for Ambient<TTarget, TFilter, TCtxt, TTime, TId>
-{
+impl<TTarget, TFilter, TCtxt> IdGenerator for Ambient<TTarget, TFilter, TCtxt> {
     fn trace(&self) -> Option<crate::id::TraceId> {
-        self.id_generator.trace()
+        self.platform.trace()
     }
 
     fn span(&self) -> Option<crate::id::SpanId> {
-        self.id_generator.span()
+        self.platform.span()
     }
 }
 
@@ -131,30 +118,16 @@ impl<TTarget, TFilter, TCtxt, TTime, TId: IdGenerator> IdGenerator
 mod std_support {
     use super::*;
 
-    use crate::{ctxt::thread_local::ThreadLocalCtxt, time::SystemClock};
+    use crate::platform::DefaultCtxt;
 
     type DefaultTarget = Empty;
     type DefaultFilter = Empty;
-    type DefaultCtxt = ThreadLocalCtxt;
-    type DefaultTime = SystemClock;
 
-    #[cfg(not(feature = "id-generator"))]
-    type DefaultIdGenerator = Empty;
-    #[cfg(feature = "id-generator")]
-    type DefaultIdGenerator = crate::id::RngIdGenerator;
-
-    pub struct Setup<
-        TTarget = DefaultTarget,
-        TFilter = DefaultFilter,
-        TCtxt = DefaultCtxt,
-        TTime = DefaultTime,
-        TId = DefaultIdGenerator,
-    > {
+    pub struct Setup<TTarget = DefaultTarget, TFilter = DefaultFilter, TCtxt = DefaultCtxt> {
         target: TTarget,
         filter: TFilter,
         ctxt: TCtxt,
-        time: TTime,
-        id_generator: TId,
+        platform: Platform,
     }
 
     impl Default for Setup {
@@ -169,30 +142,27 @@ mod std_support {
                 target: Default::default(),
                 filter: Default::default(),
                 ctxt: Default::default(),
-                time: Default::default(),
-                id_generator: Default::default(),
+                platform: Platform::new(),
             }
         }
     }
 
-    impl<TTarget, TFilter, TCtxt, TTime, TId> Setup<TTarget, TFilter, TCtxt, TTime, TId> {
-        pub fn to<UTarget>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt, TTime, TId> {
+    impl<TTarget, TFilter, TCtxt> Setup<TTarget, TFilter, TCtxt> {
+        pub fn to<UTarget>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt> {
             Setup {
                 target,
                 filter: self.filter,
                 ctxt: self.ctxt,
-                time: self.time,
-                id_generator: self.id_generator,
+                platform: self.platform,
             }
         }
 
-        pub fn with<UCtxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt, TTime, TId> {
+        pub fn with<UCtxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt> {
             Setup {
                 target: self.target,
                 filter: self.filter,
                 ctxt,
-                time: self.time,
-                id_generator: self.id_generator,
+                platform: self.platform,
             }
         }
     }
@@ -201,29 +171,28 @@ mod std_support {
             TTarget: Target + Send + Sync + 'static,
             TFilter: Filter + Send + Sync + 'static,
             TCtxt: Ctxt + Send + Sync + 'static,
-            TTime: Time + Send + Sync + 'static,
-            TId: IdGenerator + Send + Sync + 'static,
-        > Setup<TTarget, TFilter, TCtxt, TTime, TId>
+        > Setup<TTarget, TFilter, TCtxt>
     where
         TCtxt::Span: Send + 'static,
     {
-        pub fn init(
-            self,
-        ) -> Ambient<&'static TTarget, &'static TFilter, &'static TCtxt, &'static TTime, &'static TId>
-        {
+        pub fn init(self) -> Ambient<&'static TTarget, &'static TFilter, &'static TCtxt> {
             let target = Box::new(self.target);
             let filter = Box::new(self.filter);
             let ctxt = Box::new(self.ctxt);
-            let time = Box::new(self.time);
-            let id_generator = Box::new(self.id_generator);
+
+            PLATFORM
+                .set(self.platform)
+                .map_err(|_| "`emit` is already initialized")
+                .unwrap();
+
+            let platform: &'static _ = PLATFORM.get().unwrap();
 
             AMBIENT
                 .set(Ambient {
                     target,
                     filter,
                     ctxt,
-                    time,
-                    id_generator,
+                    platform,
                 })
                 .map_err(|_| "`emit` is already initialized")
                 .unwrap();
@@ -235,8 +204,7 @@ mod std_support {
                 target: unsafe { &*(&*ambient.target as *const _ as *const TTarget) },
                 filter: unsafe { &*(&*ambient.filter as *const _ as *const TFilter) },
                 ctxt: unsafe { &*(&*ambient.ctxt as *const _ as *const TCtxt) },
-                time: unsafe { &*(&*ambient.time as *const _ as *const TTime) },
-                id_generator: unsafe { &*(&*ambient.target as *const _ as *const TId) },
+                platform,
             }
         }
     }

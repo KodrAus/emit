@@ -8,9 +8,6 @@ use core::{
 
 use crate::{props::Props, Id};
 
-#[cfg(feature = "std")]
-pub mod thread_local;
-
 pub use crate::empty::Empty;
 
 pub trait Ctxt {

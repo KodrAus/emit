@@ -3,9 +3,7 @@ use std::{
     ops::ControlFlow::{self, *},
 };
 
-use crate::{ctxt::Ctxt, Key, OwnedKey, OwnedValue, Props, Value};
-
-use crate::Id;
+use crate::{ctxt::Ctxt, Id, Key, OwnedKey, OwnedValue, Props, Value};
 
 thread_local! {
     static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {
