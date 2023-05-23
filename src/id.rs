@@ -25,20 +25,25 @@ impl Id {
         }
     }
 
-    pub fn merge(&self, incoming: Id) -> Self {
+    pub fn or_gen(&self, incoming: Id, generator: impl GenId) -> Self {
         Id::new(
             // Use the trace id from the incoming, then our trace id, then try generate one
             // Ids are more likely to share the same trace id
-            incoming
-                .trace()
-                .or(self.trace())
-                .or_else(|| crate::ambient::get().trace()),
+            self.trace()
+                .or(incoming.trace())
+                .or_else(|| generator.gen_trace()),
             // Use the span id from the incoming, then try generate one, then our span id
             // Ids are more likely to have unique span ids
-            incoming
-                .span()
-                .or_else(|| crate::ambient::get().span())
-                .or(self.span()),
+            self.span()
+                .or_else(|| generator.gen_span())
+                .or(incoming.span()),
+        )
+    }
+
+    pub fn or(&self, incoming: Id) -> Self {
+        Id::new(
+            self.trace().or(incoming.trace()),
+            self.span().or(incoming.span()),
         )
     }
 
@@ -133,111 +138,136 @@ impl SpanId {
     }
 }
 
-pub trait IdGenerator {
-    fn trace(&self) -> Option<TraceId>;
-    fn span(&self) -> Option<SpanId>;
+pub trait GenId {
+    fn gen_id(&self) -> Id {
+        Id::new(self.gen_trace(), self.gen_span())
+    }
+
+    fn gen_trace(&self) -> Option<TraceId>;
+    fn gen_span(&self) -> Option<SpanId>;
 }
 
-impl<'a, T: IdGenerator + ?Sized> IdGenerator for &'a T {
-    fn trace(&self) -> Option<TraceId> {
-        (**self).trace()
+impl<'a, T: GenId + ?Sized> GenId for &'a T {
+    fn gen_id(&self) -> Id {
+        (**self).gen_id()
     }
 
-    fn span(&self) -> Option<SpanId> {
-        (**self).span()
-    }
-}
-
-impl<'a, T: IdGenerator> IdGenerator for Option<T> {
-    fn trace(&self) -> Option<TraceId> {
-        self.as_ref().and_then(|id| id.trace())
+    fn gen_trace(&self) -> Option<TraceId> {
+        (**self).gen_trace()
     }
 
-    fn span(&self) -> Option<SpanId> {
-        self.as_ref().and_then(|id| id.span())
-    }
-}
-
-#[cfg(feature = "std")]
-impl<'a, T: IdGenerator + ?Sized + 'a> IdGenerator for Box<T> {
-    fn trace(&self) -> Option<TraceId> {
-        (**self).trace()
-    }
-
-    fn span(&self) -> Option<SpanId> {
-        (**self).span()
+    fn gen_span(&self) -> Option<SpanId> {
+        (**self).gen_span()
     }
 }
 
-impl IdGenerator for Id {
-    fn trace(&self) -> Option<TraceId> {
-        self.trace()
+impl<'a, T: GenId> GenId for Option<T> {
+    fn gen_id(&self) -> Id {
+        self.as_ref()
+            .map(|id| Id::new(id.gen_trace(), id.gen_span()))
+            .unwrap_or_default()
     }
 
-    fn span(&self) -> Option<SpanId> {
-        self.span()
+    fn gen_trace(&self) -> Option<TraceId> {
+        self.as_ref().and_then(|id| id.gen_trace())
+    }
+
+    fn gen_span(&self) -> Option<SpanId> {
+        self.as_ref().and_then(|id| id.gen_span())
     }
 }
 
-impl IdGenerator for Empty {
-    fn trace(&self) -> Option<TraceId> {
+#[cfg(feature = "alloc")]
+impl<'a, T: GenId + ?Sized + 'a> GenId for alloc::boxed::Box<T> {
+    fn gen_id(&self) -> Id {
+        (**self).gen_id()
+    }
+
+    fn gen_trace(&self) -> Option<TraceId> {
+        (**self).gen_trace()
+    }
+
+    fn gen_span(&self) -> Option<SpanId> {
+        (**self).gen_span()
+    }
+}
+
+impl GenId for Empty {
+    fn gen_id(&self) -> Id {
+        Default::default()
+    }
+
+    fn gen_trace(&self) -> Option<TraceId> {
         None
     }
 
-    fn span(&self) -> Option<SpanId> {
+    fn gen_span(&self) -> Option<SpanId> {
         None
     }
 }
 
 mod internal {
-    use super::{SpanId, TraceId};
+    use super::{Id, SpanId, TraceId};
 
-    pub trait DispatchIdGenerator {
-        fn dispatch_trace(&self) -> Option<TraceId>;
-        fn dispatch_span(&self) -> Option<SpanId>;
+    pub trait DispatchGenId {
+        fn dispatch_gen_id(&self) -> Id;
+        fn dispatch_gen_trace(&self) -> Option<TraceId>;
+        fn dispatch_gen_span(&self) -> Option<SpanId>;
     }
 
     pub trait SealedIdGenerator {
-        fn erase_id_generator(&self) -> crate::internal::Erased<&dyn DispatchIdGenerator>;
+        fn erase_gen_id(&self) -> crate::internal::Erased<&dyn DispatchGenId>;
     }
 }
 
-pub trait ErasedIdGenerator: internal::SealedIdGenerator {}
+pub trait ErasedGenId: internal::SealedIdGenerator {}
 
-impl<T: IdGenerator> ErasedIdGenerator for T {}
+impl<T: GenId> ErasedGenId for T {}
 
-impl<T: IdGenerator> internal::SealedIdGenerator for T {
-    fn erase_id_generator(&self) -> crate::internal::Erased<&dyn internal::DispatchIdGenerator> {
+impl<T: GenId> internal::SealedIdGenerator for T {
+    fn erase_gen_id(&self) -> crate::internal::Erased<&dyn internal::DispatchGenId> {
         crate::internal::Erased(self)
     }
 }
 
-impl<T: IdGenerator> internal::DispatchIdGenerator for T {
-    fn dispatch_trace(&self) -> Option<TraceId> {
-        self.trace()
+impl<T: GenId> internal::DispatchGenId for T {
+    fn dispatch_gen_id(&self) -> Id {
+        self.gen_id()
     }
 
-    fn dispatch_span(&self) -> Option<SpanId> {
-        self.span()
-    }
-}
-
-impl<'a> IdGenerator for dyn ErasedIdGenerator + 'a {
-    fn trace(&self) -> Option<TraceId> {
-        self.erase_id_generator().0.dispatch_trace()
+    fn dispatch_gen_trace(&self) -> Option<TraceId> {
+        self.gen_trace()
     }
 
-    fn span(&self) -> Option<SpanId> {
-        self.erase_id_generator().0.dispatch_span()
+    fn dispatch_gen_span(&self) -> Option<SpanId> {
+        self.gen_span()
     }
 }
 
-impl<'a> IdGenerator for dyn ErasedIdGenerator + Send + Sync + 'a {
-    fn trace(&self) -> Option<TraceId> {
-        (self as &(dyn ErasedIdGenerator + 'a)).trace()
+impl<'a> GenId for dyn ErasedGenId + 'a {
+    fn gen_id(&self) -> Id {
+        self.erase_gen_id().0.dispatch_gen_id()
     }
 
-    fn span(&self) -> Option<SpanId> {
-        (self as &(dyn ErasedIdGenerator + 'a)).span()
+    fn gen_trace(&self) -> Option<TraceId> {
+        self.erase_gen_id().0.dispatch_gen_trace()
+    }
+
+    fn gen_span(&self) -> Option<SpanId> {
+        self.erase_gen_id().0.dispatch_gen_span()
+    }
+}
+
+impl<'a> GenId for dyn ErasedGenId + Send + Sync + 'a {
+    fn gen_id(&self) -> Id {
+        (self as &(dyn ErasedGenId + 'a)).gen_id()
+    }
+
+    fn gen_trace(&self) -> Option<TraceId> {
+        (self as &(dyn ErasedGenId + 'a)).gen_trace()
+    }
+
+    fn gen_span(&self) -> Option<SpanId> {
+        (self as &(dyn ErasedGenId + 'a)).gen_span()
     }
 }

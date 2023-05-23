@@ -58,8 +58,8 @@ impl<P: Props> Props for Option<P> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<'a, P: Props + ?Sized + 'a> Props for Box<P> {
+#[cfg(feature = "alloc")]
+impl<'a, P: Props + ?Sized + 'a> Props for alloc::boxed::Box<P> {
     fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
         (**self).for_each(for_each)
     }

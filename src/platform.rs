@@ -1,10 +1,10 @@
-use crate::{id::IdGenerator, time::Time, Timestamp};
+use crate::{id::GenId, time::Clock, Timestamp};
 
 #[cfg(not(feature = "std"))]
 use crate::empty::Empty;
 
 #[cfg(feature = "std")]
-use crate::{id::ErasedIdGenerator, time::ErasedTime};
+use crate::{id::ErasedGenId, time::ErasedClock};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;
@@ -13,7 +13,7 @@ pub(crate) mod system_clock;
 pub(crate) mod thread_local_ctxt;
 
 #[cfg(feature = "id-generator")]
-pub(crate) mod rng_id_generator;
+pub(crate) mod rng_gen_id;
 
 #[cfg(feature = "std")]
 type DefaultTime = system_clock::SystemClock;
@@ -21,22 +21,28 @@ type DefaultTime = system_clock::SystemClock;
 type DefaultTime = Empty;
 
 #[cfg(not(feature = "id-generator"))]
-type DefaultIdGenerator = Empty;
+type DefaultGenId = Empty;
 #[cfg(feature = "id-generator")]
-type DefaultIdGenerator = rng_id_generator::RngIdGenerator;
+type DefaultGenId = rng_gen_id::RngGenId;
 
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
 
 pub(crate) struct Platform {
     #[cfg(not(feature = "std"))]
-    time: DefaultTime,
+    clock: DefaultTime,
     #[cfg(feature = "std")]
-    time: Box<dyn ErasedTime + Send + Sync>,
+    clock: Box<dyn ErasedClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
-    id_generator: DefaultIdGenerator,
+    gen_id: DefaultGenId,
     #[cfg(feature = "std")]
-    id_generator: Box<dyn ErasedIdGenerator + Send + Sync>,
+    gen_id: Box<dyn ErasedGenId + Send + Sync>,
+}
+
+impl Default for Platform {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Platform {
@@ -44,29 +50,33 @@ impl Platform {
     pub fn new() -> Self {
         Platform {
             #[cfg(not(feature = "std"))]
-            time: DefaultTime::default(),
+            clock: DefaultTime::default(),
             #[cfg(feature = "std")]
-            time: Box::new(DefaultTime::default()),
+            clock: Box::new(DefaultTime::default()),
             #[cfg(not(feature = "std"))]
-            id_generator: DefaultIdGenerator::default(),
+            gen_id: DefaultGenId::default(),
             #[cfg(feature = "std")]
-            id_generator: Box::new(DefaultIdGenerator::default()),
+            gen_id: Box::new(DefaultGenId::default()),
         }
     }
 }
 
-impl Time for Platform {
-    fn timestamp(&self) -> Option<Timestamp> {
-        self.time.timestamp()
+impl Clock for Platform {
+    fn now(&self) -> Option<Timestamp> {
+        self.clock.now()
     }
 }
 
-impl IdGenerator for Platform {
-    fn trace(&self) -> Option<crate::id::TraceId> {
-        self.id_generator.trace()
+impl GenId for Platform {
+    fn gen_id(&self) -> crate::Id {
+        self.gen_id.gen_id()
     }
 
-    fn span(&self) -> Option<crate::id::SpanId> {
-        self.id_generator.span()
+    fn gen_trace(&self) -> Option<crate::id::TraceId> {
+        self.gen_id.gen_trace()
+    }
+
+    fn gen_span(&self) -> Option<crate::id::SpanId> {
+        self.gen_id.gen_span()
     }
 }

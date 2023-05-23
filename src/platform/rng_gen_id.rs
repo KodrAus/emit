@@ -1,16 +1,16 @@
-use crate::id::{IdGenerator, SpanId, TraceId};
+use crate::id::{GenId, SpanId, TraceId};
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct RngIdGenerator;
+pub struct RngGenId;
 
-impl IdGenerator for RngIdGenerator {
-    fn trace(&self) -> Option<TraceId> {
+impl GenId for RngGenId {
+    fn gen_trace(&self) -> Option<TraceId> {
         use rand::Rng;
 
         Some(TraceId::from_u128(rand::thread_rng().gen()))
     }
 
-    fn span(&self) -> Option<SpanId> {
+    fn gen_span(&self) -> Option<SpanId> {
         use rand::Rng;
 
         Some(SpanId::from_u64(rand::thread_rng().gen()))

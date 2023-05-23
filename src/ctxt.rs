@@ -90,7 +90,7 @@ impl<C: Ctxt> Ctxt for Option<C> {
     fn current_id(&self) -> Id {
         self.as_ref()
             .map(|ctxt| ctxt.current_id())
-            .unwrap_or(Id::EMPTY)
+            .unwrap_or_default()
     }
 
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
@@ -118,36 +118,6 @@ impl<C: Ctxt> Ctxt for Option<C> {
 
 #[cfg(feature = "alloc")]
 impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
-    type Props = C::Props;
-    type Span = C::Span;
-
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
-        (**self).with_current(with)
-    }
-
-    fn current_id(&self) -> Id {
-        (**self).current_id()
-    }
-
-    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
-        (**self).open(id, props)
-    }
-
-    fn enter(&self, span: &mut Self::Span) {
-        (**self).enter(span)
-    }
-
-    fn exit(&self, span: &mut Self::Span) {
-        (**self).exit(span)
-    }
-
-    fn close(&self, span: Self::Span) {
-        (**self).close(span)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::sync::Arc<C> {
     type Props = C::Props;
     type Span = C::Span;
 

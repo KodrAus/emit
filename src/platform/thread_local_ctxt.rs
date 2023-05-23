@@ -3,7 +3,7 @@ use std::{
     ops::ControlFlow::{self, *},
 };
 
-use crate::{ctxt::Ctxt, Id, Key, OwnedKey, OwnedValue, Props, Value};
+use crate::{ctxt::Ctxt, key::OwnedKey, value::OwnedValue, Id, Key, Props, Value};
 
 thread_local! {
     static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {
@@ -41,6 +41,10 @@ impl Ctxt for ThreadLocalCtxt {
 
             with(span.id, &span)
         })
+    }
+
+    fn current_id(&self) -> Id {
+        ACTIVE.with(|span| span.borrow().id)
     }
 
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {

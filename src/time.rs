@@ -2,33 +2,6 @@ use core::{fmt, time::Duration};
 
 pub use crate::empty::Empty;
 
-pub trait Time {
-    fn timestamp(&self) -> Option<Timestamp>;
-}
-
-impl<'a, T: Time + ?Sized> Time for &'a T {
-    fn timestamp(&self) -> Option<Timestamp> {
-        (**self).timestamp()
-    }
-}
-
-impl<'a, T: Time> Time for Option<T> {
-    fn timestamp(&self) -> Option<Timestamp> {
-        if let Some(time) = self {
-            time.timestamp()
-        } else {
-            Empty.timestamp()
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<'a, T: Time + ?Sized + 'a> Time for Box<T> {
-    fn timestamp(&self) -> Option<Timestamp> {
-        (**self).timestamp()
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct Timestamp(Duration);
 
@@ -53,14 +26,35 @@ impl Timestamp {
     }
 }
 
-impl Time for Timestamp {
-    fn timestamp(&self) -> Option<Timestamp> {
-        Some(*self)
+pub trait Clock {
+    fn now(&self) -> Option<Timestamp>;
+}
+
+impl<'a, T: Clock + ?Sized> Clock for &'a T {
+    fn now(&self) -> Option<Timestamp> {
+        (**self).now()
     }
 }
 
-impl Time for Empty {
-    fn timestamp(&self) -> Option<Timestamp> {
+impl<'a, T: Clock> Clock for Option<T> {
+    fn now(&self) -> Option<Timestamp> {
+        if let Some(time) = self {
+            time.now()
+        } else {
+            Empty.now()
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: Clock + ?Sized + 'a> Clock for alloc::boxed::Box<T> {
+    fn now(&self) -> Option<Timestamp> {
+        (**self).now()
+    }
+}
+
+impl Clock for Empty {
+    fn now(&self) -> Option<Timestamp> {
         None
     }
 }
@@ -68,39 +62,39 @@ impl Time for Empty {
 mod internal {
     use super::Timestamp;
 
-    pub trait DispatchTime {
-        fn dispatch_timestamp(&self) -> Option<Timestamp>;
+    pub trait DispatchClock {
+        fn dispatch_now(&self) -> Option<Timestamp>;
     }
 
     pub trait SealedTime {
-        fn erase_time(&self) -> crate::internal::Erased<&dyn DispatchTime>;
+        fn erase_clock(&self) -> crate::internal::Erased<&dyn DispatchClock>;
     }
 }
 
-pub trait ErasedTime: internal::SealedTime {}
+pub trait ErasedClock: internal::SealedTime {}
 
-impl<T: Time> ErasedTime for T {}
+impl<T: Clock> ErasedClock for T {}
 
-impl<T: Time> internal::SealedTime for T {
-    fn erase_time(&self) -> crate::internal::Erased<&dyn internal::DispatchTime> {
+impl<T: Clock> internal::SealedTime for T {
+    fn erase_clock(&self) -> crate::internal::Erased<&dyn internal::DispatchClock> {
         crate::internal::Erased(self)
     }
 }
 
-impl<T: Time> internal::DispatchTime for T {
-    fn dispatch_timestamp(&self) -> Option<Timestamp> {
-        self.timestamp()
+impl<T: Clock> internal::DispatchClock for T {
+    fn dispatch_now(&self) -> Option<Timestamp> {
+        self.now()
     }
 }
 
-impl<'a> Time for dyn ErasedTime + 'a {
-    fn timestamp(&self) -> Option<Timestamp> {
-        self.erase_time().0.dispatch_timestamp()
+impl<'a> Clock for dyn ErasedClock + 'a {
+    fn now(&self) -> Option<Timestamp> {
+        self.erase_clock().0.dispatch_now()
     }
 }
 
-impl<'a> Time for dyn ErasedTime + Send + Sync + 'a {
-    fn timestamp(&self) -> Option<Timestamp> {
-        (self as &(dyn ErasedTime + 'a)).timestamp()
+impl<'a> Clock for dyn ErasedClock + Send + Sync + 'a {
+    fn now(&self) -> Option<Timestamp> {
+        (self as &(dyn ErasedClock + 'a)).now()
     }
 }

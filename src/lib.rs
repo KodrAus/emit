@@ -6,7 +6,7 @@ extern crate alloc;
 use core::future::Future;
 
 pub use emit_macros::*;
-use id::IdGenerator;
+use id::GenId;
 
 mod macro_hooks;
 
@@ -16,39 +16,41 @@ mod empty;
 mod event;
 pub mod filter;
 pub mod id;
-mod key;
+pub mod key;
+mod level;
 mod platform;
 pub mod props;
 pub mod target;
 pub mod template;
 pub mod time;
-mod value;
+pub mod value;
 pub mod well_known;
 
 #[doc(inline)]
 #[allow(unused_imports)]
 pub use self::{
-    ambient::*, event::*, id::Id, key::*, props::Props, target::Target, template::Template,
-    time::Timestamp, value::*,
+    ambient::*, event::*, id::Id, key::Key, level::*, props::Props, target::Target,
+    template::Template, time::Timestamp, value::Value,
 };
 
-use self::{ctxt::Ctxt, filter::Filter, time::Time};
+use self::{ctxt::Ctxt, filter::Filter, time::Clock};
 
 pub fn emit(
     to: impl Target,
     when: impl Filter,
     with: impl Props,
-    ts: impl Time,
+    ts: Option<Timestamp>,
+    id: Id,
     lvl: Level,
     tpl: Template,
     props: impl Props,
 ) {
     let ambient = ambient::get();
 
-    ambient.with_current(|id, ctxt| {
-        let props = props.chain(with).chain(ctxt);
-
-        let ts = ts.timestamp().or_else(|| ambient.timestamp());
+    ambient.with_current(|current_id, current_props| {
+        let ts = ts.or_else(|| ambient.now());
+        let id = id.or(current_id);
+        let props = props.chain(with).chain(current_props);
 
         let evt = Event::new(ts, id, lvl, tpl, props);
 
@@ -59,18 +61,22 @@ pub fn emit(
     });
 }
 
-pub fn span<C: Ctxt>(ctxt: C, id: impl IdGenerator, props: impl Props) -> ctxt::Span<C> {
-    let id = ctxt.current_id().merge(Id::new(id.trace(), id.span()));
+pub fn span<C: Ctxt>(ctxt: C, id: Id, props: impl Props) -> ctxt::Span<C> {
+    let ambient = ambient::get();
+
+    let id = id.or_gen(ctxt.current_id(), ambient);
     ctxt.span(id, props)
 }
 
 pub fn span_future<C: Ctxt, F: Future>(
     ctxt: C,
-    id: impl IdGenerator,
+    id: Id,
     props: impl Props,
     future: F,
 ) -> ctxt::SpanFuture<C, F> {
-    let id = ctxt.current_id().merge(Id::new(id.trace(), id.span()));
+    let ambient = ambient::get();
+
+    let id = id.or_gen(ctxt.current_id(), ambient);
 
     ctxt.span_future(id, props, future)
 }
@@ -91,18 +97,18 @@ pub fn ctxt() -> impl Ctxt {
 }
 
 #[cfg(feature = "std")]
-pub fn time() -> impl Time {
+pub fn clock() -> impl Clock {
     ambient::get()
 }
 
 #[cfg(feature = "std")]
-pub fn id_generator() -> impl IdGenerator {
+pub fn gen_id() -> impl GenId {
     ambient::get()
 }
 
 #[cfg(feature = "std")]
-pub fn setup() -> Setup {
-    Setup::default()
+pub fn setup() -> setup::Setup {
+    setup::Setup::default()
 }
 
 mod internal {

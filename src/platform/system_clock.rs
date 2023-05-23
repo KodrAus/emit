@@ -1,4 +1,4 @@
-use crate::{time::Time, Timestamp};
+use crate::{time::Clock, Timestamp};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SystemClock;
@@ -9,8 +9,8 @@ impl SystemClock {
     }
 }
 
-impl Time for SystemClock {
-    fn timestamp(&self) -> Option<Timestamp> {
+impl Clock for SystemClock {
+    fn now(&self) -> Option<Timestamp> {
         Some(Self::now())
     }
 }
