@@ -25,25 +25,25 @@ impl Id {
         }
     }
 
-    pub fn or_gen(&self, incoming: Id, generator: impl GenId) -> Self {
+    pub fn or(&self, incoming: Id) -> Self {
+        Id::new(
+            self.trace().or(incoming.trace()),
+            self.span().or(incoming.span()),
+        )
+    }
+
+    pub fn or_gen(&self, incoming: Id, gen_id: impl GenId) -> Self {
         Id::new(
             // Use the trace id from the incoming, then our trace id, then try generate one
             // Ids are more likely to share the same trace id
             self.trace()
                 .or(incoming.trace())
-                .or_else(|| generator.gen_trace()),
+                .or_else(|| gen_id.gen_trace()),
             // Use the span id from the incoming, then try generate one, then our span id
             // Ids are more likely to have unique span ids
             self.span()
-                .or_else(|| generator.gen_span())
+                .or_else(|| gen_id.gen_span())
                 .or(incoming.span()),
-        )
-    }
-
-    pub fn or(&self, incoming: Id) -> Self {
-        Id::new(
-            self.trace().or(incoming.trace()),
-            self.span().or(incoming.span()),
         )
     }
 
@@ -139,7 +139,7 @@ impl SpanId {
 }
 
 pub trait GenId {
-    fn gen_id(&self) -> Id {
+    fn gen(&self) -> Id {
         Id::new(self.gen_trace(), self.gen_span())
     }
 
@@ -148,8 +148,8 @@ pub trait GenId {
 }
 
 impl<'a, T: GenId + ?Sized> GenId for &'a T {
-    fn gen_id(&self) -> Id {
-        (**self).gen_id()
+    fn gen(&self) -> Id {
+        (**self).gen()
     }
 
     fn gen_trace(&self) -> Option<TraceId> {
@@ -162,7 +162,7 @@ impl<'a, T: GenId + ?Sized> GenId for &'a T {
 }
 
 impl<'a, T: GenId> GenId for Option<T> {
-    fn gen_id(&self) -> Id {
+    fn gen(&self) -> Id {
         self.as_ref()
             .map(|id| Id::new(id.gen_trace(), id.gen_span()))
             .unwrap_or_default()
@@ -179,8 +179,8 @@ impl<'a, T: GenId> GenId for Option<T> {
 
 #[cfg(feature = "alloc")]
 impl<'a, T: GenId + ?Sized + 'a> GenId for alloc::boxed::Box<T> {
-    fn gen_id(&self) -> Id {
-        (**self).gen_id()
+    fn gen(&self) -> Id {
+        (**self).gen()
     }
 
     fn gen_trace(&self) -> Option<TraceId> {
@@ -193,7 +193,7 @@ impl<'a, T: GenId + ?Sized + 'a> GenId for alloc::boxed::Box<T> {
 }
 
 impl GenId for Empty {
-    fn gen_id(&self) -> Id {
+    fn gen(&self) -> Id {
         Default::default()
     }
 
@@ -210,7 +210,7 @@ mod internal {
     use super::{Id, SpanId, TraceId};
 
     pub trait DispatchGenId {
-        fn dispatch_gen_id(&self) -> Id;
+        fn dispatch_gen(&self) -> Id;
         fn dispatch_gen_trace(&self) -> Option<TraceId>;
         fn dispatch_gen_span(&self) -> Option<SpanId>;
     }
@@ -231,8 +231,8 @@ impl<T: GenId> internal::SealedIdGenerator for T {
 }
 
 impl<T: GenId> internal::DispatchGenId for T {
-    fn dispatch_gen_id(&self) -> Id {
-        self.gen_id()
+    fn dispatch_gen(&self) -> Id {
+        self.gen()
     }
 
     fn dispatch_gen_trace(&self) -> Option<TraceId> {
@@ -245,8 +245,8 @@ impl<T: GenId> internal::DispatchGenId for T {
 }
 
 impl<'a> GenId for dyn ErasedGenId + 'a {
-    fn gen_id(&self) -> Id {
-        self.erase_gen_id().0.dispatch_gen_id()
+    fn gen(&self) -> Id {
+        self.erase_gen_id().0.dispatch_gen()
     }
 
     fn gen_trace(&self) -> Option<TraceId> {
@@ -259,8 +259,8 @@ impl<'a> GenId for dyn ErasedGenId + 'a {
 }
 
 impl<'a> GenId for dyn ErasedGenId + Send + Sync + 'a {
-    fn gen_id(&self) -> Id {
-        (self as &(dyn ErasedGenId + 'a)).gen_id()
+    fn gen(&self) -> Id {
+        (self as &(dyn ErasedGenId + 'a)).gen()
     }
 
     fn gen_trace(&self) -> Option<TraceId> {

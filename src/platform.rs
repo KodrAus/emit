@@ -68,8 +68,8 @@ impl Clock for Platform {
 }
 
 impl GenId for Platform {
-    fn gen_id(&self) -> crate::Id {
-        self.gen_id.gen_id()
+    fn gen(&self) -> crate::Id {
+        self.gen_id.gen()
     }
 
     fn gen_trace(&self) -> Option<crate::id::TraceId> {
