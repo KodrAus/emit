@@ -51,13 +51,6 @@ impl Timestamp {
     pub fn to_system_time(&self) -> std::time::SystemTime {
         std::time::SystemTime::UNIX_EPOCH + self.0
     }
-
-    #[cfg(feature = "std")]
-    pub fn now() -> Self {
-        crate::ambient::get()
-            .timestamp()
-            .unwrap_or_else(SystemClock::now)
-    }
 }
 
 impl Time for Timestamp {
@@ -113,6 +106,7 @@ impl<'a> Time for dyn ErasedTime + Send + Sync + 'a {
 }
 
 #[cfg(feature = "std")]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct SystemClock;
 
 #[cfg(feature = "std")]

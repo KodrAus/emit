@@ -6,144 +6,12 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::props::Props;
+use crate::{props::Props, Id};
 
 #[cfg(feature = "std")]
 pub mod thread_local;
 
 pub use crate::empty::Empty;
-
-#[derive(Clone, Copy)]
-pub struct Id {
-    trace: TraceId,
-    span: SpanId,
-}
-
-#[derive(Clone, Copy)]
-pub struct TraceId(u128);
-
-#[derive(Clone, Copy)]
-pub struct SpanId(u64);
-
-impl Id {
-    pub const EMPTY: Self = Id {
-        trace: TraceId::EMPTY,
-        span: SpanId::EMPTY,
-    };
-
-    pub fn new(trace: Option<TraceId>, span: Option<SpanId>) -> Self {
-        Id {
-            trace: trace.unwrap_or(TraceId::EMPTY),
-            span: span.unwrap_or(SpanId::EMPTY),
-        }
-    }
-
-    pub fn merge(
-        &self,
-        incoming: Id,
-        gen_trace: impl FnOnce() -> Option<TraceId>,
-        gen_span: impl FnOnce() -> Option<SpanId>,
-    ) -> Self {
-        Id::new(
-            // Use the trace id from the incoming, then our trace id, then try generate one
-            // Ids are more likely to share the same trace id
-            incoming.trace().or(self.trace()).or_else(gen_trace),
-            // Use the span id from the incoming, then try generate one, then our span id
-            // Ids are more likely to have unique span ids
-            incoming.span().or_else(gen_span).or(self.span()),
-        )
-    }
-
-    pub fn trace(&self) -> Option<TraceId> {
-        if self.trace.is_empty() {
-            None
-        } else {
-            Some(self.trace)
-        }
-    }
-
-    pub fn span(&self) -> Option<SpanId> {
-        if self.span.is_empty() {
-            None
-        } else {
-            Some(self.span)
-        }
-    }
-}
-
-impl Default for Id {
-    fn default() -> Self {
-        Self::EMPTY
-    }
-}
-
-impl From<SpanId> for Id {
-    fn from(value: SpanId) -> Self {
-        Id::new(None, Some(value))
-    }
-}
-
-impl From<TraceId> for Id {
-    fn from(value: TraceId) -> Self {
-        Id::new(Some(value), None)
-    }
-}
-
-const HEX: [u8; 16] = [
-    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-];
-
-impl TraceId {
-    const EMPTY: Self = TraceId(0);
-
-    fn is_empty(&self) -> bool {
-        self.0 == Self::EMPTY.0
-    }
-
-    pub fn from_u128(v: u128) -> Self {
-        TraceId(v)
-    }
-
-    pub fn to_hex(&self) -> [u8; 32] {
-        let mut dst = [0; 32];
-        let src: [u8; 16] = self.0.to_ne_bytes();
-
-        for i in 0..src.len() {
-            let b = src[i];
-
-            dst[i * 2] = HEX[(b >> 4) as usize];
-            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
-        }
-
-        dst
-    }
-}
-
-impl SpanId {
-    const EMPTY: Self = SpanId(0);
-
-    fn is_empty(&self) -> bool {
-        self.0 == Self::EMPTY.0
-    }
-
-    pub fn from_u64(v: u64) -> Self {
-        SpanId(v)
-    }
-
-    pub fn to_hex(&self) -> [u8; 16] {
-        let mut dst = [0; 16];
-        let src: [u8; 8] = self.0.to_ne_bytes();
-
-        for i in 0..src.len() {
-            let b = src[i];
-
-            dst[i * 2] = HEX[(b >> 4) as usize];
-            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
-        }
-
-        dst
-    }
-}
 
 pub trait Ctxt {
     type Props: Props + ?Sized;
@@ -167,6 +35,15 @@ pub trait Ctxt {
     fn enter(&self, span: &mut Self::Span);
 
     fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F);
+    fn current_id(&self) -> Id {
+        let mut current = Id::EMPTY;
+
+        self.with_current(|id, _| {
+            current = id;
+        });
+
+        current
+    }
 
     fn exit(&self, span: &mut Self::Span);
     fn close(&self, span: Self::Span);
@@ -178,6 +55,10 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
 
     fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
         (**self).with_current(with)
+    }
+
+    fn current_id(&self) -> Id {
+        (**self).current_id()
     }
 
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
@@ -207,6 +88,12 @@ impl<C: Ctxt> Ctxt for Option<C> {
                 .with_current(|id, props| unsafe { with(id, &Some(internal::Slot::new(props))) }),
             None => with(Id::EMPTY, &None),
         }
+    }
+
+    fn current_id(&self) -> Id {
+        self.as_ref()
+            .map(|ctxt| ctxt.current_id())
+            .unwrap_or(Id::EMPTY)
     }
 
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
@@ -241,6 +128,10 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
         (**self).with_current(with)
     }
 
+    fn current_id(&self) -> Id {
+        (**self).current_id()
+    }
+
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
         (**self).open(id, props)
     }
@@ -265,6 +156,10 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::sync::Arc<C> {
 
     fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
         (**self).with_current(with)
+    }
+
+    fn current_id(&self) -> Id {
+        (**self).current_id()
     }
 
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
@@ -357,6 +252,10 @@ impl Ctxt for Empty {
         with(Id::EMPTY, &Empty)
     }
 
+    fn current_id(&self) -> Id {
+        Id::EMPTY
+    }
+
     fn open<P: Props>(&self, _: Id, _: P) -> Self::Span {
         Empty
     }
@@ -410,6 +309,7 @@ mod alloc_support {
 
         pub trait DispatchCtxt {
             fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, ErasedSlot));
+            fn dispatch_current_id(&self) -> Id;
 
             fn dispatch_open(&self, id: Id, props: &dyn ErasedProps) -> ErasedScope;
             fn dispatch_enter(&self, span: &mut ErasedScope);
@@ -418,7 +318,7 @@ mod alloc_support {
         }
 
         pub trait SealedCtxt {
-            fn erase_scope_ctxt(&self) -> crate::internal::Erased<&dyn DispatchCtxt>;
+            fn erase_ctxt(&self) -> crate::internal::Erased<&dyn DispatchCtxt>;
         }
 
         pub struct ErasedSlot(
@@ -460,7 +360,7 @@ mod alloc_support {
     where
         C::Span: Send + 'static,
     {
-        fn erase_scope_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchCtxt> {
+        fn erase_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchCtxt> {
             crate::internal::Erased(self)
         }
     }
@@ -473,6 +373,10 @@ mod alloc_support {
             self.with_current(move |id, props| {
                 with(id, unsafe { internal::ErasedSlot::new(&props) })
             })
+        }
+
+        fn dispatch_current_id(&self) -> Id {
+            self.current_id()
         }
 
         fn dispatch_open(&self, id: Id, props: &dyn ErasedProps) -> ErasedScope {
@@ -505,27 +409,29 @@ mod alloc_support {
         fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
             let mut f = Some(with);
 
-            self.erase_scope_ctxt()
-                .0
-                .dispatch_with_current(&mut |id, props| {
-                    f.take().expect("called multiple times")(id, &props)
-                });
+            self.erase_ctxt().0.dispatch_with_current(&mut |id, props| {
+                f.take().expect("called multiple times")(id, &props)
+            });
+        }
+
+        fn current_id(&self) -> Id {
+            self.erase_ctxt().0.dispatch_current_id()
         }
 
         fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
-            self.erase_scope_ctxt().0.dispatch_open(id, &props)
+            self.erase_ctxt().0.dispatch_open(id, &props)
         }
 
         fn enter(&self, span: &mut Self::Span) {
-            self.erase_scope_ctxt().0.dispatch_enter(span)
+            self.erase_ctxt().0.dispatch_enter(span)
         }
 
         fn exit(&self, span: &mut Self::Span) {
-            self.erase_scope_ctxt().0.dispatch_exit(span)
+            self.erase_ctxt().0.dispatch_exit(span)
         }
 
         fn close(&self, span: Self::Span) {
-            self.erase_scope_ctxt().0.dispatch_close(span)
+            self.erase_ctxt().0.dispatch_close(span)
         }
     }
 
@@ -535,6 +441,10 @@ mod alloc_support {
 
         fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
             (self as &(dyn ErasedCtxt + 'a)).with_current(with)
+        }
+
+        fn current_id(&self) -> Id {
+            (self as &(dyn ErasedCtxt + 'a)).current_id()
         }
 
         fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {

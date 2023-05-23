@@ -22,7 +22,7 @@ std = ["alloc", "emit_macros/std", "value-bag/error"]
 alloc = ["value-bag/alloc", "value-bag/owned"]
 sval = ["emit_macros/sval", "value-bag/sval", "dep:sval"]
 serde = ["emit_macros/serde", "value-bag/serde", "dep:serde"]
-span-allocator = ["std", "dep:rand"]
+id-generator = ["std", "dep:rand"]
 
 [dependencies.emit_macros]
 path = "macros"

@@ -3,7 +3,10 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+use core::future::Future;
+
 pub use emit_macros::*;
+use id::IdGenerator;
 
 mod macro_hooks;
 
@@ -12,6 +15,7 @@ pub mod ctxt;
 mod empty;
 mod event;
 pub mod filter;
+pub mod id;
 mod key;
 pub mod props;
 pub mod target;
@@ -23,7 +27,7 @@ pub mod well_known;
 #[doc(inline)]
 #[allow(unused_imports)]
 pub use self::{
-    ambient::*, event::*, key::*, props::Props, target::Target, template::Template,
+    ambient::*, event::*, id::Id, key::*, props::Props, target::Target, template::Template,
     time::Timestamp, value::*,
 };
 
@@ -54,6 +58,22 @@ pub fn emit(
     });
 }
 
+pub fn span<C: Ctxt>(ctxt: C, id: impl IdGenerator, props: impl Props) -> ctxt::Span<C> {
+    let id = ctxt.current_id().merge(Id::new(id.trace(), id.span()));
+    ctxt.span(id, props)
+}
+
+pub fn span_future<C: Ctxt, F: Future>(
+    ctxt: C,
+    id: impl IdGenerator,
+    props: impl Props,
+    future: F,
+) -> ctxt::SpanFuture<C, F> {
+    let id = ctxt.current_id().merge(Id::new(id.trace(), id.span()));
+
+    ctxt.span_future(id, props, future)
+}
+
 #[cfg(feature = "std")]
 pub fn target() -> impl Target {
     ambient::get()
@@ -71,6 +91,11 @@ pub fn ctxt() -> impl Ctxt {
 
 #[cfg(feature = "std")]
 pub fn time() -> impl Time {
+    ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn id_generator() -> impl IdGenerator {
     ambient::get()
 }
 
