@@ -5,7 +5,6 @@ use crate::{
     empty::Empty,
     props::{ByRef, Chain, ErasedProps},
     template::Render,
-    time::Time,
     well_known, Key, Props, Template, Timestamp, Value,
 };
 
@@ -43,7 +42,7 @@ impl Default for Level {
 #[derive(Clone)]
 pub struct Event<'a, P = &'a dyn ErasedProps> {
     ts: Option<Timestamp>,
-    id: Option<Id>,
+    id: Id,
     lvl: Level,
     tpl: Template<'a>,
     props: P,
@@ -70,13 +69,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn new(
-        ts: Option<Timestamp>,
-        id: Option<Id>,
-        lvl: Level,
-        tpl: Template<'a>,
-        props: P,
-    ) -> Self {
+    pub fn new(ts: Option<Timestamp>, id: Id, lvl: Level, tpl: Template<'a>, props: P) -> Self {
         Event {
             ts,
             id,
@@ -106,7 +99,7 @@ impl<'a, P: Props> Event<'a, P> {
         self.props.get(well_known::ERR_KEY)
     }
 
-    pub fn id(&self) -> Option<Id> {
+    pub fn id(&self) -> Id {
         self.id
     }
 

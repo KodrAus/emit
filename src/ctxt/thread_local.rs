@@ -47,10 +47,7 @@ impl Ctxt for ThreadLocalCtxt {
     fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
         let mut owned = ACTIVE.with(|span| span.borrow().clone());
 
-        owned.id = Id::new(
-            id.trace().or(owned.id.trace()).or_else(|| gen_trace()),
-            id.span().or_else(|| gen_span()),
-        );
+        owned.id = owned.id.merge(id, gen_trace, gen_span);
 
         props.for_each(|k, v| {
             owned.props.push((k.to_owned(), v.to_owned()));
@@ -71,10 +68,28 @@ impl Ctxt for ThreadLocalCtxt {
     fn close(&self, _: Self::Span) {}
 }
 
+// TODO: Remove the rand dependency here
+
+#[cfg(not(feature = "span-allocator"))]
 fn gen_trace() -> Option<TraceId> {
     None
 }
 
+#[cfg(feature = "span-allocator")]
+fn gen_trace() -> Option<TraceId> {
+    use rand::Rng;
+
+    Some(TraceId::from_u128(rand::thread_rng().gen()))
+}
+
+#[cfg(not(feature = "span-allocator"))]
 fn gen_span() -> Option<SpanId> {
     None
+}
+
+#[cfg(feature = "span-allocator")]
+fn gen_span() -> Option<SpanId> {
+    use rand::Rng;
+
+    Some(SpanId::from_u64(rand::thread_rng().gen()))
 }

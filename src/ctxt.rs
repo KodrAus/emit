@@ -38,6 +38,22 @@ impl Id {
         }
     }
 
+    pub fn merge(
+        &self,
+        incoming: Id,
+        gen_trace: impl FnOnce() -> Option<TraceId>,
+        gen_span: impl FnOnce() -> Option<SpanId>,
+    ) -> Self {
+        Id::new(
+            // Use the trace id from the incoming, then our trace id, then try generate one
+            // Ids are more likely to share the same trace id
+            incoming.trace().or(self.trace()).or_else(gen_trace),
+            // Use the span id from the incoming, then try generate one, then our span id
+            // Ids are more likely to have unique span ids
+            incoming.span().or_else(gen_span).or(self.span()),
+        )
+    }
+
     pub fn trace(&self) -> Option<TraceId> {
         if self.trace.is_empty() {
             None
@@ -61,6 +77,18 @@ impl Default for Id {
     }
 }
 
+impl From<SpanId> for Id {
+    fn from(value: SpanId) -> Self {
+        Id::new(None, Some(value))
+    }
+}
+
+impl From<TraceId> for Id {
+    fn from(value: TraceId) -> Self {
+        Id::new(Some(value), None)
+    }
+}
+
 const HEX: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
@@ -70,6 +98,10 @@ impl TraceId {
 
     fn is_empty(&self) -> bool {
         self.0 == Self::EMPTY.0
+    }
+
+    pub fn from_u128(v: u128) -> Self {
+        TraceId(v)
     }
 
     pub fn to_hex(&self) -> [u8; 32] {
@@ -92,6 +124,10 @@ impl SpanId {
 
     fn is_empty(&self) -> bool {
         self.0 == Self::EMPTY.0
+    }
+
+    pub fn from_u64(v: u64) -> Self {
+        SpanId(v)
     }
 
     pub fn to_hex(&self) -> [u8; 16] {

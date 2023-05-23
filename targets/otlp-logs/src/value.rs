@@ -42,9 +42,9 @@ pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
     let mut trace_id = Vec::new();
     let mut span_id = Vec::new();
 
-    if let Some(id) = evt.id() {
-        trace_id = id.trace().to_hex().to_vec();
-        span_id = id.span().to_hex().to_vec();
+    if let (Some(trace), Some(span)) = (evt.id().trace(), evt.id().span()) {
+        trace_id = trace.to_hex().to_vec();
+        span_id = span.to_hex().to_vec();
     }
 
     let mut seen = HashSet::new();
