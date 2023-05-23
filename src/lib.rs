@@ -40,12 +40,12 @@ pub fn emit(
 ) {
     let ambient = ambient::get();
 
-    ambient.with_props(|ctxt| {
+    ambient.with_current(|id, ctxt| {
         let props = props.chain(with).chain(ctxt);
 
         let ts = ts.timestamp().or_else(|| ambient.timestamp());
 
-        let evt = Event::new(ts, lvl, tpl, props);
+        let evt = Event::new(ts, id, lvl, tpl, props);
 
         if when.matches_event(&evt) && ambient.matches_event(&evt) {
             to.emit_event(&evt);

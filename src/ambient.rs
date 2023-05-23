@@ -1,4 +1,4 @@
-use crate::{empty::Empty, time::Time, Ctxt, Event, Filter, Props, Target, Timestamp};
+use crate::{ctxt::Id, empty::Empty, time::Time, Ctxt, Event, Filter, Props, Target, Timestamp};
 
 #[cfg(feature = "std")]
 use crate::{ctxt::ErasedCtxt, filter::ErasedFilter, target::ErasedTarget, time::ErasedTime};
@@ -16,7 +16,7 @@ static AMBIENT: OnceLock<
     >,
 > = OnceLock::new();
 
-pub(crate) fn get() -> Option<&'static (impl Target + Filter + Ctxt + Time)> {
+pub(crate) fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt, impl Time>> {
     #[cfg(feature = "std")]
     {
         AMBIENT.get()
@@ -68,12 +68,12 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TTime> Ctxt for Ambient<TTarget, TFilter, TC
     type Props = TCtxt::Props;
     type Span = TCtxt::Span;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        self.ctxt.with_props(with)
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        self.ctxt.with_current(with)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span {
-        self.ctxt.open(props)
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+        self.ctxt.open(id, props)
     }
 
     fn enter(&self, scope: &mut Self::Span) {
@@ -175,6 +175,7 @@ mod std_support {
             let ambient: &'static _ = AMBIENT.get().unwrap();
 
             Ambient {
+                // SAFETY: The cell is guaranteed to contain values of the given type
                 target: unsafe { &*(&*ambient.target as *const _ as *const TTarget) },
                 filter: unsafe { &*(&*ambient.filter as *const _ as *const TFilter) },
                 ctxt: unsafe { &*(&*ambient.ctxt as *const _ as *const TCtxt) },

@@ -34,26 +34,6 @@ pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
 
     let severity_text = evt.lvl().to_string();
 
-    let parse_trace_id = |v: emit::Value| {
-        if let Some(id) = v.to_borrowed_str() {
-            u128::from_str_radix(id, 16)
-                .ok()
-                .map(|id| id.to_ne_bytes().to_vec())
-        } else {
-            None
-        }
-    };
-
-    let parse_span_id = |v: emit::Value| {
-        if let Some(id) = v.to_borrowed_str() {
-            u16::from_str_radix(id, 16)
-                .ok()
-                .map(|id| id.to_ne_bytes().to_vec())
-        } else {
-            None
-        }
-    };
-
     let body = Some(AnyValue {
         value: Some(Value::StringValue(evt.msg().to_string())),
     });
@@ -62,22 +42,13 @@ pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
     let mut trace_id = Vec::new();
     let mut span_id = Vec::new();
 
+    if let Some(id) = evt.id() {
+        trace_id = id.trace().to_hex().to_vec();
+        span_id = id.span().to_hex().to_vec();
+    }
+
     let mut seen = HashSet::new();
     evt.props().for_each(|k, v| {
-        if k == emit::well_known::TRACE_ID_KEY {
-            if let Some(id) = parse_trace_id(v.by_ref()) {
-                trace_id = id;
-                return ControlFlow::Continue(());
-            }
-        }
-
-        if k == emit::well_known::SPAN_ID_KEY {
-            if let Some(id) = parse_span_id(v.by_ref()) {
-                span_id = id;
-                return ControlFlow::Continue(());
-            }
-        }
-
         let key = k.to_string();
 
         if seen.insert(k) {

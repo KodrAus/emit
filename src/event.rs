@@ -1,6 +1,7 @@
 use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
 use crate::{
+    ctxt::Id,
     empty::Empty,
     props::{ByRef, Chain, ErasedProps},
     template::Render,
@@ -42,6 +43,7 @@ impl Default for Level {
 #[derive(Clone)]
 pub struct Event<'a, P = &'a dyn ErasedProps> {
     ts: Option<Timestamp>,
+    id: Option<Id>,
     lvl: Level,
     tpl: Template<'a>,
     props: P,
@@ -68,9 +70,16 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn new(ts: impl Time, lvl: Level, tpl: Template<'a>, props: P) -> Self {
+    pub fn new(
+        ts: Option<Timestamp>,
+        id: Option<Id>,
+        lvl: Level,
+        tpl: Template<'a>,
+        props: P,
+    ) -> Self {
         Event {
-            ts: ts.timestamp(),
+            ts,
+            id,
             lvl,
             tpl,
             props,
@@ -97,12 +106,8 @@ impl<'a, P: Props> Event<'a, P> {
         self.props.get(well_known::ERR_KEY)
     }
 
-    pub fn trace_id<'b>(&'b self) -> Option<Value<'b>> {
-        self.props.get(well_known::TRACE_ID_KEY)
-    }
-
-    pub fn span_id<'b>(&'b self) -> Option<Value<'b>> {
-        self.props.get(well_known::SPAN_ID_KEY)
+    pub fn id(&self) -> Option<Id> {
+        self.id
     }
 
     pub fn for_each<'b>(&'b self, for_each: impl FnMut(Key<'b>, Value<'b>) -> ControlFlow<()>) {
@@ -116,6 +121,7 @@ impl<'a, P: Props> Event<'a, P> {
     pub fn chain<U: Props>(self, other: U) -> Event<'a, Chain<P, U>> {
         Event {
             ts: self.ts,
+            id: self.id,
             lvl: self.lvl,
             tpl: self.tpl,
             props: self.props.chain(other),
@@ -129,6 +135,7 @@ impl<'a, P: Props> Event<'a, P> {
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
         Event {
             ts: self.ts,
+            id: self.id,
             lvl: self.lvl,
             tpl: self.tpl.by_ref(),
             props: self.props.by_ref(),
@@ -138,6 +145,7 @@ impl<'a, P: Props> Event<'a, P> {
     pub fn erase<'b>(&'b self) -> Event<'b> {
         Event {
             ts: self.ts,
+            id: self.id,
             lvl: self.lvl,
             tpl: self.tpl.by_ref(),
             props: &self.props,

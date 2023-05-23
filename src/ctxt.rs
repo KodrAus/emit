@@ -13,27 +13,125 @@ pub mod thread_local;
 
 pub use crate::empty::Empty;
 
+#[derive(Clone, Copy)]
+pub struct Id {
+    trace: TraceId,
+    span: SpanId,
+}
+
+#[derive(Clone, Copy)]
+pub struct TraceId(u128);
+
+#[derive(Clone, Copy)]
+pub struct SpanId(u64);
+
+impl Id {
+    pub const EMPTY: Self = Id {
+        trace: TraceId::EMPTY,
+        span: SpanId::EMPTY,
+    };
+
+    pub fn new(trace: Option<TraceId>, span: Option<SpanId>) -> Self {
+        Id {
+            trace: trace.unwrap_or(TraceId::EMPTY),
+            span: span.unwrap_or(SpanId::EMPTY),
+        }
+    }
+
+    pub fn trace(&self) -> Option<TraceId> {
+        if self.trace.is_empty() {
+            None
+        } else {
+            Some(self.trace)
+        }
+    }
+
+    pub fn span(&self) -> Option<SpanId> {
+        if self.span.is_empty() {
+            None
+        } else {
+            Some(self.span)
+        }
+    }
+}
+
+impl Default for Id {
+    fn default() -> Self {
+        Self::EMPTY
+    }
+}
+
+const HEX: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+];
+
+impl TraceId {
+    const EMPTY: Self = TraceId(0);
+
+    fn is_empty(&self) -> bool {
+        self.0 == Self::EMPTY.0
+    }
+
+    pub fn to_hex(&self) -> [u8; 32] {
+        let mut dst = [0; 32];
+        let src: [u8; 16] = self.0.to_ne_bytes();
+
+        for i in 0..src.len() {
+            let b = src[i];
+
+            dst[i * 2] = HEX[(b >> 4) as usize];
+            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
+        }
+
+        dst
+    }
+}
+
+impl SpanId {
+    const EMPTY: Self = SpanId(0);
+
+    fn is_empty(&self) -> bool {
+        self.0 == Self::EMPTY.0
+    }
+
+    pub fn to_hex(&self) -> [u8; 16] {
+        let mut dst = [0; 16];
+        let src: [u8; 8] = self.0.to_ne_bytes();
+
+        for i in 0..src.len() {
+            let b = src[i];
+
+            dst[i * 2] = HEX[(b >> 4) as usize];
+            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
+        }
+
+        dst
+    }
+}
+
 pub trait Ctxt {
     type Props: Props + ?Sized;
     type Span;
 
-    fn span<P: Props>(self, props: P) -> Span<Self>
+    fn span<P: Props>(self, id: Id, props: P) -> Span<Self>
     where
         Self: Sized,
     {
-        Span::new(self, props)
+        Span::new(self, id, props)
     }
 
-    fn span_future<P: Props, F: Future>(self, props: P, future: F) -> SpanFuture<Self, F>
+    fn span_future<P: Props, F: Future>(self, id: Id, props: P, future: F) -> SpanFuture<Self, F>
     where
         Self: Sized,
     {
-        SpanFuture::new(self, props, future)
+        SpanFuture::new(self, id, props, future)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span;
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span;
     fn enter(&self, span: &mut Self::Span);
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F);
+
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F);
+
     fn exit(&self, span: &mut Self::Span);
     fn close(&self, span: Self::Span);
 }
@@ -42,12 +140,12 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
     type Props = C::Props;
     type Span = C::Span;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        (**self).with_props(with)
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        (**self).with_current(with)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span {
-        (**self).open(props)
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+        (**self).open(id, props)
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -67,17 +165,16 @@ impl<C: Ctxt> Ctxt for Option<C> {
     type Props = Option<internal::Slot<C::Props>>;
     type Span = Option<C::Span>;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
         match self {
-            Some(ctxt) => {
-                ctxt.with_props(|props| unsafe { with(&Some(internal::Slot::new(props))) })
-            }
-            None => with(&None),
+            Some(ctxt) => ctxt
+                .with_current(|id, props| unsafe { with(id, &Some(internal::Slot::new(props))) }),
+            None => with(Id::EMPTY, &None),
         }
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span {
-        self.as_ref().map(|ctxt| ctxt.open(props))
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+        self.as_ref().map(|ctxt| ctxt.open(id, props))
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -104,12 +201,12 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
     type Props = C::Props;
     type Span = C::Span;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        (**self).with_props(with)
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        (**self).with_current(with)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span {
-        (**self).open(props)
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+        (**self).open(id, props)
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -130,12 +227,12 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::sync::Arc<C> {
     type Props = C::Props;
     type Span = C::Span;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        (**self).with_props(with)
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        (**self).with_current(with)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Span {
-        (**self).open(props)
+    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+        (**self).open(id, props)
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -164,8 +261,8 @@ impl<C: Ctxt> Drop for Span<C> {
 }
 
 impl<C: Ctxt> Span<C> {
-    fn new(ctxt: C, props: impl Props) -> Self {
-        let scope = mem::ManuallyDrop::new(ctxt.open(props));
+    fn new(ctxt: C, id: Id, props: impl Props) -> Self {
+        let scope = mem::ManuallyDrop::new(ctxt.open(id, props));
 
         Span { ctxt, scope }
     }
@@ -197,9 +294,9 @@ pub struct SpanFuture<C: Ctxt, F> {
 }
 
 impl<C: Ctxt, F> SpanFuture<C, F> {
-    fn new(scope: C, props: impl Props, future: F) -> Self {
+    fn new(scope: C, id: Id, props: impl Props, future: F) -> Self {
         SpanFuture {
-            scope: Span::new(scope, props),
+            scope: Span::new(scope, id, props),
             future,
         }
     }
@@ -220,11 +317,11 @@ impl Ctxt for Empty {
     type Props = Empty;
     type Span = Empty;
 
-    fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-        with(&Empty)
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        with(Id::EMPTY, &Empty)
     }
 
-    fn open<P: Props>(&self, _: P) -> Self::Span {
+    fn open<P: Props>(&self, _: Id, _: P) -> Self::Span {
         Empty
     }
 
@@ -271,14 +368,14 @@ mod alloc_support {
     mod internal {
         use core::{marker::PhantomData, mem, ops::ControlFlow};
 
-        use crate::{props::ErasedProps, Key, Props, Value};
+        use crate::{ctxt::Id, props::ErasedProps, Key, Props, Value};
 
         use super::ErasedScope;
 
         pub trait DispatchCtxt {
-            fn dispatch_with_props(&self, with: &mut dyn FnMut(ErasedSlot));
+            fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, ErasedSlot));
 
-            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedScope;
+            fn dispatch_open(&self, id: Id, props: &dyn ErasedProps) -> ErasedScope;
             fn dispatch_enter(&self, span: &mut ErasedScope);
             fn dispatch_exit(&self, span: &mut ErasedScope);
             fn dispatch_close(&self, span: ErasedScope);
@@ -336,12 +433,14 @@ mod alloc_support {
     where
         C::Span: Send + 'static,
     {
-        fn dispatch_with_props(&self, with: &mut dyn FnMut(internal::ErasedSlot)) {
-            self.with_props(move |props| with(unsafe { internal::ErasedSlot::new(&props) }))
+        fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, internal::ErasedSlot)) {
+            self.with_current(move |id, props| {
+                with(id, unsafe { internal::ErasedSlot::new(&props) })
+            })
         }
 
-        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedScope {
-            ErasedScope(Box::new(self.open(props)))
+        fn dispatch_open(&self, id: Id, props: &dyn ErasedProps) -> ErasedScope {
+            ErasedScope(Box::new(self.open(id, props)))
         }
 
         fn dispatch_enter(&self, span: &mut ErasedScope) {
@@ -367,16 +466,18 @@ mod alloc_support {
         type Props = internal::ErasedSlot;
         type Span = ErasedScope;
 
-        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
+        fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
             let mut f = Some(with);
 
             self.erase_scope_ctxt()
                 .0
-                .dispatch_with_props(&mut |props| f.take().expect("called multiple times")(&props));
+                .dispatch_with_current(&mut |id, props| {
+                    f.take().expect("called multiple times")(id, &props)
+                });
         }
 
-        fn open<P: Props>(&self, props: P) -> Self::Span {
-            self.erase_scope_ctxt().0.dispatch_open(&props)
+        fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+            self.erase_scope_ctxt().0.dispatch_open(id, &props)
         }
 
         fn enter(&self, span: &mut Self::Span) {
@@ -396,12 +497,12 @@ mod alloc_support {
         type Props = <dyn ErasedCtxt + 'a as Ctxt>::Props;
         type Span = <dyn ErasedCtxt + 'a as Ctxt>::Span;
 
-        fn with_props<F: FnOnce(&Self::Props)>(&self, with: F) {
-            (self as &(dyn ErasedCtxt + 'a)).with_props(with)
+        fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+            (self as &(dyn ErasedCtxt + 'a)).with_current(with)
         }
 
-        fn open<P: Props>(&self, props: P) -> Self::Span {
-            (self as &(dyn ErasedCtxt + 'a)).open(props)
+        fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+            (self as &(dyn ErasedCtxt + 'a)).open(id, props)
         }
 
         fn enter(&self, span: &mut Self::Span) {
