@@ -5,7 +5,7 @@ use serde::ser::{
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer, StdError,
 };
 
-use crate::otlp::{
+use crate::proto::{
     common::v1::{any_value::Value, AnyValue, ArrayValue, KeyValue, KeyValueList},
     logs::v1::{LogRecord, SeverityNumber},
 };

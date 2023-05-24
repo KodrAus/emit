@@ -1,14 +1,14 @@
 use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
-use otlp::{
+use proto::{
     collector::logs::v1::ExportLogsServiceRequest,
     common::v1::{InstrumentationScope, KeyValue},
     logs::v1::{LogRecord, ResourceLogs, ScopeLogs},
     resource::v1::Resource,
 };
 
-mod otlp;
-mod value;
+mod proto;
+mod record;
 
 pub fn http(dst: impl Into<String>) -> OtlpTargetBuilder {
     OtlpTargetBuilder {
@@ -38,7 +38,7 @@ impl OtlpTargetBuilder {
 
         resource.for_each(|k, v| {
             let key = k.to_string();
-            let value = value::to_value(v);
+            let value = record::to_value(v);
 
             attributes.push(KeyValue { key, value });
 
@@ -94,7 +94,7 @@ impl OtlpTarget {
 
 impl emit::Target for OtlpTarget {
     fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
-        let record = value::to_record(evt);
+        let record = record::to_record(evt);
 
         // Non-blocking
         self.sender.send(record);
