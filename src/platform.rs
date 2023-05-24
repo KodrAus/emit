@@ -12,18 +12,22 @@ pub(crate) mod system_clock;
 #[cfg(feature = "std")]
 pub(crate) mod thread_local_ctxt;
 
-#[cfg(feature = "id-generator")]
+#[cfg(feature = "rng")]
 pub(crate) mod rng_gen_id;
+#[cfg(all(feature = "atomic", not(feature = "rng")))]
+pub(crate) mod seq_gen_id;
 
 #[cfg(feature = "std")]
 type DefaultTime = system_clock::SystemClock;
 #[cfg(not(feature = "std"))]
 type DefaultTime = Empty;
 
-#[cfg(not(feature = "id-generator"))]
-type DefaultGenId = Empty;
-#[cfg(feature = "id-generator")]
+#[cfg(feature = "rng")]
 type DefaultGenId = rng_gen_id::RngGenId;
+#[cfg(all(feature = "atomic", not(feature = "rng")))]
+type DefaultGenId = seq_gen_id::SeqGenId;
+#[cfg(all(not(feature = "atomic"), not(feature = "rng")))]
+type DefaultGenId = Empty;
 
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
@@ -46,7 +50,6 @@ impl Default for Platform {
 }
 
 impl Platform {
-    #[cfg(feature = "std")]
     pub fn new() -> Self {
         Platform {
             #[cfg(not(feature = "std"))]

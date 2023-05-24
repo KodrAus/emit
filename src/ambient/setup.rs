@@ -1,12 +1,25 @@
+use std::sync::OnceLock;
+
 use crate::{
-    ctxt::Ctxt,
+    ctxt::{Ctxt, ErasedCtxt},
     empty::Empty,
-    filter::Filter,
+    filter::{ErasedFilter, Filter},
     platform::{DefaultCtxt, Platform},
+    target::ErasedTarget,
     Ambient, Target,
 };
 
-use super::AMBIENT;
+static AMBIENT: OnceLock<
+    Ambient<
+        Box<dyn ErasedTarget + Send + Sync>,
+        Box<dyn ErasedFilter + Send + Sync>,
+        Box<dyn ErasedCtxt + Send + Sync>,
+    >,
+> = OnceLock::new();
+
+pub(super) fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt>> {
+    AMBIENT.get()
+}
 
 type DefaultTarget = Empty;
 type DefaultFilter = Empty;

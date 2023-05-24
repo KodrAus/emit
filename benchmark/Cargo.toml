@@ -1,0 +1,38 @@
+[package]
+name = "emit-benchmark"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[lib]
+path = "lib.rs"
+
+[[bench]]
+name = "emit"
+path = "emit.rs"
+harness = false
+
+[[bench]]
+name = "span"
+path = "span.rs"
+harness = false
+
+[[bench]]
+name = "batcher"
+path = "batcher.rs"
+harness = false
+
+[features]
+full = ["emit/std", "emit/rng", "emit/serde", "emit/sval"]
+
+[dependencies.emit]
+path = "../"
+
+[dependencies.emit-batcher]
+path = "../batcher"
+
+[dependencies.smol]
+version = "1"
+
+[dependencies.criterion]
+version = "0.5"

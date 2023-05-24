@@ -3,7 +3,7 @@ members = [
     "targets/otlp-logs",
     "targets/otlp-logs/gen",
     "macros",
-    "benches",
+    "benchmark",
     "tests/ui",
     "tests/smoke-test",
 ]
@@ -19,19 +19,17 @@ edition = "2021"
 
 [features]
 std = ["alloc", "emit_macros/std", "value-bag/error"]
-alloc = ["value-bag/alloc", "value-bag/owned"]
+alloc = ["atomic", "value-bag/alloc", "value-bag/owned"]
 sval = ["emit_macros/sval", "value-bag/sval", "dep:sval"]
 serde = ["emit_macros/serde", "value-bag/serde", "dep:serde"]
-id-generator = ["std", "dep:rand"]
+atomic = []
+rng = ["dep:rand"]
 
 [dependencies.emit_macros]
 path = "macros"
 
 [dependencies.value-bag]
 version = "1"
-
-[dependencies.fv-template]
-version = "0.3"
 
 [dependencies.sval]
 version = "2"

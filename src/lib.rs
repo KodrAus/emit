@@ -6,7 +6,6 @@ extern crate alloc;
 use core::future::Future;
 
 pub use emit_macros::*;
-use id::GenId;
 
 mod macro_hooks;
 
@@ -102,7 +101,7 @@ pub fn clock() -> impl Clock {
 }
 
 #[cfg(feature = "std")]
-pub fn gen_id() -> impl GenId {
+pub fn gen_id() -> impl id::GenId {
     ambient::get()
 }
 

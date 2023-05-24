@@ -4,27 +4,12 @@ use crate::{
 };
 
 #[cfg(feature = "std")]
-use crate::{ctxt::ErasedCtxt, filter::ErasedFilter, target::ErasedTarget};
-
-#[cfg(feature = "std")]
-use std::sync::OnceLock;
-
-#[cfg(feature = "std")]
 pub mod setup;
-
-#[cfg(feature = "std")]
-static AMBIENT: OnceLock<
-    Ambient<
-        Box<dyn ErasedTarget + Send + Sync>,
-        Box<dyn ErasedFilter + Send + Sync>,
-        Box<dyn ErasedCtxt + Send + Sync>,
-    >,
-> = OnceLock::new();
 
 pub(crate) fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt>> {
     #[cfg(feature = "std")]
     {
-        AMBIENT.get()
+        setup::get()
     }
     #[cfg(not(feature = "std"))]
     {

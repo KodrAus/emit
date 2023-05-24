@@ -1,5 +1,8 @@
 use proc_macro2::TokenStream;
-use syn::{parse::Parse, spanned::Spanned, Block, FieldValue, Item, ItemFn, Signature};
+use syn::{
+    parse::Parse, spanned::Spanned, Block, Expr, ExprAsync, ExprBlock, FieldValue, Item, ItemFn,
+    Signature, Stmt,
+};
 
 use crate::{
     args::{self, Arg},
@@ -36,27 +39,35 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
     let with_tokens = args.with;
 
-    let mut item = syn::parse2::<Item>(opts.item)?;
+    let mut item = syn::parse2::<Stmt>(opts.item)?;
     match &mut item {
         // A synchronous function
-        Item::Fn(ItemFn {
+        Stmt::Item(Item::Fn(ItemFn {
             block,
             sig: Signature {
                 asyncness: None, ..
             },
             ..
-        }) => {
+        })) => {
             **block = syn::parse2::<Block>(inject_sync(&props, with_tokens, quote!(#block)))?;
         }
+        // A synchronous block
+        Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
+            *block = syn::parse2::<Block>(inject_sync(&props, with_tokens, quote!(#block)))?;
+        }
         // An asynchronous function
-        Item::Fn(ItemFn {
+        Stmt::Item(Item::Fn(ItemFn {
             block,
             sig: Signature {
                 asyncness: Some(_), ..
             },
             ..
-        }) => {
+        })) => {
             **block = syn::parse2::<Block>(inject_async(&props, with_tokens, quote!(#block)))?;
+        }
+        // An asynchronous block
+        Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
+            *block = syn::parse2::<Block>(inject_async(&props, with_tokens, quote!(#block)))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
