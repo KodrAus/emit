@@ -1,5 +1,7 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
+use std::time::Duration;
+
 #[macro_use]
 extern crate serde_derive;
 
@@ -11,9 +13,19 @@ struct Work {
 
 #[tokio::main]
 async fn main() {
-    emit::setup().to(emit_term::stdout()).init();
+    let emitter = emit::setup().to((
+        emit_term::stdout(),
+        emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
+            .resource(emit::props! {
+                #[emit::key("service.name")]
+                service_name: "smoke-test-rs"
+            })
+            .spawn()
+    )).init();
 
     in_ctxt(78).await;
+
+    emitter.target().1.flush(Duration::from_secs(5)).await;
 }
 
 #[emit::span("Hello!", a, ax: 13)]
@@ -30,7 +42,6 @@ async fn in_ctxt(a: i32) {
 
 #[emit::span("Hello!", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
-    // Emit an info event to the global receiver
     emit::warn!(
         with: emit::props! {
             request_id: "abc",
