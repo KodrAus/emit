@@ -14,20 +14,20 @@ struct Work {
 #[tokio::main]
 async fn main() {
     let emitter = emit::setup()
-        .to((
-            emit_term::stdout(),
+        .to(emit_term::stdout())
+        .to(
             emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
                 .resource(emit::props! {
                     #[emit::key("service.name")]
                     service_name: "smoke-test-rs"
                 })
                 .spawn(),
-        ))
+        )
         .init();
 
     in_ctxt(78).await;
 
-    emitter.target().1.flush(Duration::from_secs(5)).await;
+    emitter.blocking_flush(Duration::from_secs(5));
 }
 
 #[emit::span("Hello!", a, ax: 13)]

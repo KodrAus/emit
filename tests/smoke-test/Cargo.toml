@@ -10,7 +10,7 @@ path = "main.rs"
 
 [dependencies.emit]
 path = "../../"
-features = ["rng", "serde"]
+features = ["serde"]
 
 [dependencies.emit-otlp-logs]
 path = "../../targets/otlp-logs"
