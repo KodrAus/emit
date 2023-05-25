@@ -22,6 +22,8 @@ pub use self::{
 
 mod macro_hooks;
 mod platform;
+
+#[cfg(feature = "std")]
 mod setup;
 
 pub fn emit(

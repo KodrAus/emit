@@ -10,10 +10,19 @@ path = "main.rs"
 
 [dependencies.emit]
 path = "../../"
-features = ["rng"]
+features = ["rng", "serde"]
 
 [dependencies.emit-otlp-logs]
 path = "../../targets/otlp-logs"
+
+[dependencies.emit-term]
+path = "../../targets/term"
+
+[dependencies.serde]
+version = "1"
+
+[dependencies.serde_derive]
+version = "1"
 
 [dependencies.tokio]
 version = "1"

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "core",
+    "targets/term",
     "targets/otlp-logs",
     "targets/otlp-logs/gen",
     "macros",

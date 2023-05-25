@@ -1,0 +1,14 @@
+[package]
+name = "emit-term"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.emit]
+path = "../../"
+features = ["sval"]
+
+[dependencies.sval_fmt]
+version = "2"
+
+[dependencies.termcolor]
+version = "1"

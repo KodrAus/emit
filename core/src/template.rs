@@ -52,26 +52,89 @@ impl<'a, P> Render<'a, P> {
     }
 }
 
-impl<'a, P: Props> fmt::Display for Render<'a, P> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<'a, P: Props> Render<'a, P> {
+    pub fn write(&self, mut writer: impl Write) -> fmt::Result {
         for part in self.tpl.0 {
             match part.0 {
-                PartKind::Text { value } => f.write_str(value)?,
+                PartKind::Text { value } => writer.write_text(value)?,
                 PartKind::Hole { label, formatter } => {
                     if let Some(value) = self.props.get(label) {
                         if let Some(formatter) = formatter {
-                            formatter(&value, f)?;
+                            writer.write_hole_fmt(value, formatter)?;
                         } else {
-                            fmt::Display::fmt(&value, f)?;
+                            writer.write_hole_value(value)?;
                         }
                     } else {
-                        write!(f, "`{}`", label)?;
+                        writer.write_hole_label(label)?;
                     }
                 }
             }
         }
 
         Ok(())
+    }
+}
+
+pub trait Write: fmt::Write {
+    fn write_text(&mut self, text: &str) -> fmt::Result {
+        self.write_str(text)
+    }
+
+    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
+        self.write_fmt(format_args!("{}", value))
+    }
+
+    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
+        struct FormatValue<'a> {
+            value: Value<'a>,
+            formatter: Formatter,
+        }
+
+        impl<'a> fmt::Display for FormatValue<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                (self.formatter)(&self.value, f)
+            }
+        }
+
+        self.write_fmt(format_args!("{}", FormatValue { value, formatter }))
+    }
+
+    fn write_hole_label(&mut self, label: &str) -> fmt::Result {
+        self.write_fmt(format_args!("`{}`", label))
+    }
+}
+
+impl<'a, W: Write + ?Sized> Write for &'a mut W {
+    fn write_text(&mut self, text: &str) -> fmt::Result {
+        (**self).write_text(text)
+    }
+
+    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
+        (**self).write_hole_value(value)
+    }
+
+    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
+        (**self).write_hole_fmt(value, formatter)
+    }
+
+    fn write_hole_label(&mut self, label: &str) -> fmt::Result {
+        (**self).write_hole_label(label)
+    }
+}
+
+impl<'a> Write for fmt::Formatter<'a> {
+    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
+        fmt::Display::fmt(&value, self)
+    }
+
+    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
+        formatter(&value, self)
+    }
+}
+
+impl<'a, P: Props> fmt::Display for Render<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f)
     }
 }
 
