@@ -8,15 +8,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let (sender, receiver) = emit_batcher::bounded::<u64>(1024);
 
     thread::spawn(move || {
-        smol::block_on(receiver.exec(
-            |delay| async move { thread::sleep(delay) },
-            |batch| async move {
+        receiver
+            .blocking_exec(|batch| {
                 black_box(batch);
 
                 Ok(())
-            },
-        ))
-        .unwrap();
+            })
+            .unwrap();
     });
 
     c.bench_function("batch u64 thread 1 msg 10_000", |b| {

@@ -1,9 +1,11 @@
 use std::{
     cmp,
-    future::Future,
+    future::{self, Future},
     mem,
     panic::{self, AssertUnwindSafe},
-    sync::{Arc, Mutex},
+    pin::pin,
+    sync::{Arc, Mutex, OnceLock},
+    task, thread,
     time::Duration,
 };
 
@@ -118,6 +120,42 @@ impl<T> BatchError<T> {
 }
 
 impl<T> Receiver<T> {
+    pub fn blocking_exec(
+        self,
+        mut on_batch: impl FnMut(Vec<T>) -> Result<(), BatchError<T>>,
+    ) -> Result<(), Error> {
+        static WAKER: OnceLock<Arc<NeverWake>> = OnceLock::new();
+
+        // A waker that does nothing; the tasks it runs are fully
+        // synchronous so there's never any notifications to issue
+        struct NeverWake;
+
+        impl task::Wake for NeverWake {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        // The future is polled to completion here, so we can pin
+        // it directly on the stack
+        let mut fut = pin!(self.exec(
+            |delay| future::ready(thread::sleep(delay)),
+            move |batch| future::ready(on_batch(batch)),
+        ));
+
+        // Get a context for our synchronous task
+        let waker = WAKER.get_or_init(|| Arc::new(NeverWake)).clone().into();
+        let mut cx = task::Context::from_waker(&waker);
+
+        // Drive the task to completion; it should complete in one go,
+        // but may eagerly return as soon as it hits an await point, so
+        // just to be sure we continuously poll it
+        loop {
+            match fut.as_mut().poll(&mut cx) {
+                task::Poll::Ready(r) => return r,
+                task::Poll::Pending => continue,
+            }
+        }
+    }
+
     pub async fn exec<
         FBatch: Future<Output = Result<(), BatchError<T>>>,
         FWait: Future<Output = ()>,
@@ -341,3 +379,6 @@ impl Watchers {
         }
     }
 }
+
+#[cfg(feature = "tokio")]
+pub mod tokio;

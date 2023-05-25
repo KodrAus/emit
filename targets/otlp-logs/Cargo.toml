@@ -9,6 +9,7 @@ features = ["std", "serde"]
 
 [dependencies.emit-batcher]
 path = "../../batcher"
+features = ["tokio"]
 
 [dependencies.serde]
 version = "1"

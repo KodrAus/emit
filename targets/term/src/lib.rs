@@ -1,28 +1,61 @@
 use core::{fmt, time::Duration};
-use std::io::Write;
+use std::{cell::RefCell, io::Write};
 
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
-    Stdout
+    Stdout(BufferWriter::stdout(ColorChoice::Auto))
 }
 
-pub struct Stdout;
+pub struct Stdout(BufferWriter);
+
+thread_local! {
+    static STDOUT: RefCell<Option<Buffer>> = RefCell::new(None);
+}
 
 impl emit::target::Target for Stdout {
     fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
-        let stdout = BufferWriter::stdout(ColorChoice::Auto);
-        let mut buf = stdout.buffer();
+        STDOUT.with(|buf| {
+            match buf.try_borrow_mut() {
+                // If there are no overlapping references then use the cached buffer
+                Ok(mut slot) => {
+                    match &mut *slot {
+                        // If there's a cached buffer then clear it and print using it
+                        Some(buf) => {
+                            buf.clear();
+                            print(&self.0, buf, evt);
+                        }
+                        // If there's no cached buffer then create one and use it
+                        // It'll be cached for future callers on this thread
+                        None => {
+                            let mut buf = self.0.buffer();
+                            print(&self.0, &mut buf, evt);
 
-        let props = evt.props();
-
-        if let Ok(_) = evt.tpl().with_props(props).write(Writer { buf: &mut buf }) {
-            let _ = buf.write(b"\n");
-            let _ = stdout.print(&buf);
-        }
+                            *slot = Some(buf);
+                        }
+                    }
+                }
+                // If there are overlapping references then just create a
+                // buffer on-demand to use
+                Err(_) => {
+                    print(&self.0, &mut self.0.buffer(), evt);
+                }
+            }
+        });
     }
 
-    fn blocking_flush(&self, _: Duration) {}
+    fn blocking_flush(&self, _: Duration) {
+        // Events are emitted synchronously
+    }
+}
+
+fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
+    let props = evt.props();
+
+    if let Ok(_) = evt.tpl().with_props(props).write(Writer { buf }) {
+        let _ = buf.write(b"\n");
+        let _ = out.print(&buf);
+    }
 }
 
 struct Writer<'a> {
@@ -31,23 +64,33 @@ struct Writer<'a> {
 
 impl<'a> sval_fmt::TokenWrite for Writer<'a> {
     fn write_text(&mut self, text: &str) -> fmt::Result {
-        self.write(text, TEXT)
+        self.write(text, TEXT);
+
+        Ok(())
     }
 
     fn write_number<N: fmt::Display>(&mut self, num: N) -> fmt::Result {
-        self.write(num, NUMBER)
+        self.write(num, NUMBER);
+
+        Ok(())
     }
 
     fn write_atom<A: fmt::Display>(&mut self, atom: A) -> fmt::Result {
-        self.write(atom, ATOM)
+        self.write(atom, ATOM);
+
+        Ok(())
     }
 
     fn write_ident(&mut self, ident: &str) -> fmt::Result {
-        self.write(ident, IDENT)
+        self.write(ident, IDENT);
+
+        Ok(())
     }
 
     fn write_field(&mut self, field: &str) -> fmt::Result {
-        self.write(field, FIELD)
+        self.write(field, FIELD);
+
+        Ok(())
     }
 }
 
@@ -70,13 +113,9 @@ const IDENT: Color = Color::Ansi256(170);
 const FIELD: Color = Color::Ansi256(174);
 
 impl<'a> Writer<'a> {
-    fn write(&mut self, v: impl fmt::Display, color: Color) -> fmt::Result {
-        self.buf
-            .set_color(ColorSpec::new().set_fg(Some(color)))
-            .map_err(|_| fmt::Error)?;
-        write!(&mut self.buf, "{}", v).map_err(|_| fmt::Error)?;
-        self.buf.reset().map_err(|_| fmt::Error)?;
-
-        Ok(())
+    fn write(&mut self, v: impl fmt::Display, color: Color) {
+        let _ = self.buf.set_color(ColorSpec::new().set_fg(Some(color)));
+        let _ = write!(&mut self.buf, "{}", v);
+        let _ = self.buf.reset();
     }
 }

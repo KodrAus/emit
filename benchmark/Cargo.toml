@@ -31,8 +31,5 @@ path = "../"
 [dependencies.emit-batcher]
 path = "../batcher"
 
-[dependencies.smol]
-version = "1"
-
 [dependencies.criterion]
 version = "0.5"
