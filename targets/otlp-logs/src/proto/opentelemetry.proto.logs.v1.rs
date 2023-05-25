@@ -102,7 +102,7 @@ pub struct LogRecord {
     /// defined in W3C Trace Context specification. 24 most significant bits are reserved
     /// and must be set to 0. Readers must not assume that 24 most significant bits
     /// will be zero and must correctly mask the bits when reading 8-bit trace flag (use
-    /// flags & TRACE_FLAGS_MASK). \[Optional\].
+    /// flags & LOG_RECORD_FLAGS_TRACE_FLAGS_MASK). \[Optional\].
     #[prost(fixed32, tag = "8")]
     pub flags: u32,
     /// A unique identifier for a trace. All logs from the same trace share
@@ -234,16 +234,16 @@ impl SeverityNumber {
 /// bit-fields. Each non-zero value defined in this enum is a bit-mask.
 /// To extract the bit-field, for example, use an expression like:
 ///
-///    (logRecord.flags & LOG_RECORD_FLAG_TRACE_FLAGS_MASK)
+///    (logRecord.flags & LOG_RECORD_FLAGS_TRACE_FLAGS_MASK)
 ///
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum LogRecordFlags {
     /// The zero value for the enum. Should not be used for comparisons.
     /// Instead use bitwise "and" with the appropriate mask as shown above.
-    LogRecordFlagDoNotUse = 0,
+    DoNotUse = 0,
     /// Bits 0-7 are used for trace flags.
-    LogRecordFlagTraceFlagsMask = 255,
+    TraceFlagsMask = 255,
 }
 impl LogRecordFlags {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -252,15 +252,15 @@ impl LogRecordFlags {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            LogRecordFlags::LogRecordFlagDoNotUse => "LOG_RECORD_FLAG_DO_NOT_USE",
-            LogRecordFlags::LogRecordFlagTraceFlagsMask => "LOG_RECORD_FLAG_TRACE_FLAGS_MASK",
+            LogRecordFlags::DoNotUse => "LOG_RECORD_FLAGS_DO_NOT_USE",
+            LogRecordFlags::TraceFlagsMask => "LOG_RECORD_FLAGS_TRACE_FLAGS_MASK",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "LOG_RECORD_FLAG_DO_NOT_USE" => Some(Self::LogRecordFlagDoNotUse),
-            "LOG_RECORD_FLAG_TRACE_FLAGS_MASK" => Some(Self::LogRecordFlagTraceFlagsMask),
+            "LOG_RECORD_FLAGS_DO_NOT_USE" => Some(Self::DoNotUse),
+            "LOG_RECORD_FLAGS_TRACE_FLAGS_MASK" => Some(Self::TraceFlagsMask),
             _ => None,
         }
     }
