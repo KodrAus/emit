@@ -6,9 +6,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::{props::Props, Id};
-
-pub use crate::empty::Empty;
+use crate::{empty::Empty, id::Id, props::Props};
 
 pub trait Ctxt {
     type Props: Props + ?Sized;
@@ -237,7 +235,7 @@ impl Ctxt for Empty {
 mod internal {
     use core::{marker::PhantomData, ops::ControlFlow};
 
-    use crate::{Key, Props, Value};
+    use crate::{key::Key, props::Props, value::Value};
 
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
@@ -270,7 +268,12 @@ mod alloc_support {
     mod internal {
         use core::{marker::PhantomData, mem, ops::ControlFlow};
 
-        use crate::{ctxt::Id, props::ErasedProps, Key, Props, Value};
+        use crate::{
+            id::Id,
+            key::Key,
+            props::{ErasedProps, Props},
+            value::Value,
+        };
 
         use super::ErasedScope;
 

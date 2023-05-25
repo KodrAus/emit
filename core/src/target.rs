@@ -1,6 +1,4 @@
-use crate::{Event, Props};
-
-pub use crate::empty::Empty;
+use crate::{empty::Empty, event::Event, props::Props};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
@@ -51,7 +49,7 @@ pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
 }
 
 mod internal {
-    use crate::Event;
+    use crate::event::Event;
 
     pub trait DispatchTarget {
         fn dispatch_emit_to(&self, evt: &Event);

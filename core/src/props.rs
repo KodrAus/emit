@@ -1,8 +1,6 @@
-use crate::{Key, Value};
-
 use core::{borrow::Borrow, ops::ControlFlow};
 
-pub use crate::empty::Empty;
+use crate::{empty::Empty, key::Key, value::Value};
 
 pub trait Props {
     fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F);
@@ -158,7 +156,7 @@ impl<'a> Props for SortedSlice<'a> {
 mod internal {
     use core::ops::ControlFlow;
 
-    use crate::{Key, Value};
+    use crate::{key::Key, value::Value};
 
     pub trait DispatchProps {
         fn dispatch_for_each<'a, 'b>(

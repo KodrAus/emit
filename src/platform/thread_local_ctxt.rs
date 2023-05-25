@@ -3,7 +3,13 @@ use std::{
     ops::ControlFlow::{self, *},
 };
 
-use crate::{ctxt::Ctxt, key::OwnedKey, value::OwnedValue, Id, Key, Props, Value};
+use emit_core::{
+    ctxt::Ctxt,
+    id::Id,
+    key::{Key, OwnedKey},
+    props::Props,
+    value::{OwnedValue, Value},
+};
 
 thread_local! {
     static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {

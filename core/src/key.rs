@@ -119,7 +119,7 @@ impl<'k> AsRef<str> for Key<'k> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::borrow::Cow;
+    use alloc::borrow::{Cow, ToOwned};
 
     use super::*;
 

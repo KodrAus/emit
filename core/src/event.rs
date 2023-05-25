@@ -2,9 +2,14 @@ use core::{borrow::Borrow, fmt, ops::ControlFlow};
 
 use crate::{
     empty::Empty,
-    props::{ByRef, Chain, ErasedProps},
-    template::Render,
-    well_known, Id, Key, Level, Props, Template, Timestamp, Value,
+    id::Id,
+    key::Key,
+    level::Level,
+    props::{ByRef, Chain, ErasedProps, Props},
+    template::{Render, Template},
+    time::Timestamp,
+    value::Value,
+    well_known,
 };
 
 #[derive(Clone)]

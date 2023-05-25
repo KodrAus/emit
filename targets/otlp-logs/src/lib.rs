@@ -92,7 +92,7 @@ impl OtlpTarget {
     }
 }
 
-impl emit::Target for OtlpTarget {
+impl emit::target::Target for OtlpTarget {
     fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
         let record = record::to_record(evt);
 

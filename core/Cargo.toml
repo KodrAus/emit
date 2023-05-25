@@ -1,0 +1,23 @@
+[package]
+name = "emit_core"
+version = "0.0.0"
+edition = "2021"
+
+[features]
+std = ["alloc", "value-bag/error"]
+alloc = ["value-bag/alloc", "value-bag/owned"]
+sval = ["value-bag/sval", "dep:sval"]
+serde = ["value-bag/serde", "dep:serde"]
+
+[dependencies.value-bag]
+version = "1"
+
+[dependencies.sval]
+version = "2"
+optional = true
+default-features = false
+
+[dependencies.serde]
+version = "1"
+optional = true
+default-features = false

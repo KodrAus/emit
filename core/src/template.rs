@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{empty::Empty, Props, Value};
+use crate::{empty::Empty, props::Props, value::Value};
 
 #[derive(Clone)]
 pub struct Template<'a>(&'a [Part<'a>]);

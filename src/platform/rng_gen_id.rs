@@ -1,4 +1,4 @@
-use crate::id::{GenId, SpanId, TraceId};
+use emit_core::id::{GenId, SpanId, TraceId};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct RngGenId;

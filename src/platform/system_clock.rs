@@ -1,4 +1,4 @@
-use crate::{time::Clock, Timestamp};
+use emit_core::time::{Clock, Timestamp};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SystemClock;

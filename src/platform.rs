@@ -1,10 +1,10 @@
 use crate::{id::GenId, time::Clock, Timestamp};
 
 #[cfg(not(feature = "std"))]
-use crate::empty::Empty;
+use emit_core::empty::Empty;
 
 #[cfg(feature = "std")]
-use crate::{id::ErasedGenId, time::ErasedClock};
+use emit_core::{id::ErasedGenId, time::ErasedClock};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;
@@ -14,8 +14,6 @@ pub(crate) mod thread_local_ctxt;
 
 #[cfg(feature = "rng")]
 pub(crate) mod rng_gen_id;
-#[cfg(all(feature = "atomic", not(feature = "rng")))]
-pub(crate) mod seq_gen_id;
 
 #[cfg(feature = "std")]
 type DefaultTime = system_clock::SystemClock;
@@ -24,9 +22,7 @@ type DefaultTime = Empty;
 
 #[cfg(feature = "rng")]
 type DefaultGenId = rng_gen_id::RngGenId;
-#[cfg(all(feature = "atomic", not(feature = "rng")))]
-type DefaultGenId = seq_gen_id::SeqGenId;
-#[cfg(all(not(feature = "atomic"), not(feature = "rng")))]
+#[cfg(not(feature = "rng"))]
 type DefaultGenId = Empty;
 
 #[cfg(feature = "std")]
@@ -34,13 +30,13 @@ pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
 
 pub(crate) struct Platform {
     #[cfg(not(feature = "std"))]
-    clock: DefaultTime,
+    pub(crate) clock: DefaultTime,
     #[cfg(feature = "std")]
-    clock: Box<dyn ErasedClock + Send + Sync>,
+    pub(crate) clock: Box<dyn ErasedClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
-    gen_id: DefaultGenId,
+    pub(crate) gen_id: DefaultGenId,
     #[cfg(feature = "std")]
-    gen_id: Box<dyn ErasedGenId + Send + Sync>,
+    pub(crate) gen_id: Box<dyn ErasedGenId + Send + Sync>,
 }
 
 impl Default for Platform {

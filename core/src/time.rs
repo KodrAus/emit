@@ -1,6 +1,6 @@
 use core::{fmt, time::Duration};
 
-pub use crate::empty::Empty;
+use crate::empty::Empty;
 
 #[derive(Clone, Copy)]
 pub struct Timestamp(Duration);

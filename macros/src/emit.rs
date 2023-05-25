@@ -34,9 +34,9 @@ impl Parse for Args {
         )?;
 
         Ok(Args {
-            to: to.take().unwrap_or_else(|| quote!(emit::target::Empty)),
-            when: when.take().unwrap_or_else(|| quote!(emit::filter::Empty)),
-            with: with.take().unwrap_or_else(|| quote!(emit::props::Empty)),
+            to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
+            when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
+            with: with.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             ts: ts.take().unwrap_or_else(|| quote!(None)),
             id: id.take().unwrap_or_else(|| quote!(emit::Id::EMPTY)),
         })

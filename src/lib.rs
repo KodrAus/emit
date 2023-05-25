@@ -5,34 +5,24 @@ extern crate alloc;
 
 use core::future::Future;
 
-pub use emit_macros::*;
-
-mod macro_hooks;
-
-mod ambient;
-pub mod ctxt;
-mod empty;
-mod event;
-pub mod filter;
-pub mod id;
-pub mod key;
-mod level;
-mod platform;
-pub mod props;
-pub mod target;
-pub mod template;
-pub mod time;
-pub mod value;
-pub mod well_known;
+use emit_core::{ctxt::Ctxt, filter::Filter, target::Target, time::Clock};
 
 #[doc(inline)]
-#[allow(unused_imports)]
-pub use self::{
-    ambient::*, event::*, id::Id, key::Key, level::*, props::Props, target::Target,
-    template::Template, time::Timestamp, value::Value,
+pub use emit_macros::*;
+
+#[doc(inline)]
+pub use emit_core::{
+    ctxt, empty, event, filter, id, key, level, props, target, template, time, value, well_known,
 };
 
-use self::{ctxt::Ctxt, filter::Filter, time::Clock};
+pub use self::{
+    event::Event, id::Id, key::Key, level::Level, props::Props, template::Template,
+    time::Timestamp, value::Value,
+};
+
+mod macro_hooks;
+mod platform;
+mod setup;
 
 pub fn emit(
     to: impl Target,
@@ -44,7 +34,7 @@ pub fn emit(
     tpl: Template,
     props: impl Props,
 ) {
-    let ambient = ambient::get();
+    let ambient = emit_core::ambient::get();
 
     ambient.with_current(|current_id, current_props| {
         let ts = ts.or_else(|| ambient.now());
@@ -61,7 +51,7 @@ pub fn emit(
 }
 
 pub fn span<C: Ctxt>(ctxt: C, id: Id, props: impl Props) -> ctxt::Span<C> {
-    let ambient = ambient::get();
+    let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ctxt.current_id(), ambient);
     ctxt.span(id, props)
@@ -73,7 +63,7 @@ pub fn span_future<C: Ctxt, F: Future>(
     props: impl Props,
     future: F,
 ) -> ctxt::SpanFuture<C, F> {
-    let ambient = ambient::get();
+    let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ctxt.current_id(), ambient);
 
@@ -81,37 +71,33 @@ pub fn span_future<C: Ctxt, F: Future>(
 }
 
 #[cfg(feature = "std")]
-pub fn target() -> impl Target {
-    ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn filter() -> impl Filter {
-    ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn ctxt() -> impl Ctxt {
-    ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn clock() -> impl Clock {
-    ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn gen_id() -> impl id::GenId {
-    ambient::get()
-}
-
-#[cfg(feature = "std")]
 pub fn setup() -> setup::Setup {
     setup::Setup::default()
 }
 
-mod internal {
-    pub struct Erased<T>(pub(crate) T);
+#[cfg(feature = "std")]
+pub fn target() -> impl Target {
+    emit_core::ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn filter() -> impl Filter {
+    emit_core::ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn ctxt() -> impl Ctxt {
+    emit_core::ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn clock() -> impl Clock {
+    emit_core::ambient::get()
+}
+
+#[cfg(feature = "std")]
+pub fn gen_id() -> impl id::GenId {
+    emit_core::ambient::get()
 }
 
 #[doc(hidden)]

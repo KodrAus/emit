@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "core",
     "targets/otlp-logs",
     "targets/otlp-logs/gen",
     "macros",
@@ -18,18 +19,18 @@ authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2021"
 
 [features]
-std = ["alloc", "emit_macros/std", "value-bag/error"]
-alloc = ["atomic", "value-bag/alloc", "value-bag/owned"]
-sval = ["emit_macros/sval", "value-bag/sval", "dep:sval"]
-serde = ["emit_macros/serde", "value-bag/serde", "dep:serde"]
-atomic = []
+default = ["std", "rng"]
+std = ["emit_macros/std", "emit_core/std"]
+alloc = ["emit_core/alloc"]
+sval = ["emit_macros/sval", "emit_core/sval", "dep:sval"]
+serde = ["emit_macros/serde", "emit_core/serde", "dep:serde"]
 rng = ["dep:rand"]
 
 [dependencies.emit_macros]
 path = "macros"
 
-[dependencies.value-bag]
-version = "1"
+[dependencies.emit_core]
+path = "core"
 
 [dependencies.sval]
 version = "2"

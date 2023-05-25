@@ -1,25 +1,6 @@
-use std::sync::OnceLock;
+use emit_core::{ambient::Ambient, ctxt::Ctxt, empty::Empty, filter::Filter, target::Target};
 
-use crate::{
-    ctxt::{Ctxt, ErasedCtxt},
-    empty::Empty,
-    filter::{ErasedFilter, Filter},
-    platform::{DefaultCtxt, Platform},
-    target::ErasedTarget,
-    Ambient, Target,
-};
-
-static AMBIENT: OnceLock<
-    Ambient<
-        Box<dyn ErasedTarget + Send + Sync>,
-        Box<dyn ErasedFilter + Send + Sync>,
-        Box<dyn ErasedCtxt + Send + Sync>,
-    >,
-> = OnceLock::new();
-
-pub(super) fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt>> {
-    AMBIENT.get()
-}
+use crate::platform::{DefaultCtxt, Platform};
 
 type DefaultTarget = Empty;
 type DefaultFilter = Empty;
@@ -77,27 +58,20 @@ where
     TCtxt::Span: Send + 'static,
 {
     pub fn init(self) -> Init<&'static TTarget, &'static TFilter, &'static TCtxt> {
-        let target = Box::new(self.target);
-        let filter = Box::new(self.filter);
-        let ctxt = Box::new(self.ctxt);
-
-        AMBIENT
-            .set(Ambient {
-                target,
-                filter,
-                ctxt,
-                platform: self.platform,
-            })
-            .map_err(|_| "`emit` is already initialized")
-            .unwrap();
-
-        let ambient: &'static _ = AMBIENT.get().unwrap();
+        let ambient = emit_core::ambient::init(
+            Ambient::new()
+                .with_target(self.target)
+                .with_filter(self.filter)
+                .with_ctxt(self.ctxt)
+                .with_clock(self.platform.clock)
+                .with_gen_id(self.platform.gen_id),
+        )
+        .expect("already initialized");
 
         Init {
-            // SAFETY: The cell is guaranteed to contain values of the given type
-            target: unsafe { &*(&*ambient.target as *const _ as *const TTarget) },
-            filter: unsafe { &*(&*ambient.filter as *const _ as *const TFilter) },
-            ctxt: unsafe { &*(&*ambient.ctxt as *const _ as *const TCtxt) },
+            target: *ambient.target(),
+            filter: *ambient.filter(),
+            ctxt: *ambient.ctxt(),
         }
     }
 }
