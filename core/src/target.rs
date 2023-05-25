@@ -2,6 +2,20 @@ use crate::{empty::Empty, event::Event, props::Props};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
+
+    fn and<U>(self, other: U) -> And<Self, U>
+    where
+        Self: Sized,
+    {
+        And {
+            lhs: self,
+            rhs: other,
+        }
+    }
+
+    fn by_ref(&self) -> ByRef<Self> {
+        ByRef(self)
+    }
 }
 
 impl<'a, T: Target + ?Sized> Target for &'a T {
@@ -48,6 +62,26 @@ pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
+pub struct And<T, U> {
+    lhs: T,
+    rhs: U,
+}
+
+impl<T: Target, U: Target> Target for And<T, U> {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        self.lhs.emit_event(evt);
+        self.rhs.emit_event(evt);
+    }
+}
+
+pub struct ByRef<'a, T: ?Sized>(&'a T);
+
+impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
+    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+        self.0.emit_event(evt)
+    }
+}
+
 mod internal {
     use crate::event::Event;
 
@@ -86,191 +120,4 @@ impl<'a> Target for dyn ErasedTarget + Send + Sync + 'a {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         (self as &(dyn ErasedTarget + 'a)).emit_event(evt)
     }
-}
-
-macro_rules! tuple {
-    ($(
-        $len:expr => ( $(self.$i:tt: $ty:ident,)+ ),
-    )+) => {
-        $(
-            impl<$($ty: Target),+> Target for ($($ty,)+) {
-                fn emit_event<P: Props>(&self, evt: &Event<P>) {
-                    $(
-                        self.$i.emit_event(evt);
-                    )+
-                }
-            }
-        )+
-    }
-}
-
-tuple! {
-    1 => (
-        self.0: T0,
-    ),
-    2 => (
-        self.0: T0,
-        self.1: T1,
-    ),
-    3 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-    ),
-    4 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-    ),
-    5 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-    ),
-    6 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-    ),
-    7 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-    ),
-    8 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-    ),
-    9 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-    ),
-    10 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-    ),
-    11 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-    ),
-    12 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-        self.11: T11,
-    ),
-    13 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-        self.11: T11,
-        self.12: T12,
-    ),
-    14 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-        self.11: T11,
-        self.12: T12,
-        self.13: T13,
-    ),
-    15 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-        self.11: T11,
-        self.12: T12,
-        self.13: T13,
-        self.14: T14,
-    ),
-    16 => (
-        self.0: T0,
-        self.1: T1,
-        self.2: T2,
-        self.3: T3,
-        self.4: T4,
-        self.5: T5,
-        self.6: T6,
-        self.7: T7,
-        self.8: T8,
-        self.9: T9,
-        self.10: T10,
-        self.11: T11,
-        self.12: T12,
-        self.13: T13,
-        self.14: T14,
-        self.15: T15,
-    ),
 }

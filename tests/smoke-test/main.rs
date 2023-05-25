@@ -13,15 +13,17 @@ struct Work {
 
 #[tokio::main]
 async fn main() {
-    let emitter = emit::setup().to((
-        emit_term::stdout(),
-        emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
-            .resource(emit::props! {
-                #[emit::key("service.name")]
-                service_name: "smoke-test-rs"
-            })
-            .spawn()
-    )).init();
+    let emitter = emit::setup()
+        .to((
+            emit_term::stdout(),
+            emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
+                .resource(emit::props! {
+                    #[emit::key("service.name")]
+                    service_name: "smoke-test-rs"
+                })
+                .spawn(),
+        ))
+        .init();
 
     in_ctxt(78).await;
 

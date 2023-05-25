@@ -2,6 +2,30 @@ use crate::{empty::Empty, event::Event, props::Props};
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;
+
+    fn and<U>(self, other: U) -> And<Self, U>
+    where
+        Self: Sized,
+    {
+        And {
+            lhs: self,
+            rhs: other,
+        }
+    }
+
+    fn or<U>(self, other: U) -> Or<Self, U>
+    where
+        Self: Sized,
+    {
+        Or {
+            lhs: self,
+            rhs: other,
+        }
+    }
+
+    fn by_ref(&self) -> ByRef<Self> {
+        ByRef(self)
+    }
 }
 
 impl<'a, F: Filter + ?Sized> Filter for &'a F {
@@ -48,6 +72,36 @@ impl<F: Fn(&Event) -> bool> Filter for FromFn<F> {
 
 pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
     FromFn(f)
+}
+
+pub struct And<T, U> {
+    lhs: T,
+    rhs: U,
+}
+
+impl<T: Filter, U: Filter> Filter for And<T, U> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.lhs.matches_event(evt) && self.rhs.matches_event(evt)
+    }
+}
+
+pub struct Or<T, U> {
+    lhs: T,
+    rhs: U,
+}
+
+impl<T: Filter, U: Filter> Filter for Or<T, U> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.lhs.matches_event(evt) || self.rhs.matches_event(evt)
+    }
+}
+
+pub struct ByRef<'a, T: ?Sized>(&'a T);
+
+impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
+    fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.0.matches_event(evt)
+    }
 }
 
 mod internal {

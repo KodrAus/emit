@@ -85,8 +85,8 @@ impl Props for Empty {
 }
 
 pub struct Chain<T, U> {
-    pub(crate) first: T,
-    pub(crate) second: U,
+    first: T,
+    second: U,
 }
 
 impl<A: Props, B: Props> Props for Chain<A, B> {
@@ -115,7 +115,7 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
     }
 }
 
-pub struct ByRef<'a, T: ?Sized>(pub(crate) &'a T);
+pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
