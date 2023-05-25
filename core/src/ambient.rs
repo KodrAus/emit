@@ -103,6 +103,10 @@ impl<TTarget: Target, TFilter, TCtxt, TClock, TGenId> Target
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         self.target.emit_event(evt)
     }
+
+    fn blocking_flush(&self, timeout: core::time::Duration) {
+        self.target.blocking_flush(timeout)
+    }
 }
 
 impl<TTarget, TFilter: Filter, TCtxt, TClock, TGenId> Filter

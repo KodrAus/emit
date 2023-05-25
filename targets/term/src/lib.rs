@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, time::Duration};
 use std::io::Write;
 
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
@@ -21,6 +21,8 @@ impl emit::target::Target for Stdout {
             let _ = stdout.print(&buf);
         }
     }
+
+    fn blocking_flush(&self, _: Duration) {}
 }
 
 struct Writer<'a> {

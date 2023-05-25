@@ -1,4 +1,12 @@
-use emit_core::{ambient::Ambient, ctxt::Ctxt, empty::Empty, filter::Filter, target::Target};
+use core::time::Duration;
+
+use emit_core::{
+    ambient::Ambient,
+    ctxt::Ctxt,
+    empty::Empty,
+    filter::Filter,
+    target::{self, Target},
+};
 
 use crate::platform::{DefaultCtxt, Platform};
 
@@ -29,17 +37,20 @@ impl Setup {
     }
 }
 
-impl<TTarget, TFilter, TCtxt> Setup<TTarget, TFilter, TCtxt> {
-    pub fn to<UTarget>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt> {
+impl<TTarget: Target, TFilter: Filter, TCtxt: Ctxt> Setup<TTarget, TFilter, TCtxt> {
+    pub fn to<UTarget: Target>(
+        self,
+        target: UTarget,
+    ) -> Setup<target::And<TTarget, UTarget>, TFilter, TCtxt> {
         Setup {
-            target,
+            target: self.target.and(target),
             filter: self.filter,
             ctxt: self.ctxt,
             platform: self.platform,
         }
     }
 
-    pub fn with<UCtxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt> {
+    pub fn with<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt> {
         Setup {
             target: self.target,
             filter: self.filter,
@@ -57,7 +68,8 @@ impl<
 where
     TCtxt::Span: Send + 'static,
 {
-    pub fn init(self) -> Init<&'static TTarget, &'static TFilter, &'static TCtxt> {
+    #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
+    pub fn init(self) -> Init<&'static TTarget> {
         let ambient = emit_core::ambient::init(
             Ambient::new()
                 .with_target(self.target)
@@ -70,28 +82,16 @@ where
 
         Init {
             target: *ambient.target(),
-            filter: *ambient.filter(),
-            ctxt: *ambient.ctxt(),
         }
     }
 }
 
-pub struct Init<TTarget = DefaultTarget, TFilter = DefaultFilter, TCtxt = DefaultCtxt> {
+pub struct Init<TTarget: Target = DefaultTarget> {
     target: TTarget,
-    filter: TFilter,
-    ctxt: TCtxt,
 }
 
-impl<TTarget, TFilter, TCtxt> Init<TTarget, TFilter, TCtxt> {
-    pub fn target(&self) -> &TTarget {
-        &self.target
-    }
-
-    pub fn filter(&self) -> &TFilter {
-        &self.filter
-    }
-
-    pub fn ctxt(&self) -> &TCtxt {
-        &self.ctxt
+impl<TTarget: Target> Init<TTarget> {
+    pub fn blocking_flush(&self, timeout: Duration) {
+        self.target.blocking_flush(timeout);
     }
 }
