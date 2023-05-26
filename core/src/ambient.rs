@@ -127,8 +127,8 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TGenId> Ctxt
         self.ctxt.with_current(with)
     }
 
-    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
-        self.ctxt.open(id, props)
+    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
+        self.ctxt.open(id, tpl, props)
     }
 
     fn enter(&self, scope: &mut Self::Span) {
@@ -324,6 +324,7 @@ mod std_support {
     }
 }
 
+use crate::template::Template;
 use crate::{
     ctxt::Ctxt,
     empty::Empty,

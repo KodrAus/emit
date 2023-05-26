@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct Event<'a, P = &'a dyn ErasedProps> {
+pub struct Event<'a, P> {
     ts: Option<Timestamp>,
     id: Id,
     lvl: Level,
@@ -61,11 +61,11 @@ impl<'a, P: Props> Event<'a, P> {
     }
 
     pub fn msg<'b>(&'b self) -> Render<'b, &'b P> {
-        self.tpl.render().with_props(&self.props)
+        self.tpl.render(&self.props)
     }
 
     pub fn tpl<'b>(&'b self) -> Render<'b, Empty> {
-        self.tpl.render()
+        self.tpl.render(Empty)
     }
 
     pub fn err<'b>(&'b self) -> Option<Value<'b>> {
@@ -108,7 +108,7 @@ impl<'a, P: Props> Event<'a, P> {
         }
     }
 
-    pub fn erase<'b>(&'b self) -> Event<'b> {
+    pub fn erase<'b>(&'b self) -> Event<'b, &'b dyn ErasedProps> {
         Event {
             ts: self.ts,
             id: self.id,

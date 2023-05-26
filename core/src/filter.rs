@@ -1,3 +1,4 @@
+use crate::props::ErasedProps;
 use crate::{empty::Empty, event::Event, props::Props};
 
 pub trait Filter {
@@ -56,7 +57,7 @@ impl Filter for Empty {
     }
 }
 
-impl Filter for fn(&Event) -> bool {
+impl Filter for fn(&Event<&dyn ErasedProps>) -> bool {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         (self)(&evt.erase())
     }
@@ -64,13 +65,13 @@ impl Filter for fn(&Event) -> bool {
 
 pub struct FromFn<F>(F);
 
-impl<F: Fn(&Event) -> bool> Filter for FromFn<F> {
+impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool {
         (self.0)(&evt.erase())
     }
 }
 
-pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
+pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
@@ -106,9 +107,10 @@ impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
 
 mod internal {
     use crate::event::Event;
+    use crate::props::ErasedProps;
 
     pub trait DispatchFilter {
-        fn dispatch_emit_when(&self, evt: &Event) -> bool;
+        fn dispatch_emit_when(&self, evt: &Event<&dyn ErasedProps>) -> bool;
     }
 
     pub trait SealedFilter {
@@ -127,7 +129,7 @@ impl<T: Filter> internal::SealedFilter for T {
 }
 
 impl<T: Filter> internal::DispatchFilter for T {
-    fn dispatch_emit_when(&self, evt: &Event) -> bool {
+    fn dispatch_emit_when(&self, evt: &Event<&dyn ErasedProps>) -> bool {
         self.matches_event(evt)
     }
 }

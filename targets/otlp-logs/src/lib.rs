@@ -33,7 +33,7 @@ enum Destination {
 }
 
 impl OtlpTargetBuilder {
-    pub fn resource(mut self, resource: impl emit::Props) -> Self {
+    pub fn resource(mut self, resource: impl emit_core::props::Props) -> Self {
         let mut attributes = Vec::new();
 
         resource.for_each(|k, v| {
@@ -73,8 +73,8 @@ impl OtlpTargetBuilder {
     }
 }
 
-impl emit::target::Target for OtlpTarget {
-    fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
+impl emit_core::target::Target for OtlpTarget {
+    fn emit_event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         let record = record::to_record(evt);
 
         // Non-blocking

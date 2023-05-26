@@ -1,5 +1,6 @@
 use core::time::Duration;
 
+use crate::props::ErasedProps;
 use crate::{empty::Empty, event::Event, props::Props};
 
 pub trait Target {
@@ -64,7 +65,7 @@ impl Target for Empty {
     fn blocking_flush(&self, _: Duration) {}
 }
 
-impl Target for fn(&Event) {
+impl Target for fn(&Event<&dyn ErasedProps>) {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         (self)(&evt.erase())
     }
@@ -74,7 +75,7 @@ impl Target for fn(&Event) {
 
 pub struct FromFn<F>(F);
 
-impl<F: Fn(&Event)> Target for FromFn<F> {
+impl<F: Fn(&Event<&dyn ErasedProps>)> Target for FromFn<F> {
     fn emit_event<P: Props>(&self, evt: &Event<P>) {
         (self.0)(&evt.erase())
     }
@@ -82,7 +83,7 @@ impl<F: Fn(&Event)> Target for FromFn<F> {
     fn blocking_flush(&self, _: Duration) {}
 }
 
-pub fn from_fn<F: Fn(&Event)>(f: F) -> FromFn<F> {
+pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
@@ -121,9 +122,10 @@ mod internal {
     use core::time::Duration;
 
     use crate::event::Event;
+    use crate::props::ErasedProps;
 
     pub trait DispatchTarget {
-        fn dispatch_emit_to(&self, evt: &Event);
+        fn dispatch_emit_to(&self, evt: &Event<&dyn ErasedProps>);
         fn dispatch_blocking_flush(&self, timeout: Duration);
     }
 
@@ -143,7 +145,7 @@ impl<T: Target> internal::SealedTarget for T {
 }
 
 impl<T: Target> internal::DispatchTarget for T {
-    fn dispatch_emit_to(&self, evt: &Event) {
+    fn dispatch_emit_to(&self, evt: &Event<&dyn ErasedProps>) {
         self.emit_event(evt)
     }
 

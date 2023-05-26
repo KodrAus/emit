@@ -1,7 +1,7 @@
 use std::{fmt, ops::ControlFlow, str, time::SystemTime};
 
 use opentelemetry_api::{
-    logs::{AnyValue, LogRecord, Severity, TraceContext},
+    logs::{AnyValue, LogRecord, Severity},
     trace::{SpanContext, SpanId, TraceId},
     Key, OrderMap,
 };
@@ -10,38 +10,34 @@ use serde::ser::{
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer, StdError,
 };
 
-pub(crate) fn to_value(value: emit::Value) -> Option<AnyValue> {
-    value.serialize(ValueSerializer).ok()
+pub(crate) fn to_value(value: emit_core::value::Value) -> Option<AnyValue> {
+    value.serialize(ValueSerializer).unwrap_or(None)
 }
 
-// TODO: `Null`s should probably just exclude the attribute altogether
-pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
+pub(crate) fn to_record(evt: &emit_core::event::Event<impl emit_core::props::Props>) -> LogRecord {
     let mut builder = LogRecord::builder();
 
     if let (Some(trace), Some(span)) = (evt.id().trace(), evt.id().span()) {
-        let trace_id = trace.to_hex();
-        let span_id = span.to_hex();
-
         builder = builder.with_span_context(&SpanContext::new(
-            TraceId::from_hex(str::from_utf8(&trace_id).unwrap_or("")).unwrap_or(TraceId::INVALID),
-            SpanId::from_hex(str::from_utf8(&span_id).unwrap_or("")).unwrap_or(SpanId::INVALID),
+            TraceId::from_bytes(trace.to_u128().to_be_bytes()),
+            SpanId::from_bytes(span.to_u64().to_be_bytes()),
             Default::default(),
             Default::default(),
             Default::default(),
         ));
     }
 
-    LogRecord::builder()
+    builder
         .with_timestamp(
             evt.ts()
                 .map(|ts| ts.to_system_time())
                 .unwrap_or_else(SystemTime::now),
         )
         .with_severity_number(match evt.lvl() {
-            emit::Level::Debug => Severity::Debug,
-            emit::Level::Info => Severity::Info,
-            emit::Level::Warn => Severity::Warn,
-            emit::Level::Error => Severity::Error,
+            emit_core::level::Level::Debug => Severity::Debug,
+            emit_core::level::Level::Info => Severity::Info,
+            emit_core::level::Level::Warn => Severity::Warn,
+            emit_core::level::Level::Error => Severity::Error,
         })
         .with_severity_text(evt.lvl().to_string())
         .with_body(AnyValue::String(evt.msg().to_string().into()))
@@ -50,7 +46,11 @@ pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
 
             evt.props().for_each(|k, v| {
                 if let Some(value) = to_value(v) {
-                    let key = k.to_string().into();
+                    let key = if let Some(k) = k.as_static_str() {
+                        Key::from_static_str(k)
+                    } else {
+                        k.to_string().into()
+                    };
 
                     attributes.insert(key, value);
                 }
@@ -78,6 +78,7 @@ struct ValueSerializeTupleStruct {
 }
 
 struct ValueSerializeMap {
+    key: Option<Key>,
     value: OrderMap<Key, AnyValue>,
 }
 
@@ -116,7 +117,7 @@ impl Error for ValueError {
 impl StdError for ValueError {}
 
 impl Serializer for ValueSerializer {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -135,7 +136,7 @@ impl Serializer for ValueSerializer {
     type SerializeStructVariant = ValueSerializeStructVariant;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Boolean(v))
+        Ok(Some(AnyValue::Boolean(v)))
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
@@ -151,7 +152,7 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Int(v))
+        Ok(Some(AnyValue::Int(v)))
     }
 
     fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
@@ -195,7 +196,7 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Double(v))
+        Ok(Some(AnyValue::Double(v)))
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
@@ -203,15 +204,15 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::String(v.to_owned().into()))
+        Ok(Some(AnyValue::String(v.to_owned().into())))
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Bytes(v.to_owned()))
+        Ok(Some(AnyValue::Bytes(v.to_owned())))
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::ListAny(vec![]))
+        Ok(None)
     }
 
     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
@@ -222,7 +223,7 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::ListAny(vec![]))
+        Ok(None)
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
@@ -295,6 +296,7 @@ impl Serializer for ValueSerializer {
 
     fn serialize_map(self, _: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Ok(ValueSerializeMap {
+            key: None,
             value: OrderMap::new(),
         })
     }
@@ -324,7 +326,7 @@ impl Serializer for ValueSerializer {
 }
 
 impl SerializeSeq for ValueSerializeSeq {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -332,16 +334,20 @@ impl SerializeSeq for ValueSerializeSeq {
     where
         T: Serialize,
     {
-        Ok(self.value.push(value.serialize(ValueSerializer)?))
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.push(value);
+        }
+
+        Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::ListAny(self.value))
+        Ok(Some(AnyValue::ListAny(self.value)))
     }
 }
 
 impl SerializeTuple for ValueSerializeTuple {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -349,16 +355,20 @@ impl SerializeTuple for ValueSerializeTuple {
     where
         T: Serialize,
     {
-        Ok(self.value.push(value.serialize(ValueSerializer)?))
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.push(value);
+        }
+
+        Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::ListAny(self.value))
+        Ok(Some(AnyValue::ListAny(self.value)))
     }
 }
 
 impl SerializeTupleStruct for ValueSerializeTupleStruct {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -366,16 +376,20 @@ impl SerializeTupleStruct for ValueSerializeTupleStruct {
     where
         T: Serialize,
     {
-        Ok(self.value.push(value.serialize(ValueSerializer)?))
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.push(value);
+        }
+
+        Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::ListAny(self.value))
+        Ok(Some(AnyValue::ListAny(self.value)))
     }
 }
 
 impl SerializeTupleVariant for ValueSerializeTupleVariant {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -383,7 +397,9 @@ impl SerializeTupleVariant for ValueSerializeTupleVariant {
     where
         T: Serialize,
     {
-        self.value.push(value.serialize(ValueSerializer)?);
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.push(value);
+        }
 
         Ok(())
     }
@@ -395,12 +411,12 @@ impl SerializeTupleVariant for ValueSerializeTupleVariant {
             AnyValue::ListAny(self.value),
         );
 
-        Ok(AnyValue::Map(wrapper))
+        Ok(Some(AnyValue::Map(wrapper)))
     }
 }
 
 impl SerializeMap for ValueSerializeMap {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -409,12 +425,11 @@ impl SerializeMap for ValueSerializeMap {
         T: Serialize,
     {
         let key = match key.serialize(ValueSerializer)? {
-            AnyValue::String(key) => Key::from(key.as_str().to_owned()),
+            Some(AnyValue::String(key)) => Key::from(key.as_str().to_owned()),
             key => Key::from(format!("{:?}", key)),
         };
 
-        // Use a dummy value; a valid serializer will replace it shortly
-        self.value.insert(key, AnyValue::ListAny(vec![]));
+        self.key = Some(key);
 
         Ok(())
     }
@@ -423,22 +438,20 @@ impl SerializeMap for ValueSerializeMap {
     where
         T: Serialize,
     {
-        *self
-            .value
-            .last_mut()
-            .ok_or_else(|| Error::custom("missing key"))?
-            .1 = value.serialize(ValueSerializer)?;
+        if let (Some(key), Some(value)) = (self.key.take(), value.serialize(ValueSerializer)?) {
+            self.value.insert(key, value);
+        }
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Map(self.value))
+        Ok(Some(AnyValue::Map(self.value)))
     }
 }
 
 impl SerializeStruct for ValueSerializeStruct {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -450,19 +463,20 @@ impl SerializeStruct for ValueSerializeStruct {
     where
         T: Serialize,
     {
-        self.value
-            .insert(Key::from_static_str(key), value.serialize(ValueSerializer)?);
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.insert(Key::from_static_str(key), value);
+        }
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(AnyValue::Map(self.value))
+        Ok(Some(AnyValue::Map(self.value)))
     }
 }
 
 impl SerializeStructVariant for ValueSerializeStructVariant {
-    type Ok = AnyValue;
+    type Ok = Option<AnyValue>;
 
     type Error = ValueError;
 
@@ -474,8 +488,9 @@ impl SerializeStructVariant for ValueSerializeStructVariant {
     where
         T: Serialize,
     {
-        self.value
-            .insert(Key::from_static_str(key), value.serialize(ValueSerializer)?);
+        if let Some(value) = value.serialize(ValueSerializer)? {
+            self.value.insert(Key::from_static_str(key), value);
+        }
 
         Ok(())
     }
@@ -487,6 +502,6 @@ impl SerializeStructVariant for ValueSerializeStructVariant {
             AnyValue::Map(self.value),
         );
 
-        Ok(AnyValue::Map(wrapper))
+        Ok(Some(AnyValue::Map(wrapper)))
     }
 }

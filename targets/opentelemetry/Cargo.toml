@@ -1,10 +1,10 @@
 [package]
-name = "opentelemetry"
+name = "emit-opentelemetry"
 version = "0.0.0"
 edition = "2021"
 
-[dependencies.emit]
-path = "../../"
+[dependencies.emit_core]
+path = "../../core"
 features = ["std", "serde"]
 
 [dependencies.opentelemetry_sdk]

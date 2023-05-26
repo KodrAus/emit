@@ -97,9 +97,13 @@ impl TraceId {
         TraceId(v)
     }
 
+    pub fn to_u128(&self) -> u128 {
+        self.0
+    }
+
     pub fn to_hex(&self) -> [u8; 32] {
         let mut dst = [0; 32];
-        let src: [u8; 16] = self.0.to_ne_bytes();
+        let src: [u8; 16] = self.0.to_be_bytes();
 
         for i in 0..src.len() {
             let b = src[i];
@@ -123,9 +127,13 @@ impl SpanId {
         SpanId(v)
     }
 
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
+
     pub fn to_hex(&self) -> [u8; 16] {
         let mut dst = [0; 16];
-        let src: [u8; 8] = self.0.to_ne_bytes();
+        let src: [u8; 8] = self.0.to_be_bytes();
 
         for i in 0..src.len() {
             let b = src[i];

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use opentelemetry_api::logs::{LogRecord, Logger as _};
+use opentelemetry_api::logs::Logger as _;
 use opentelemetry_sdk::logs::Logger;
 
 mod record;
@@ -11,8 +11,8 @@ pub fn logger(logger: Logger) -> OpenTelemetryTarget {
 
 pub struct OpenTelemetryTarget(Logger);
 
-impl emit::target::Target for OpenTelemetryTarget {
-    fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
+impl emit_core::target::Target for OpenTelemetryTarget {
+    fn emit_event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         self.0.emit(record::to_record(evt));
     }
 

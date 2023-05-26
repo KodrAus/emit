@@ -3,9 +3,9 @@ name = "emit-otlp-logs"
 version = "0.0.0"
 edition = "2021"
 
-[dependencies.emit]
-path = "../../"
-features = ["std", "serde"]
+[dependencies.emit_core]
+path = "../../core"
+features = ["serde"]
 
 [dependencies.emit-batcher]
 path = "../../batcher"

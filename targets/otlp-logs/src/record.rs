@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, ops::ControlFlow, time::SystemTime};
+use std::{collections::HashSet, fmt, ops::ControlFlow};
 
 use serde::ser::{
     Error, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
@@ -10,26 +10,23 @@ use crate::proto::{
     logs::v1::{LogRecord, SeverityNumber},
 };
 
-pub(crate) fn to_value(value: emit::Value) -> Option<AnyValue> {
+pub(crate) fn to_value(value: emit_core::value::Value) -> Option<AnyValue> {
     value.serialize(ValueSerializer).ok()
 }
 
-pub(crate) fn to_record(evt: &emit::Event<impl emit::Props>) -> LogRecord {
+pub(crate) fn to_record(evt: &emit_core::event::Event<impl emit_core::props::Props>) -> LogRecord {
     let time_unix_nano = evt
         .ts()
-        .map(|ts| ts.to_system_time())
-        .unwrap_or_else(SystemTime::now)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("invalid timestamp")
-        .as_nanos() as u64;
+        .map(|ts| ts.to_unix().as_nanos() as u64)
+        .unwrap_or_default();
 
     let observed_time_unix_nano = time_unix_nano;
 
     let severity_number = match evt.lvl() {
-        emit::Level::Debug => SeverityNumber::Debug as i32,
-        emit::Level::Info => SeverityNumber::Info as i32,
-        emit::Level::Warn => SeverityNumber::Warn as i32,
-        emit::Level::Error => SeverityNumber::Error as i32,
+        emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
+        emit_core::level::Level::Info => SeverityNumber::Info as i32,
+        emit_core::level::Level::Warn => SeverityNumber::Warn as i32,
+        emit_core::level::Level::Error => SeverityNumber::Error as i32,
     };
 
     let severity_text = evt.lvl().to_string();
