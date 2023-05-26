@@ -4,6 +4,7 @@ members = [
     "targets/term",
     "targets/otlp-logs",
     "targets/otlp-logs/gen",
+    "targets/opentelemetry",
     "macros",
     "benchmark",
     "tests/ui",

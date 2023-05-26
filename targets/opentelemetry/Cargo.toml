@@ -1,0 +1,19 @@
+[package]
+name = "opentelemetry"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.emit]
+path = "../../"
+features = ["std", "serde"]
+
+[dependencies.opentelemetry_sdk]
+git = "https://github.com/open-telemetry/opentelemetry-rust"
+features = ["logs"]
+
+[dependencies.opentelemetry_api]
+git = "https://github.com/open-telemetry/opentelemetry-rust"
+features = ["logs"]
+
+[dependencies.serde]
+version = "1"
