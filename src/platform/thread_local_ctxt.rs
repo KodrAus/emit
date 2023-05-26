@@ -10,7 +10,9 @@ use emit_core::{
     props::Props,
     value::{OwnedValue, Value},
 };
+use emit_core::template::Template;
 
+// TODO: Optimize this
 thread_local! {
     static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {
         id: Id::EMPTY,
@@ -53,7 +55,7 @@ impl Ctxt for ThreadLocalCtxt {
         ACTIVE.with(|span| span.borrow().id)
     }
 
-    fn open<P: Props>(&self, id: Id, props: P) -> Self::Span {
+    fn open<P: Props>(&self, id: Id, _: Template, props: P) -> Self::Span {
         let mut span = ACTIVE.with(|span| span.borrow().clone());
 
         span.id = id;

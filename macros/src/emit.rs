@@ -16,8 +16,6 @@ struct Args {
     to: TokenStream,
     when: TokenStream,
     with: TokenStream,
-    ts: TokenStream,
-    id: TokenStream,
 }
 
 impl Parse for Args {
@@ -25,20 +23,16 @@ impl Parse for Args {
         let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
         let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
         let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
-        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(Some((#expr).into()))));
-        let mut id = Arg::token_stream("id", |expr| Ok(quote!((#expr).into())));
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut to, &mut when, &mut with, &mut ts, &mut id],
+            [&mut to, &mut when, &mut with],
         )?;
 
         Ok(Args {
             to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             with: with.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
-            ts: ts.take().unwrap_or_else(|| quote!(None)),
-            id: id.take().unwrap_or_else(|| quote!(emit::Id::EMPTY)),
         })
     }
 }
@@ -53,8 +47,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let to_tokens = args.to;
     let when_tokens = args.when;
     let with_tokens = args.with;
-    let ts_tokens = args.ts;
-    let id_tokens = args.id;
 
     let level_tokens = {
         let level = opts.level;
@@ -72,8 +64,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                     #to_tokens,
                     #when_tokens,
                     #with_tokens,
-                    #ts_tokens,
-                    #id_tokens,
                     #level_tokens,
                     #template_tokens,
                     #props_tokens,
