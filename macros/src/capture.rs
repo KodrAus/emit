@@ -30,7 +30,7 @@ impl Parse for Args {
 pub fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream {
     let fn_name = match &*fv.key_name() {
         // Default to capturing the well-known error identifier as an error
-        "err" => quote_spanned!(fv.span()=> __private_capture_as_error),
+        emit_core::well_known::ERR_KEY => quote_spanned!(fv.span()=> __private_capture_as_error),
         // In other cases, capture using the default implementation
         _ => quote_spanned!(fv.span()=> __private_capture_as_default),
     };

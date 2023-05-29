@@ -6,7 +6,7 @@ use syn::{
 
 use crate::{
     args::{self, Arg},
-    props::Props,
+    props::{self, Props},
     template,
 };
 
@@ -36,6 +36,11 @@ impl Parse for Args {
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let (args, template, props) = template::parse2::<Args>(opts.input)?;
+
+    // Ensure props don't use reserved identifiers
+    for prop in props.iter() {
+        props::ensure_not_reserved(prop)?;
+    }
 
     let template_tokens = template.template_tokens();
 

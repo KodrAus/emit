@@ -51,7 +51,10 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
                         "the key name and path don't match"
                     );
                 } else {
-                    return Err(syn::Error::new(extra_fv.span(), "keys that exist in the template and extra pairs can only use identifiers"));
+                    return Err(syn::Error::new(
+                        extra_fv.span(),
+                        "keys that exist in the template and extra pairs can only use identifiers",
+                    ));
                 }
 
                 extra_fv

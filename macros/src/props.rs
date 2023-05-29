@@ -34,6 +34,7 @@ pub struct KeyValue {
     match_bound_tokens: TokenStream,
     direct_bound_tokens: TokenStream,
     span: Span,
+    pub label: String,
     pub cfg_attr: Option<Attribute>,
     pub attrs: Vec<Attribute>,
     pub has_expr: bool,
@@ -138,13 +139,16 @@ impl Props {
         self.match_binding_tokens
             .push(quote_spanned!(fv.span()=> #match_bound_ident));
 
+        let label = fv.key_name();
+
         // Make sure keys aren't duplicated
         let previous = self.key_values.insert(
-            fv.key_name(),
+            label.clone(),
             KeyValue {
                 match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (#match_bound_ident.0.by_ref(), #match_bound_ident.1.by_ref())),
                 direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
                 span: fv.span(),
+                label,
                 has_expr: fv.colon_token.is_some(),
                 cfg_attr,
                 attrs,
@@ -155,6 +159,17 @@ impl Props {
             return Err(syn::Error::new(fv.span(), "keys cannot be duplicated"));
         }
 
+        Ok(())
+    }
+}
+
+pub fn ensure_not_reserved(kv: &KeyValue) -> Result<(), syn::Error> {
+    if emit_core::well_known::RESERVED.contains(&&*kv.label) {
+        Err(syn::Error::new(
+            kv.span(),
+            format!("`{}` is a reserved identifier", kv.label),
+        ))
+    } else {
         Ok(())
     }
 }
