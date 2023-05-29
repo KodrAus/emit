@@ -1,4 +1,153 @@
-pub use value_bag::{visit::Visit, ValueBag as Value};
+use core::fmt;
+
+#[derive(Clone)]
+pub struct Value<'v>(value_bag::ValueBag<'v>);
+
+impl<'v> Value<'v> {
+    pub fn by_ref<'b>(&'b self) -> Value<'b> {
+        Value(self.0.by_ref())
+    }
+}
+
+impl<'v> fmt::Debug for Value<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl<'v> fmt::Display for Value<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'v> sval::Value for Value<'v> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        self.0.stream(stream)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'v> sval_ref::ValueRef<'v> for Value<'v> {
+    fn stream_ref<S: sval::Stream<'v> + ?Sized>(&self, stream: &mut S) -> sval::Result {
+        self.0.stream_ref(stream)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'v> serde::Serialize for Value<'v> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'v> From<value_bag::ValueBag<'v>> for Value<'v> {
+    fn from(value: value_bag::ValueBag<'v>) -> Self {
+        Value(value)
+    }
+}
+
+impl<'v> From<&'v str> for Value<'v> {
+    fn from(value: &'v str) -> Self {
+        Value(value_bag::ValueBag::from(value))
+    }
+}
+
+pub trait ToValue {
+    fn to_value(&self) -> Value;
+}
+
+impl<'a, T: ToValue + ?Sized> ToValue for &'a T {
+    fn to_value(&self) -> Value {
+        (**self).to_value()
+    }
+}
+
+impl<'v> ToValue for Value<'v> {
+    fn to_value(&self) -> Value {
+        self.by_ref()
+    }
+}
+
+impl<'v> ToValue for value_bag::ValueBag<'v> {
+    fn to_value(&self) -> Value {
+        Value(self.by_ref())
+    }
+}
 
 #[cfg(feature = "alloc")]
-pub use value_bag::OwnedValueBag as OwnedValue;
+mod alloc_support {
+    use super::*;
+
+    #[derive(Clone)]
+    pub struct OwnedValue(value_bag::OwnedValueBag);
+
+    impl<'v> Value<'v> {
+        pub fn to_owned(&self) -> OwnedValue {
+            OwnedValue(self.0.to_owned())
+        }
+    }
+
+    impl OwnedValue {
+        pub fn by_ref<'v>(&'v self) -> Value<'v> {
+            Value(self.0.by_ref())
+        }
+    }
+
+    impl fmt::Debug for OwnedValue {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Debug::fmt(&self.0, f)
+        }
+    }
+
+    impl fmt::Display for OwnedValue {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    impl<'a> From<&'a OwnedValue> for Value<'a> {
+        fn from(value: &'a OwnedValue) -> Self {
+            value.by_ref()
+        }
+    }
+
+    impl From<value_bag::OwnedValueBag> for OwnedValue {
+        fn from(value: value_bag::OwnedValueBag) -> Self {
+            OwnedValue(value)
+        }
+    }
+
+    impl ToValue for OwnedValue {
+        fn to_value(&self) -> Value {
+            self.by_ref()
+        }
+    }
+
+    impl ToValue for value_bag::OwnedValueBag {
+        fn to_value(&self) -> Value {
+            Value(self.by_ref())
+        }
+    }
+
+    #[cfg(feature = "sval")]
+    impl sval::Value for OwnedValue {
+        fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(
+            &'sval self,
+            stream: &mut S,
+        ) -> sval::Result {
+            self.0.stream(stream)
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    impl serde::Serialize for OwnedValue {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+pub use self::alloc_support::*;

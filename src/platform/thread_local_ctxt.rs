@@ -3,6 +3,7 @@ use std::{
     ops::ControlFlow::{self, *},
 };
 
+use emit_core::template::Template;
 use emit_core::{
     ctxt::Ctxt,
     id::Id,
@@ -10,7 +11,6 @@ use emit_core::{
     props::Props,
     value::{OwnedValue, Value},
 };
-use emit_core::template::Template;
 
 // TODO: Optimize this
 thread_local! {

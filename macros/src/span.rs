@@ -51,11 +51,21 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_sync(&props, template_tokens, with_tokens, quote!(#block)))?;
+            **block = syn::parse2::<Block>(inject_sync(
+                &props,
+                template_tokens,
+                with_tokens,
+                quote!(#block),
+            ))?;
         }
         // A synchronous block
         Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_sync(&props, template_tokens, with_tokens, quote!(#block)))?;
+            *block = syn::parse2::<Block>(inject_sync(
+                &props,
+                template_tokens,
+                with_tokens,
+                quote!(#block),
+            ))?;
         }
         // An asynchronous function
         Stmt::Item(Item::Fn(ItemFn {
@@ -65,11 +75,21 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_async(&props, template_tokens, with_tokens, quote!(#block)))?;
+            **block = syn::parse2::<Block>(inject_async(
+                &props,
+                template_tokens,
+                with_tokens,
+                quote!(#block),
+            ))?;
         }
         // An asynchronous block
         Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_async(&props, template_tokens, with_tokens, quote!(#block)))?;
+            *block = syn::parse2::<Block>(inject_async(
+                &props,
+                template_tokens,
+                with_tokens,
+                quote!(#block),
+            ))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
@@ -77,7 +97,12 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     Ok(quote!(#item))
 }
 
-fn inject_sync(props: &Props, template_tokens: TokenStream, with_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_sync(
+    props: &Props,
+    template_tokens: TokenStream,
+    with_tokens: TokenStream,
+    body: TokenStream,
+) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
@@ -88,7 +113,12 @@ fn inject_sync(props: &Props, template_tokens: TokenStream, with_tokens: TokenSt
     })
 }
 
-fn inject_async(props: &Props, template_tokens: TokenStream, with_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_async(
+    props: &Props,
+    template_tokens: TokenStream,
+    with_tokens: TokenStream,
+    body: TokenStream,
+) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({

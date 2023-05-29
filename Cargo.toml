@@ -34,6 +34,9 @@ path = "macros"
 [dependencies.emit_core]
 path = "core"
 
+[dependencies.value-bag]
+version = "1"
+
 [dependencies.sval]
 version = "2"
 optional = true

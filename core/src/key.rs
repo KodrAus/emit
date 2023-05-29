@@ -49,12 +49,6 @@ impl<'k> Key<'k> {
     }
 }
 
-impl<'a> From<&'a str> for Key<'a> {
-    fn from(value: &'a str) -> Self {
-        Key::new_ref(value)
-    }
-}
-
 impl<'a> hash::Hash for Key<'a> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.as_str().hash(state)
@@ -117,6 +111,34 @@ impl<'k> AsRef<str> for Key<'k> {
     }
 }
 
+impl<'a> From<&'a str> for Key<'a> {
+    fn from(value: &'a str) -> Self {
+        Key::new_ref(value)
+    }
+}
+
+pub trait ToKey {
+    fn to_key(&self) -> Key;
+}
+
+impl<'a, T: ToKey + ?Sized> ToKey for &'a T {
+    fn to_key(&self) -> Key {
+        (**self).to_key()
+    }
+}
+
+impl<'k> ToKey for Key<'k> {
+    fn to_key(&self) -> Key {
+        self.by_ref()
+    }
+}
+
+impl ToKey for str {
+    fn to_key(&self) -> Key {
+        Key::new_ref(self)
+    }
+}
+
 #[cfg(feature = "alloc")]
 mod alloc_support {
     use alloc::borrow::{Cow, ToOwned};
@@ -157,6 +179,12 @@ mod alloc_support {
     impl<'k> From<&'k OwnedKey> for Key<'k> {
         fn from(key: &'k OwnedKey) -> Self {
             key.by_ref()
+        }
+    }
+
+    impl ToKey for OwnedKey {
+        fn to_key(&self) -> Key {
+            self.by_ref()
         }
     }
 

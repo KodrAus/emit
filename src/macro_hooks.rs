@@ -62,13 +62,13 @@ where
     T: fmt::Display + Any,
 {
     fn capture(&self) -> crate::Value {
-        Value::capture_display(self)
+        value_bag::ValueBag::capture_display(self).into()
     }
 }
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
     fn capture(&self) -> crate::Value {
-        Value::from_dyn_display(self)
+        value_bag::ValueBag::from_dyn_display(self).into()
     }
 }
 
@@ -77,7 +77,7 @@ where
     T: fmt::Display,
 {
     fn capture(&self) -> crate::Value {
-        Value::from_display(self)
+        value_bag::ValueBag::from_display(self).into()
     }
 }
 
@@ -86,13 +86,13 @@ where
     T: fmt::Debug + Any,
 {
     fn capture(&self) -> crate::Value {
-        Value::capture_debug(self)
+        value_bag::ValueBag::capture_debug(self).into()
     }
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
     fn capture(&self) -> crate::Value {
-        Value::from_dyn_debug(self)
+        value_bag::ValueBag::from_dyn_debug(self).into()
     }
 }
 
@@ -101,7 +101,7 @@ where
     T: fmt::Debug,
 {
     fn capture(&self) -> crate::Value {
-        Value::from_debug(self)
+        value_bag::ValueBag::from_debug(self).into()
     }
 }
 
@@ -111,7 +111,7 @@ where
     T: sval::Value + Any,
 {
     fn capture(&self) -> crate::Value {
-        Value::capture_sval2(self)
+        value_bag::ValueBag::capture_sval2(self).into()
     }
 }
 
@@ -121,7 +121,7 @@ where
     T: sval::Value,
 {
     fn capture(&self) -> crate::Value {
-        Value::from_sval2(self)
+        value_bag::ValueBag::from_sval2(self).into()
     }
 }
 
@@ -131,7 +131,7 @@ where
     T: serde::Serialize + Any,
 {
     fn capture(&self) -> crate::Value {
-        Value::capture_serde1(self)
+        value_bag::ValueBag::capture_serde1(self).into()
     }
 }
 
@@ -141,7 +141,7 @@ where
     T: serde::Serialize,
 {
     fn capture(&self) -> crate::Value {
-        Value::from_serde1(self)
+        value_bag::ValueBag::from_serde1(self).into()
     }
 }
 
@@ -151,14 +151,14 @@ where
     T: Error + 'static,
 {
     fn capture(&self) -> crate::Value {
-        Value::capture_error(self)
+        value_bag::ValueBag::capture_error(self).into()
     }
 }
 
 #[cfg(feature = "std")]
 impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
     fn capture(&self) -> crate::Value {
-        Value::from_dyn_error(self)
+        value_bag::ValueBag::from_dyn_error(self).into()
     }
 }
 

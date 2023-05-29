@@ -6,7 +6,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::{empty::Empty, id::Id, props::Props};
+use crate::{empty::Empty, id::Id, props::Props, template::Template};
 
 pub trait Ctxt {
     type Props: Props + ?Sized;
@@ -48,6 +48,10 @@ pub trait Ctxt {
 
     fn exit(&self, span: &mut Self::Span);
     fn close(&self, span: Self::Span);
+
+    fn by_ref(&self) -> ByRef<Self> {
+        ByRef(self)
+    }
 }
 
 impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
@@ -147,6 +151,38 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
 
     fn close(&self, span: Self::Span) {
         (**self).close(span)
+    }
+}
+
+pub struct ByRef<'a, T: ?Sized>(&'a T);
+
+impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
+    type Props = T::Props;
+
+    type Span = T::Span;
+
+    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
+        self.0.open(id, tpl, props)
+    }
+
+    fn enter(&self, span: &mut Self::Span) {
+        self.0.enter(span)
+    }
+
+    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        self.0.with_current(with)
+    }
+
+    fn exit(&self, span: &mut Self::Span) {
+        self.0.exit(span)
+    }
+
+    fn close(&self, span: Self::Span) {
+        self.0.close(span)
+    }
+
+    fn current_id(&self) -> Id {
+        self.0.current_id()
     }
 }
 
@@ -442,6 +478,5 @@ mod alloc_support {
     }
 }
 
-use crate::template::Template;
 #[cfg(feature = "alloc")]
 pub use alloc_support::*;

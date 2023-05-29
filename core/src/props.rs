@@ -3,7 +3,7 @@ use core::{borrow::Borrow, ops::ControlFlow};
 use crate::{empty::Empty, key::Key, value::Value};
 
 pub trait Props {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F);
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F);
 
     fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
         let key = key.borrow();
@@ -38,7 +38,7 @@ pub trait Props {
 }
 
 impl<'a, P: Props + ?Sized> Props for &'a P {
-    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         (**self).for_each(for_each)
     }
 
@@ -48,7 +48,7 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
 }
 
 impl<P: Props> Props for Option<P> {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         match self {
             Some(props) => props.for_each(for_each),
             None => (),
@@ -58,13 +58,16 @@ impl<P: Props> Props for Option<P> {
 
 #[cfg(feature = "alloc")]
 impl<'a, P: Props + ?Sized + 'a> Props for alloc::boxed::Box<P> {
-    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         (**self).for_each(for_each)
     }
 }
 
 impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
         for (k, v) in self {
             match for_each(k.by_ref(), v.by_ref()) {
                 ControlFlow::Continue(()) => continue,
@@ -75,13 +78,13 @@ impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
 }
 
 impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         (self as &[_]).for_each(for_each)
     }
 }
 
 impl Props for Empty {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, _: F) {}
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, _: F) {}
 }
 
 pub struct Chain<T, U> {
@@ -90,7 +93,10 @@ pub struct Chain<T, U> {
 }
 
 impl<A: Props, B: Props> Props for Chain<A, B> {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
         let mut cf = ControlFlow::Continue(());
 
         self.first.for_each(|k, v| match for_each(k, v) {
@@ -118,7 +124,7 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
-    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         self.0.for_each(for_each)
     }
 }
@@ -139,7 +145,7 @@ impl<'a> SortedSlice<'a> {
 }
 
 impl<'a> Props for SortedSlice<'a> {
-    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         self.0.for_each(for_each)
     }
 
@@ -159,11 +165,11 @@ mod internal {
     use crate::{key::Key, value::Value};
 
     pub trait DispatchProps {
-        fn dispatch_for_each<'a, 'b>(
-            &'a self,
-            for_each: &'b mut dyn FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>,
+        fn dispatch_for_each<'kv, 'f>(
+            &'kv self,
+            for_each: &'f mut dyn FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>,
         );
-        fn dispatch_get<'a>(&'a self, key: &str) -> Option<Value<'a>>;
+        fn dispatch_get<'v>(&'v self, key: &str) -> Option<Value<'v>>;
     }
 
     pub trait SealedProps {
@@ -182,20 +188,23 @@ impl<P: Props> internal::SealedProps for P {
 }
 
 impl<P: Props> internal::DispatchProps for P {
-    fn dispatch_for_each<'a, 'b>(
-        &'a self,
-        for_each: &'b mut dyn FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>,
+    fn dispatch_for_each<'kv, 'f>(
+        &'kv self,
+        for_each: &'f mut dyn FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>,
     ) {
         self.for_each(for_each)
     }
 
-    fn dispatch_get<'a>(&'a self, key: &str) -> Option<Value<'a>> {
+    fn dispatch_get<'v>(&'v self, key: &str) -> Option<Value<'v>> {
         self.get(key)
     }
 }
 
 impl<'a> Props for dyn ErasedProps + 'a {
-    fn for_each<'v, F: FnMut(Key<'v>, Value<'v>) -> ControlFlow<()>>(&'v self, mut for_each: F) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
         self.erase_props().0.dispatch_for_each(&mut for_each)
     }
 
