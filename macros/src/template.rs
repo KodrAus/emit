@@ -42,7 +42,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
                 if let Expr::Path(ExprPath { ref path, .. }) = fv.expr {
                     // Make sure the field-value in the template is just a plain identifier
                     if !fv.attrs.is_empty() {
-                        return Err(syn::Error::new(fv.span(), "keys that exist in the template and extra pairs should only use attributes on the extra pair"));
+                        return Err(syn::Error::new(fv.span(), "keys that exist in the template and extra pairs can only use attributes on the extra pair"));
                     }
 
                     assert_eq!(
@@ -51,7 +51,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
                         "the key name and path don't match"
                     );
                 } else {
-                    return Err(syn::Error::new(extra_fv.span(), "keys that exist in the template and extra pairs should only use identifiers"));
+                    return Err(syn::Error::new(extra_fv.span(), "keys that exist in the template and extra pairs can only use identifiers"));
                 }
 
                 extra_fv

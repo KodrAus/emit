@@ -19,7 +19,7 @@ async fn main() {
             emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
                 .resource(emit::props! {
                     #[emit::key("service.name")]
-                    service_name: "smoke-test-rs"
+                    service_name: "smoke-test-rs",
                 })
                 .spawn(),
         )
