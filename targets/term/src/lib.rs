@@ -2,6 +2,8 @@ use core::{fmt, time::Duration};
 use std::{cell::RefCell, io::Write};
 
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+use emit::template::Formatter;
+use emit::Value;
 
 pub fn stdout() -> Stdout {
     Stdout(BufferWriter::stdout(ColorChoice::Auto))
@@ -103,6 +105,32 @@ impl<'a> fmt::Write for Writer<'a> {
 impl<'a> emit::template::Write for Writer<'a> {
     fn write_hole_value(&mut self, value: emit::Value) -> fmt::Result {
         sval_fmt::stream_to_token_write(self, value)
+    }
+
+    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> std::fmt::Result {
+        use sval::Value as _;
+
+        struct FormatValue<'a> {
+            value: Value<'a>,
+            formatter: Formatter,
+        }
+
+        impl<'a> fmt::Display for FormatValue<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                (self.formatter)(&self.value, f)
+            }
+        }
+
+        match value.tag() {
+            Some(sval::tags::NUMBER) => {
+                self.write(FormatValue { value, formatter }, NUMBER)
+            }
+            _ => {
+                self.write(FormatValue { value, formatter }, TEXT)
+            }
+        }
+
+        Ok(())
     }
 }
 

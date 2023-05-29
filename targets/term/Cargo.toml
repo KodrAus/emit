@@ -7,6 +7,9 @@ edition = "2021"
 path = "../../"
 features = ["sval"]
 
+[dependencies.sval]
+version = "2"
+
 [dependencies.sval_fmt]
 version = "2"
 

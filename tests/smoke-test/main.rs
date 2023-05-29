@@ -49,6 +49,7 @@ async fn in_ctxt2(b: i32) {
             request_id: "abc",
         },
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
+        #[emit::fmt(">08")]
         x: 15,
     );
 }
