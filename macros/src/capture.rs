@@ -39,7 +39,7 @@ pub fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream 
     let expr = &fv.expr;
 
     let key_tokens = key::key_with_hook(&[], &key_expr);
-    let value_tokens = quote!({
+    let value_tokens = quote_spanned!(fv.span()=> {
         use emit::__private::__PrivateCaptureHook;
         (#expr).#fn_name()
     });

@@ -1,3 +1,5 @@
+use std::{fmt, marker::PhantomData};
+
 use proc_macro2::TokenStream;
 use syn::{
     parse::{self, Parse, ParseStream},
@@ -99,4 +101,30 @@ impl ResultToTokens for Result<TokenStream, syn::Error> {
             Err(err) => err.into_compile_error(),
         })
     }
+}
+
+pub fn print_list<'a, I: Iterator<Item = &'a str> + 'a>(
+    list: impl Fn() -> I + 'a,
+) -> impl fmt::Display + 'a {
+    struct PrintList<F, I>(F, PhantomData<I>);
+
+    impl<'a, F: Fn() -> I + 'a, I: Iterator<Item = &'a str>> fmt::Display for PrintList<F, I> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let mut first = true;
+
+            for arg in (self.0)() {
+                if !first {
+                    write!(f, ", ")?;
+                }
+
+                first = false;
+
+                write!(f, "`{}`", arg)?;
+            }
+
+            Ok(())
+        }
+    }
+
+    PrintList(list, PhantomData)
 }

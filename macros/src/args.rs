@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::{spanned::Spanned, Expr, ExprLit, FieldValue, Lit};
 
-use crate::util::FieldValueKey;
+use crate::util::{print_list, FieldValueKey};
 
 /**
 An argument represented as a field-value input to a macro.
@@ -121,7 +121,11 @@ pub fn set_from_field_values<'a, const N: usize>(
 
         return Err(syn::Error::new(
             fv.span(),
-            format_args!("unknown argument `{}`", key_name),
+            format_args!(
+                "unknown argument `{}`; available arguments are {}",
+                key_name,
+                print_list(|| args.iter().map(|arg| arg.key()))
+            ),
         ));
     }
 
