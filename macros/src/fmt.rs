@@ -69,10 +69,10 @@ pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Er
             let fmt = args.to_format_args();
 
             let to_ident = quote!(__private_fmt_as);
-            let to_arg = quote!(|v, f| {
+            let to_arg = quote!(emit::template::Formatter::new(|v, f| {
                 use emit::__private::core::fmt;
                 emit::__private::core::write!(f, #fmt, v)
-            });
+            }));
 
             (to_ident, to_arg)
         },

@@ -1,4 +1,5 @@
 use core::fmt;
+use std::marker::PhantomData;
 
 use crate::{empty::Empty, props::Props, value::Value};
 
@@ -113,12 +114,12 @@ impl<'a, P: Props> Render<'a, P> {
                 } => writer.write_text(value)?,
                 PartKind::Hole {
                     label,
-                    formatter,
+                    ref formatter,
                     label_static: _,
                 } => {
                     if let Some(value) = self.props.get(label) {
                         if let Some(formatter) = formatter {
-                            writer.write_hole_fmt(value, formatter)?;
+                            writer.write_hole_fmt(value, formatter.by_ref())?;
                         } else {
                             writer.write_hole_value(value)?;
                         }
@@ -143,18 +144,7 @@ pub trait Write: fmt::Write {
     }
 
     fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
-        struct FormatValue<'a> {
-            value: Value<'a>,
-            formatter: Formatter,
-        }
-
-        impl<'a> fmt::Display for FormatValue<'a> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                (self.formatter)(&self.value, f)
-            }
-        }
-
-        self.write_fmt(format_args!("{}", FormatValue { value, formatter }))
+        self.write_fmt(format_args!("{}", formatter.apply(value)))
     }
 
     fn write_hole_label(&mut self, label: &str) -> fmt::Result {
@@ -186,7 +176,7 @@ impl<'a> Write for fmt::Formatter<'a> {
     }
 
     fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
-        formatter(&value, self)
+        formatter.fmt(value, self)
     }
 }
 
@@ -264,11 +254,11 @@ impl<'a> Part<'a> {
             PartKind::Hole {
                 label,
                 label_static,
-                formatter,
+                ref formatter,
             } => Part(PartKind::Hole {
                 label,
                 label_static,
-                formatter,
+                formatter: formatter.as_ref().map(|formatter| formatter.by_ref()),
             }),
         }
     }
@@ -295,7 +285,49 @@ impl<'a> Part<'a> {
     }
 }
 
-pub type Formatter = fn(&Value, &mut fmt::Formatter) -> fmt::Result;
+#[derive(Clone)]
+pub struct Formatter<'a> {
+    fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result,
+    _marker: PhantomData<&'a dyn Fn(Value, &mut fmt::Formatter) -> fmt::Result>,
+}
+
+impl Formatter {
+    pub fn new(fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result) -> Self {
+        Formatter {
+            fmt,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn by_ref<'b>(&'b self) -> Formatter<'b> {
+        Formatter {
+            fmt: self.fmt,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn fmt(&self, value: Value, f: &mut fmt::Formatter) -> fmt::Result {
+        (self.fmt)(value, f)
+    }
+
+    pub fn apply<'a>(&'a self, value: Value<'a>) -> impl fmt::Display + 'a {
+        struct FormatValue<'a> {
+            value: Value<'a>,
+            fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result,
+        }
+
+        impl<'a> fmt::Display for FormatValue<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                (self.fmt)(self.value.by_ref(), f)
+            }
+        }
+
+        FormatValue {
+            value,
+            fmt: self.fmt,
+        }
+    }
+}
 
 #[derive(Clone)]
 enum PartKind<'a> {
@@ -306,6 +338,6 @@ enum PartKind<'a> {
     Hole {
         label: &'a str,
         label_static: Option<&'static str>,
-        formatter: Option<Formatter>,
+        formatter: Option<Formatter<'a>>,
     },
 }
