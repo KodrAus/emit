@@ -249,17 +249,17 @@ pub trait __PrivateCaptureHook {
 
 impl<T: ?Sized> __PrivateCaptureHook for T {}
 
-pub trait __PrivateFmtHook {
+pub trait __PrivateFmtHook<'a> {
     fn __private_fmt_as_default(self) -> Self;
-    fn __private_fmt_as(self, formatter: Formatter) -> Self;
+    fn __private_fmt_as(self, formatter: Formatter<'a>) -> Self;
 }
 
-impl<'a> __PrivateFmtHook for Part<'a> {
+impl<'a> __PrivateFmtHook<'a> for Part<'a> {
     fn __private_fmt_as_default(self) -> Self {
         self
     }
 
-    fn __private_fmt_as(self, formatter: Formatter) -> Self {
+    fn __private_fmt_as(self, formatter: Formatter<'a>) -> Self {
         self.with_formatter(formatter)
     }
 }

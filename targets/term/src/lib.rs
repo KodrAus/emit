@@ -52,6 +52,11 @@ impl emit::target::Target for Stdout {
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
     let props = evt.props();
 
+    // TODO: Make this part of a template
+    if let Some(ts) = evt.ts() {
+        let _ = write!(buf, "{:.0}: ", ts);
+    }
+
     if let Ok(_) = evt.tpl().with_props(props).write(Writer { buf }) {
         let _ = buf.write(b"\n");
         let _ = out.print(&buf);

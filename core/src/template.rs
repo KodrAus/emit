@@ -1,5 +1,4 @@
-use core::fmt;
-use std::marker::PhantomData;
+use core::{fmt, marker::PhantomData};
 
 use crate::{empty::Empty, props::Props, value::Value};
 
@@ -263,7 +262,7 @@ impl<'a> Part<'a> {
         }
     }
 
-    pub fn with_formatter(self, formatter: Formatter) -> Self {
+    pub fn with_formatter(self, formatter: Formatter<'a>) -> Self {
         match self.0 {
             PartKind::Text {
                 value,
@@ -291,7 +290,7 @@ pub struct Formatter<'a> {
     _marker: PhantomData<&'a dyn Fn(Value, &mut fmt::Formatter) -> fmt::Result>,
 }
 
-impl Formatter {
+impl<'a> Formatter<'a> {
     pub fn new(fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result) -> Self {
         Formatter {
             fmt,
@@ -310,7 +309,7 @@ impl Formatter {
         (self.fmt)(value, f)
     }
 
-    pub fn apply<'a>(&'a self, value: Value<'a>) -> impl fmt::Display + 'a {
+    pub fn apply<'b>(&'b self, value: Value<'b>) -> impl fmt::Display + 'b {
         struct FormatValue<'a> {
             value: Value<'a>,
             fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result,
