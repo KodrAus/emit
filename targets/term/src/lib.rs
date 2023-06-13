@@ -52,10 +52,11 @@ impl emit::target::Target for Stdout {
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
     let props = evt.props();
 
-    // TODO: Make this part of a template
     if let Some(ts) = evt.ts() {
-        let _ = write!(buf, "{:.0}: ", ts);
+        let _ = write!(buf, "[{:.0} ", ts);
     }
+
+    let _ = write!(buf, "{}]: ", evt.lvl());
 
     if let Ok(_) = evt.tpl().with_props(props).write(Writer { buf }) {
         let _ = buf.write(b"\n");
@@ -68,6 +69,10 @@ struct Writer<'a> {
 }
 
 impl<'a> sval_fmt::TokenWrite for Writer<'a> {
+    fn write_text_quote(&mut self) -> fmt::Result {
+        Ok(())
+    }
+
     fn write_text(&mut self, text: &str) -> fmt::Result {
         self.write(text, TEXT);
 

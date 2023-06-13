@@ -15,24 +15,21 @@ pub struct ExpandTokens {
 struct Args {
     to: TokenStream,
     when: TokenStream,
-    with: TokenStream,
 }
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
         let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
-        let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut to, &mut when, &mut with],
+            [&mut to, &mut when],
         )?;
 
         Ok(Args {
             to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
-            with: with.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
         })
     }
 }
@@ -51,7 +48,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
     let to_tokens = args.to;
     let when_tokens = args.when;
-    let with_tokens = args.with;
 
     let level_tokens = {
         let level = opts.level;
@@ -68,7 +64,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                 emit::#receiver_tokens(
                     #to_tokens,
                     #when_tokens,
-                    #with_tokens,
                     #level_tokens,
                     #template_tokens,
                     #props_tokens,

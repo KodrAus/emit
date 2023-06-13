@@ -45,9 +45,6 @@ async fn in_ctxt(a: i32) {
 #[emit::span("Hello!", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     emit::warn!(
-        with: emit::props! {
-            request_id: "abc",
-        },
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
         #[emit::fmt(">08")]
         x: 15,

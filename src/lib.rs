@@ -26,19 +26,12 @@ mod platform;
 #[cfg(feature = "std")]
 mod setup;
 
-pub fn emit(
-    to: impl Target,
-    when: impl Filter,
-    with: impl Props,
-    lvl: Level,
-    tpl: Template,
-    props: impl Props,
-) {
+pub fn emit(to: impl Target, when: impl Filter, lvl: Level, tpl: Template, props: impl Props) {
     let ambient = emit_core::ambient::get();
 
     ambient.with_current(|id, current_props| {
         let ts = ambient.now();
-        let props = props.chain(with).chain(current_props);
+        let props = props.chain(current_props);
 
         let evt = Event::new(ts, id, lvl, tpl, props);
 
