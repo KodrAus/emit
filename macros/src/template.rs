@@ -2,20 +2,18 @@ use std::collections::BTreeMap;
 
 use proc_macro2::TokenStream;
 
-use syn::{
-    parse::Parse, punctuated::Punctuated, spanned::Spanned, Expr, ExprLit, ExprPath, FieldValue,
-};
+use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Expr, ExprPath, FieldValue};
 
 use crate::{fmt, props::Props, util::FieldValueKey};
 
 pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn::Error> {
     let template =
-        fv_template::ct::Template::parse2(input).map_err(|e| syn::Error::new(e.span(), e))?;
+        fv_template::Template::parse2(input).map_err(|e| syn::Error::new(e.span(), e))?;
 
     // Parse args from the field values before the template
     let args = {
         let args = template
-            .before_template_field_values()
+            .before_literal_field_values()
             .cloned()
             .collect::<Punctuated<FieldValue, Token![,]>>();
         syn::parse2(quote!(#args))?
@@ -23,14 +21,14 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
 
     // Any field-values that aren't part of the template
     let mut extra_field_values: BTreeMap<_, _> = template
-        .after_template_field_values()
+        .after_literal_field_values()
         .map(|fv| Ok((fv.key_name(), fv)))
         .collect::<Result<_, syn::Error>>()?;
 
     let mut props = Props::new();
 
     // Push the field-values that appear in the template
-    for fv in template.template_field_values() {
+    for fv in template.literal_field_values() {
         let k = fv.key_name();
 
         // If the hole has a corresponding field-value outside the template
@@ -77,7 +75,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
             props: &props,
             parts: Vec::new(),
         };
-        template.visit(&mut template_visitor);
+        template.visit_literal(&mut template_visitor);
         let template_parts = &template_visitor.parts;
 
         quote!(emit::Template::new_ref(&[
@@ -103,11 +101,14 @@ struct TemplateVisitor<'a> {
     parts: Vec<TokenStream>,
 }
 
-impl<'a> fv_template::ct::Visitor for TemplateVisitor<'a> {
-    fn visit_hole(&mut self, label: &str, hole: &ExprLit) {
-        let field = self.props.get(label).expect("missing prop");
+impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
+    fn visit_hole(&mut self, hole: &FieldValue) {
+        let label = hole.key_name();
+        let hole = hole.key_expr();
 
-        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, hole);
+        let field = self.props.get(&label).expect("missing prop");
+
+        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole);
 
         match field.cfg_attr {
             Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),
