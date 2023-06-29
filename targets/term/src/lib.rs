@@ -50,15 +50,13 @@ impl emit::target::Target for Stdout {
 }
 
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
-    let props = evt.props();
-
     if let Some(ts) = evt.ts() {
         let _ = write!(buf, "[{:.0} ", ts);
     }
 
     let _ = write!(buf, "{}]: ", evt.lvl());
 
-    if let Ok(_) = evt.tpl().with_props(props).write(Writer { buf }) {
+    if let Ok(_) = evt.msg().write(Writer { buf }) {
         let _ = buf.write(b"\n");
         let _ = out.print(&buf);
     }
