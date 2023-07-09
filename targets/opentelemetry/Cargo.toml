@@ -9,11 +9,11 @@ features = ["std", "serde"]
 
 [dependencies.opentelemetry_sdk]
 git = "https://github.com/open-telemetry/opentelemetry-rust"
-features = ["logs"]
+features = ["logs", "trace"]
 
 [dependencies.opentelemetry_api]
 git = "https://github.com/open-telemetry/opentelemetry-rust"
-features = ["logs"]
+features = ["logs", "trace"]
 
 [dependencies.serde]
 version = "1"

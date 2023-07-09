@@ -1,66 +1,29 @@
-use std::{fmt, ops::ControlFlow, str, time::SystemTime};
+use std::{fmt, str};
 
-use opentelemetry_api::{
-    logs::{AnyValue, LogRecord, Severity},
-    trace::{SpanContext, SpanId, TraceId},
-    Key, OrderMap,
-};
+use opentelemetry_api::{logs::AnyValue, Key, OrderMap, Value};
 use serde::ser::{
     Error, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer, StdError,
 };
 
-pub(crate) fn to_value(value: emit_core::value::Value) -> Option<AnyValue> {
+pub(crate) fn to_any_value(value: emit_core::value::Value) -> Option<AnyValue> {
     value.serialize(ValueSerializer).unwrap_or(None)
 }
 
-pub(crate) fn to_record(evt: &emit_core::event::Event<impl emit_core::props::Props>) -> LogRecord {
-    let mut builder = LogRecord::builder();
-
-    if let (Some(trace), Some(span)) = (evt.id().trace(), evt.id().span()) {
-        builder = builder.with_span_context(&SpanContext::new(
-            TraceId::from_bytes(trace.to_u128().to_be_bytes()),
-            SpanId::from_bytes(span.to_u64().to_be_bytes()),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ));
-    }
-
-    builder
-        .with_timestamp(
-            evt.ts()
-                .map(|ts| ts.to_system_time())
-                .unwrap_or_else(SystemTime::now),
-        )
-        .with_severity_number(match evt.lvl() {
-            emit_core::level::Level::Debug => Severity::Debug,
-            emit_core::level::Level::Info => Severity::Info,
-            emit_core::level::Level::Warn => Severity::Warn,
-            emit_core::level::Level::Error => Severity::Error,
+pub(crate) fn to_value(value: emit_core::value::Value) -> Value {
+    value
+        .by_ref()
+        .serialize(ValueSerializer)
+        .ok()
+        .flatten()
+        .and_then(|v| match v {
+            AnyValue::Int(v) => Some(Value::I64(v)),
+            AnyValue::Double(v) => Some(Value::F64(v)),
+            AnyValue::String(v) => Some(Value::String(v)),
+            AnyValue::Boolean(v) => Some(Value::Bool(v)),
+            _ => None,
         })
-        .with_severity_text(evt.lvl().to_string())
-        .with_body(AnyValue::String(evt.msg().to_string().into()))
-        .with_attributes({
-            let mut attributes = OrderMap::<Key, AnyValue>::new();
-
-            evt.props().for_each(|k, v| {
-                if let Some(value) = to_value(v) {
-                    let key = if let Some(k) = k.as_static_str() {
-                        Key::from_static_str(k)
-                    } else {
-                        k.to_string().into()
-                    };
-
-                    attributes.insert(key, value);
-                }
-
-                ControlFlow::Continue(())
-            });
-
-            attributes
-        })
-        .build()
+        .unwrap_or_else(|| Value::from(value.to_string()))
 }
 
 struct ValueSerializer;
@@ -217,7 +180,7 @@ impl Serializer for ValueSerializer {
 
     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
     where
-        T: serde::Serialize,
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -245,7 +208,7 @@ impl Serializer for ValueSerializer {
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: serde::Serialize,
+        T: Serialize,
     {
         value.serialize(self)
     }
@@ -258,7 +221,7 @@ impl Serializer for ValueSerializer {
         value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
-        T: serde::Serialize,
+        T: Serialize,
     {
         let mut map = self.serialize_map(Some(1))?;
         map.serialize_entry(variant, value)?;
