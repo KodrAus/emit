@@ -4,6 +4,7 @@ use std::{
 };
 
 use emit_core::template::Template;
+use emit_core::time::Timestamp;
 use emit_core::{
     ctxt::Ctxt,
     id::Id,
@@ -55,7 +56,7 @@ impl Ctxt for ThreadLocalCtxt {
         ACTIVE.with(|span| span.borrow().id)
     }
 
-    fn open<P: Props>(&self, id: Id, _: Template, props: P) -> Self::Span {
+    fn open<P: Props>(&self, _: Option<Timestamp>, id: Id, _: Template, props: P) -> Self::Span {
         let mut span = ACTIVE.with(|span| span.borrow().clone());
 
         span.id = id;
@@ -75,5 +76,5 @@ impl Ctxt for ThreadLocalCtxt {
         ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
     }
 
-    fn close(&self, _: Self::Span) {}
+    fn close(&self, _: Option<Timestamp>, _: Self::Span) {}
 }

@@ -1,11 +1,10 @@
 use proc_macro2::TokenStream;
 use syn::{
-    parse::Parse, spanned::Spanned, Block, Expr, ExprAsync, ExprBlock, FieldValue, Item, ItemFn,
-    Signature, Stmt,
+    parse::Parse, spanned::Spanned, Block, Expr, ExprAsync, ExprBlock, Item, ItemFn, Signature,
+    Stmt,
 };
 
 use crate::{
-    args::{self, Arg},
     props::{self, Props},
     template,
 };
@@ -15,27 +14,16 @@ pub struct ExpandTokens {
     pub input: TokenStream,
 }
 
-struct Args {
-    with: TokenStream,
-}
+struct Args {}
 
 impl Parse for Args {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut with = Arg::token_stream("with", |expr| Ok(quote!(#expr)));
-
-        args::set_from_field_values(
-            input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut with],
-        )?;
-
-        Ok(Args {
-            with: with.take().unwrap_or_else(|| quote!(emit::ctxt())),
-        })
+    fn parse(_: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Args {})
     }
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    let (args, template, props) = template::parse2::<Args>(opts.input)?;
+    let (_, template, props) = template::parse2::<Args>(opts.input)?;
 
     // Ensure props don't use reserved identifiers
     for prop in props.iter() {
@@ -43,8 +31,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     }
 
     let template_tokens = template.template_tokens();
-
-    let with_tokens = args.with;
 
     let mut item = syn::parse2::<Stmt>(opts.item)?;
     match &mut item {
@@ -56,21 +42,11 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_sync(
-                &props,
-                template_tokens,
-                with_tokens,
-                quote!(#block),
-            ))?;
+            **block = syn::parse2::<Block>(inject_sync(&props, template_tokens, quote!(#block)))?;
         }
         // A synchronous block
         Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_sync(
-                &props,
-                template_tokens,
-                with_tokens,
-                quote!(#block),
-            ))?;
+            *block = syn::parse2::<Block>(inject_sync(&props, template_tokens, quote!(#block)))?;
         }
         // An asynchronous function
         Stmt::Item(Item::Fn(ItemFn {
@@ -80,21 +56,11 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_async(
-                &props,
-                template_tokens,
-                with_tokens,
-                quote!(#block),
-            ))?;
+            **block = syn::parse2::<Block>(inject_async(&props, template_tokens, quote!(#block)))?;
         }
         // An asynchronous block
         Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_async(
-                &props,
-                template_tokens,
-                with_tokens,
-                quote!(#block),
-            ))?;
+            *block = syn::parse2::<Block>(inject_async(&props, template_tokens, quote!(#block)))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
@@ -102,32 +68,22 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     Ok(quote!(#item))
 }
 
-fn inject_sync(
-    props: &Props,
-    template_tokens: TokenStream,
-    with_tokens: TokenStream,
-    body: TokenStream,
-) -> TokenStream {
+fn inject_sync(props: &Props, template_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        let mut __span = emit::span(#with_tokens, emit::Id::EMPTY, #template_tokens, #props_tokens);
+        let mut __span = emit::span(emit::Id::EMPTY, #template_tokens, #props_tokens);
         let __span_guard = __span.enter();
 
         #body
     })
 }
 
-fn inject_async(
-    props: &Props,
-    template_tokens: TokenStream,
-    with_tokens: TokenStream,
-    body: TokenStream,
-) -> TokenStream {
+fn inject_async(props: &Props, template_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        emit::span_future(#with_tokens, emit::Id::EMPTY, #template_tokens, #props_tokens, async #body).await
+        emit::span_future(emit::Id::EMPTY, #template_tokens, #props_tokens, async #body).await
     })
 }
 

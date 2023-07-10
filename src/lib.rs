@@ -42,11 +42,15 @@ pub fn emit(to: impl Target, when: impl Filter, lvl: Level, tpl: Template, props
     });
 }
 
-pub fn span(id: Id, tpl: Template, props: impl Props) -> ctxt::Span<impl Ctxt, impl Clock> {
+pub fn span(
+    id: Id,
+    tpl: Template,
+    props: impl Props,
+) -> ctxt::Span<impl Ctxt + Send + Sync + 'static, impl Clock + Send + Sync + 'static> {
     let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ambient.current_id(), ambient);
-    ambient.span(ambient, id, tpl, props)
+    ctxt::Span::new(ambient, ambient, id, tpl, props)
 }
 
 pub fn span_future<F: Future>(
@@ -54,11 +58,11 @@ pub fn span_future<F: Future>(
     tpl: Template,
     props: impl Props,
     future: F,
-) -> ctxt::SpanFuture<impl Ctxt, F, impl Clock> {
+) -> ctxt::SpanFuture<impl Ctxt + Send + Sync + 'static, F, impl Clock + Send + Sync + 'static> {
     let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ambient.current_id(), ambient);
-    ambient.span_future(ambient, id, tpl, props, future)
+    ctxt::SpanFuture::new(ambient, ambient, id, tpl, props, future)
 }
 
 #[cfg(feature = "std")]

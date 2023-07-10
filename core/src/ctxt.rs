@@ -12,27 +12,6 @@ pub trait Ctxt {
     type Props: Props + ?Sized;
     type Span;
 
-    fn span<P: Props, T: Clock>(self, clock: T, id: Id, tpl: Template, props: P) -> Span<Self, T>
-    where
-        Self: Sized,
-    {
-        Span::new(self, clock, id, tpl, props)
-    }
-
-    fn span_future<P: Props, F: Future, T: Clock>(
-        self,
-        clock: T,
-        id: Id,
-        tpl: Template,
-        props: P,
-        future: F,
-    ) -> SpanFuture<Self, F, T>
-    where
-        Self: Sized,
-    {
-        SpanFuture::new(self, clock, id, tpl, props, future)
-    }
-
     fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span;
     fn enter(&self, span: &mut Self::Span);
 
@@ -194,7 +173,7 @@ pub struct Span<C: Ctxt, T: Clock = Empty> {
 }
 
 impl<C: Ctxt, T: Clock> Span<C, T> {
-    fn new(ctxt: C, clock: T, id: Id, tpl: Template, props: impl Props) -> Self {
+    pub fn new(ctxt: C, clock: T, id: Id, tpl: Template, props: impl Props) -> Self {
         let scope = mem::ManuallyDrop::new(ctxt.open(clock.now(), id, tpl, props));
 
         Span { ctxt, scope, clock }
@@ -235,7 +214,7 @@ pub struct SpanFuture<C: Ctxt, F, T: Clock = Empty> {
 }
 
 impl<C: Ctxt, F, T: Clock> SpanFuture<C, F, T> {
-    fn new(scope: C, clock: T, id: Id, tpl: Template, props: impl Props, future: F) -> Self {
+    pub fn new(scope: C, clock: T, id: Id, tpl: Template, props: impl Props, future: F) -> Self {
         SpanFuture {
             scope: Span::new(scope, clock, id, tpl, props),
             future,
