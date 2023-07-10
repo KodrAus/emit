@@ -1,7 +1,10 @@
 use core::time::Duration;
 
-use crate::props::ErasedProps;
-use crate::{empty::Empty, event::Event, props::Props};
+use crate::{
+    empty::Empty,
+    event::Event,
+    props::{ErasedProps, Props},
+};
 
 pub trait Target {
     fn emit_event<P: Props>(&self, evt: &Event<P>);
@@ -121,8 +124,7 @@ impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
 mod internal {
     use core::time::Duration;
 
-    use crate::event::Event;
-    use crate::props::ErasedProps;
+    use crate::{event::Event, props::ErasedProps};
 
     pub trait DispatchTarget {
         fn dispatch_emit_to(&self, evt: &Event<&dyn ErasedProps>);

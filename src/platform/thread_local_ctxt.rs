@@ -3,13 +3,13 @@ use std::{
     ops::ControlFlow::{self, *},
 };
 
-use emit_core::template::Template;
-use emit_core::time::Timestamp;
 use emit_core::{
     ctxt::Ctxt,
     id::Id,
     key::{Key, OwnedKey},
     props::Props,
+    template::Template,
+    time::Timestamp,
     value::{OwnedValue, Value},
 };
 

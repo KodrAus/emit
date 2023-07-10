@@ -1,12 +1,18 @@
-use crate::id::{to_span_id, to_trace_id};
-use crate::key::to_key;
-use crate::value::to_any_value;
-use opentelemetry_api::logs::{AnyValue, LogRecord, Logger as _, Severity};
-use opentelemetry_api::trace::{SpanContext, TraceFlags, TraceState};
-use opentelemetry_api::{Key, OrderMap};
+use crate::{
+    id::{to_span_id, to_trace_id},
+    key::to_key,
+    value::to_any_value,
+};
+use opentelemetry_api::{
+    logs::{AnyValue, LogRecord, Logger as _, Severity},
+    trace::{SpanContext, TraceFlags, TraceState},
+    Key, OrderMap,
+};
 use opentelemetry_sdk::logs::Logger;
-use std::ops::ControlFlow;
-use std::time::{Duration, SystemTime};
+use std::{
+    ops::ControlFlow,
+    time::{Duration, SystemTime},
+};
 
 pub fn target(logger: Logger) -> OpenTelemetryLogsTarget {
     OpenTelemetryLogsTarget(logger)

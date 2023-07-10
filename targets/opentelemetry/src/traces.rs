@@ -1,11 +1,13 @@
-use crate::id::{from_trace_span_ids, to_span_id, to_trace_id};
-use crate::key::to_key;
-use crate::value::to_value;
-use emit_core::id::Id;
-use emit_core::props::Props;
-use emit_core::template::Template;
-use opentelemetry_api::trace::{TraceContextExt, Tracer};
-use opentelemetry_api::{Context, ContextGuard, OrderMap};
+use crate::{
+    id::{from_trace_span_ids, to_span_id, to_trace_id},
+    key::to_key,
+    value::to_value,
+};
+use emit_core::{id::Id, props::Props, template::Template};
+use opentelemetry_api::{
+    trace::{TraceContextExt, Tracer},
+    Context, ContextGuard, OrderMap,
+};
 use std::ops::ControlFlow;
 
 pub fn ctxt<T: Tracer>(tracer: T) -> OpenTelemetryTracesCtxt<T>

@@ -23,6 +23,8 @@ pub use self::{
 mod macro_hooks;
 mod platform;
 
+pub mod span;
+
 #[cfg(feature = "std")]
 mod setup;
 
@@ -46,11 +48,11 @@ pub fn span(
     id: Id,
     tpl: Template,
     props: impl Props,
-) -> ctxt::Span<impl Ctxt + Send + Sync + 'static, impl Clock + Send + Sync + 'static> {
+) -> span::Span<impl Ctxt + Send + Sync + 'static, impl Clock + Send + Sync + 'static> {
     let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ambient.current_id(), ambient);
-    ctxt::Span::new(ambient, ambient, id, tpl, props)
+    span::Span::new(ambient, ambient, id, tpl, props)
 }
 
 pub fn span_future<F: Future>(
@@ -58,11 +60,11 @@ pub fn span_future<F: Future>(
     tpl: Template,
     props: impl Props,
     future: F,
-) -> ctxt::SpanFuture<impl Ctxt + Send + Sync + 'static, F, impl Clock + Send + Sync + 'static> {
+) -> span::SpanFuture<impl Ctxt + Send + Sync + 'static, F, impl Clock + Send + Sync + 'static> {
     let ambient = emit_core::ambient::get();
 
     let id = id.or_gen(ambient.current_id(), ambient);
-    ctxt::SpanFuture::new(ambient, ambient, id, tpl, props, future)
+    span::SpanFuture::new(ambient, ambient, id, tpl, props, future)
 }
 
 #[cfg(feature = "std")]

@@ -1,5 +1,8 @@
-use crate::props::ErasedProps;
-use crate::{empty::Empty, event::Event, props::Props};
+use crate::{
+    empty::Empty,
+    event::Event,
+    props::{ErasedProps, Props},
+};
 
 pub trait Filter {
     fn matches_event<P: Props>(&self, evt: &Event<P>) -> bool;
@@ -106,8 +109,7 @@ impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
 }
 
 mod internal {
-    use crate::event::Event;
-    use crate::props::ErasedProps;
+    use crate::{event::Event, props::ErasedProps};
 
     pub trait DispatchFilter {
         fn dispatch_emit_when(&self, evt: &Event<&dyn ErasedProps>) -> bool;

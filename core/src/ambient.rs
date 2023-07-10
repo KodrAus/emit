@@ -1,3 +1,15 @@
+use crate::{
+    ctxt::Ctxt,
+    empty::Empty,
+    event::Event,
+    filter::Filter,
+    id::{GenId, Id},
+    props::Props,
+    target::Target,
+    template::Template,
+    time::{Clock, Timestamp},
+};
+
 #[derive(Debug, Clone, Copy)]
 pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TClock = Empty, TGenId = Empty>
 {
@@ -332,18 +344,6 @@ mod std_support {
         })
     }
 }
-
-use crate::template::Template;
-use crate::{
-    ctxt::Ctxt,
-    empty::Empty,
-    event::Event,
-    filter::Filter,
-    id::{GenId, Id},
-    props::Props,
-    target::Target,
-    time::{Clock, Timestamp},
-};
 
 #[cfg(feature = "std")]
 pub use self::std_support::*;
