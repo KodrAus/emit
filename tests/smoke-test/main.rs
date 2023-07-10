@@ -15,7 +15,7 @@ struct Work {
 async fn main() {
     let emitter = emit::setup()
         .to(emit_term::stdout())
-        .to(
+        .and_to(
             emit_otlp_logs::http("http://localhost:5341/ingest/otlp/v1/logs")
                 .resource(emit::props! {
                     #[emit::key("service.name")]

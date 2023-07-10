@@ -146,6 +146,7 @@ impl SpanId {
     }
 }
 
+// TODO: Better name for this; may not always generate ids. Trace ids may come from a known source etc
 pub trait GenId {
     fn gen(&self) -> Id {
         Id::new(self.gen_trace(), self.gen_span())

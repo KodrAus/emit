@@ -38,7 +38,16 @@ impl Setup {
 }
 
 impl<TTarget: Target, TFilter: Filter, TCtxt: Ctxt> Setup<TTarget, TFilter, TCtxt> {
-    pub fn to<UTarget: Target>(
+    pub fn to<UTarget: Target>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt> {
+        Setup {
+            target,
+            filter: self.filter,
+            ctxt: self.ctxt,
+            platform: self.platform,
+        }
+    }
+
+    pub fn and_to<UTarget: Target>(
         self,
         target: UTarget,
     ) -> Setup<target::And<TTarget, UTarget>, TFilter, TCtxt> {

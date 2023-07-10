@@ -12,27 +12,28 @@ pub trait Ctxt {
     type Props: Props + ?Sized;
     type Span;
 
-    fn span<P: Props>(self, id: Id, tpl: Template, props: P) -> Span<Self>
+    fn span<P: Props, T: Clock>(self, clock: T, id: Id, tpl: Template, props: P) -> Span<Self, T>
     where
         Self: Sized,
     {
-        Span::new(self, id, tpl, props)
+        Span::new(self, clock, id, tpl, props)
     }
 
-    fn span_future<P: Props, F: Future>(
+    fn span_future<P: Props, F: Future, T: Clock>(
         self,
+        clock: T,
         id: Id,
         tpl: Template,
         props: P,
         future: F,
-    ) -> SpanFuture<Self, F>
+    ) -> SpanFuture<Self, F, T>
     where
         Self: Sized,
     {
-        SpanFuture::new(self, id, tpl, props, future)
+        SpanFuture::new(self, clock, id, tpl, props, future)
     }
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span;
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span;
     fn enter(&self, span: &mut Self::Span);
 
     fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F);
@@ -47,7 +48,7 @@ pub trait Ctxt {
     }
 
     fn exit(&self, span: &mut Self::Span);
-    fn close(&self, span: Self::Span);
+    fn close(&self, ts: Option<Timestamp>, span: Self::Span);
 
     fn by_ref(&self) -> ByRef<Self> {
         ByRef(self)
@@ -58,6 +59,14 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
     type Props = C::Props;
     type Span = C::Span;
 
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+        (**self).open(ts, id, tpl, props)
+    }
+
+    fn enter(&self, span: &mut Self::Span) {
+        (**self).enter(span)
+    }
+
     fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
         (**self).with_current(with)
     }
@@ -66,20 +75,12 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
         (**self).current_id()
     }
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-        (**self).open(id, tpl, props)
-    }
-
-    fn enter(&self, span: &mut Self::Span) {
-        (**self).enter(span)
-    }
-
     fn exit(&self, span: &mut Self::Span) {
         (**self).exit(span)
     }
 
-    fn close(&self, scope: Self::Span) {
-        (**self).close(scope)
+    fn close(&self, ts: Option<Timestamp>, scope: Self::Span) {
+        (**self).close(ts, scope)
     }
 }
 
@@ -101,8 +102,8 @@ impl<C: Ctxt> Ctxt for Option<C> {
             .unwrap_or_default()
     }
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-        self.as_ref().map(|ctxt| ctxt.open(id, tpl, props))
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+        self.as_ref().map(|ctxt| ctxt.open(ts, id, tpl, props))
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -117,9 +118,9 @@ impl<C: Ctxt> Ctxt for Option<C> {
         }
     }
 
-    fn close(&self, span: Self::Span) {
+    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
         if let (Some(ctxt), Some(span)) = (self, span) {
-            ctxt.close(span)
+            ctxt.close(ts, span)
         }
     }
 }
@@ -137,8 +138,8 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
         (**self).current_id()
     }
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-        (**self).open(id, tpl, props)
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+        (**self).open(ts, id, tpl, props)
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -149,8 +150,8 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
         (**self).exit(span)
     }
 
-    fn close(&self, span: Self::Span) {
-        (**self).close(span)
+    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
+        (**self).close(ts, span)
     }
 }
 
@@ -161,8 +162,8 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
 
     type Span = T::Span;
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-        self.0.open(id, tpl, props)
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+        self.0.open(ts, id, tpl, props)
     }
 
     fn enter(&self, span: &mut Self::Span) {
@@ -177,8 +178,8 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
         self.0.exit(span)
     }
 
-    fn close(&self, span: Self::Span) {
-        self.0.close(span)
+    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
+        self.0.close(ts, span)
     }
 
     fn current_id(&self) -> Id {
@@ -186,26 +187,20 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
     }
 }
 
-pub struct Span<C: Ctxt> {
+pub struct Span<C: Ctxt, T: Clock = Empty> {
     scope: mem::ManuallyDrop<C::Span>,
     ctxt: C,
+    clock: T,
 }
 
-impl<C: Ctxt> Drop for Span<C> {
-    fn drop(&mut self) {
-        self.ctxt
-            .close(unsafe { mem::ManuallyDrop::take(&mut self.scope) })
-    }
-}
+impl<C: Ctxt, T: Clock> Span<C, T> {
+    fn new(ctxt: C, clock: T, id: Id, tpl: Template, props: impl Props) -> Self {
+        let scope = mem::ManuallyDrop::new(ctxt.open(clock.now(), id, tpl, props));
 
-impl<C: Ctxt> Span<C> {
-    fn new(ctxt: C, id: Id, tpl: Template, props: impl Props) -> Self {
-        let scope = mem::ManuallyDrop::new(ctxt.open(id, tpl, props));
-
-        Span { ctxt, scope }
+        Span { ctxt, scope, clock }
     }
 
-    pub fn enter(&mut self) -> SpanGuard<C> {
+    pub fn enter(&mut self) -> SpanGuard<C, T> {
         self.ctxt.enter(&mut self.scope);
 
         SpanGuard {
@@ -215,32 +210,40 @@ impl<C: Ctxt> Span<C> {
     }
 }
 
-pub struct SpanGuard<'a, C: Ctxt> {
-    scope: &'a mut Span<C>,
+pub struct SpanGuard<'a, C: Ctxt, T: Clock> {
+    scope: &'a mut Span<C, T>,
     _marker: PhantomData<*mut fn()>,
 }
 
-impl<'a, C: Ctxt> Drop for SpanGuard<'a, C> {
+impl<'a, C: Ctxt, T: Clock> Drop for SpanGuard<'a, C, T> {
     fn drop(&mut self) {
         self.scope.ctxt.exit(&mut self.scope.scope);
     }
 }
 
-pub struct SpanFuture<C: Ctxt, F> {
-    scope: Span<C>,
+impl<C: Ctxt, T: Clock> Drop for Span<C, T> {
+    fn drop(&mut self) {
+        self.ctxt.close(self.clock.now(), unsafe {
+            mem::ManuallyDrop::take(&mut self.scope)
+        })
+    }
+}
+
+pub struct SpanFuture<C: Ctxt, F, T: Clock = Empty> {
+    scope: Span<C, T>,
     future: F,
 }
 
-impl<C: Ctxt, F> SpanFuture<C, F> {
-    fn new(scope: C, id: Id, tpl: Template, props: impl Props, future: F) -> Self {
+impl<C: Ctxt, F, T: Clock> SpanFuture<C, F, T> {
+    fn new(scope: C, clock: T, id: Id, tpl: Template, props: impl Props, future: F) -> Self {
         SpanFuture {
-            scope: Span::new(scope, id, tpl, props),
+            scope: Span::new(scope, clock, id, tpl, props),
             future,
         }
     }
 }
 
-impl<C: Ctxt, F: Future> Future for SpanFuture<C, F> {
+impl<C: Ctxt, F: Future, T: Clock> Future for SpanFuture<C, F, T> {
     type Output = F::Output;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -263,7 +266,7 @@ impl Ctxt for Empty {
         Id::EMPTY
     }
 
-    fn open<P: Props>(&self, _: Id, _: Template, _: P) -> Self::Span {
+    fn open<P: Props>(&self, _: Option<Timestamp>, _: Id, _: Template, _: P) -> Self::Span {
         Empty
     }
 
@@ -271,7 +274,7 @@ impl Ctxt for Empty {
 
     fn exit(&self, _: &mut Self::Span) {}
 
-    fn close(&self, _: Self::Span) {}
+    fn close(&self, _: Option<Timestamp>, _: Self::Span) {}
 }
 
 mod internal {
@@ -311,6 +314,7 @@ mod alloc_support {
         use core::{marker::PhantomData, mem, ops::ControlFlow};
 
         use crate::template::Template;
+        use crate::time::Timestamp;
         use crate::{
             id::Id,
             key::Key,
@@ -324,10 +328,16 @@ mod alloc_support {
             fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, ErasedSlot));
             fn dispatch_current_id(&self) -> Id;
 
-            fn dispatch_open(&self, id: Id, tpl: Template, props: &dyn ErasedProps) -> ErasedScope;
+            fn dispatch_open(
+                &self,
+                ts: Option<Timestamp>,
+                id: Id,
+                tpl: Template,
+                props: &dyn ErasedProps,
+            ) -> ErasedScope;
             fn dispatch_enter(&self, span: &mut ErasedScope);
             fn dispatch_exit(&self, span: &mut ErasedScope);
-            fn dispatch_close(&self, span: ErasedScope);
+            fn dispatch_close(&self, ts: Option<Timestamp>, span: ErasedScope);
         }
 
         pub trait SealedCtxt {
@@ -392,8 +402,14 @@ mod alloc_support {
             self.current_id()
         }
 
-        fn dispatch_open(&self, id: Id, tpl: Template, props: &dyn ErasedProps) -> ErasedScope {
-            ErasedScope(Box::new(self.open(id, tpl, props)))
+        fn dispatch_open(
+            &self,
+            ts: Option<Timestamp>,
+            id: Id,
+            tpl: Template,
+            props: &dyn ErasedProps,
+        ) -> ErasedScope {
+            ErasedScope(Box::new(self.open(ts, id, tpl, props)))
         }
 
         fn dispatch_enter(&self, span: &mut ErasedScope) {
@@ -408,9 +424,9 @@ mod alloc_support {
             }
         }
 
-        fn dispatch_close(&self, span: ErasedScope) {
+        fn dispatch_close(&self, ts: Option<Timestamp>, span: ErasedScope) {
             if let Ok(span) = span.0.downcast() {
-                self.close(*span)
+                self.close(ts, *span)
             }
         }
     }
@@ -431,8 +447,14 @@ mod alloc_support {
             self.erase_ctxt().0.dispatch_current_id()
         }
 
-        fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-            self.erase_ctxt().0.dispatch_open(id, tpl, &props)
+        fn open<P: Props>(
+            &self,
+            ts: Option<Timestamp>,
+            id: Id,
+            tpl: Template,
+            props: P,
+        ) -> Self::Span {
+            self.erase_ctxt().0.dispatch_open(ts, id, tpl, &props)
         }
 
         fn enter(&self, span: &mut Self::Span) {
@@ -443,8 +465,8 @@ mod alloc_support {
             self.erase_ctxt().0.dispatch_exit(span)
         }
 
-        fn close(&self, span: Self::Span) {
-            self.erase_ctxt().0.dispatch_close(span)
+        fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
+            self.erase_ctxt().0.dispatch_close(ts, span)
         }
     }
 
@@ -460,8 +482,14 @@ mod alloc_support {
             (self as &(dyn ErasedCtxt + 'a)).current_id()
         }
 
-        fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-            (self as &(dyn ErasedCtxt + 'a)).open(id, tpl, props)
+        fn open<P: Props>(
+            &self,
+            ts: Option<Timestamp>,
+            id: Id,
+            tpl: Template,
+            props: P,
+        ) -> Self::Span {
+            (self as &(dyn ErasedCtxt + 'a)).open(ts, id, tpl, props)
         }
 
         fn enter(&self, span: &mut Self::Span) {
@@ -472,11 +500,12 @@ mod alloc_support {
             (self as &(dyn ErasedCtxt + 'a)).exit(span)
         }
 
-        fn close(&self, span: Self::Span) {
-            (self as &(dyn ErasedCtxt + 'a)).close(span)
+        fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
+            (self as &(dyn ErasedCtxt + 'a)).close(ts, span)
         }
     }
 }
 
+use crate::time::{Clock, Timestamp};
 #[cfg(feature = "alloc")]
 pub use alloc_support::*;

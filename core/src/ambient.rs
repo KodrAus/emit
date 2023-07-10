@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Copy)]
 pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TClock = Empty, TGenId = Empty>
 {
     target: TTarget,
@@ -127,8 +128,8 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TGenId> Ctxt
         self.ctxt.with_current(with)
     }
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
-        self.ctxt.open(id, tpl, props)
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+        self.ctxt.open(ts, id, tpl, props)
     }
 
     fn enter(&self, scope: &mut Self::Span) {
@@ -139,8 +140,8 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TGenId> Ctxt
         self.ctxt.exit(scope)
     }
 
-    fn close(&self, span: Self::Span) {
-        self.ctxt.close(span)
+    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
+        self.ctxt.close(ts, span)
     }
 }
 
@@ -188,7 +189,7 @@ mod std_support {
 
     trait AmbientTarget: Any + ErasedTarget + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &dyn ErasedTarget;
+        fn as_super(&self) -> &(dyn ErasedTarget + Send + Sync + 'static);
     }
 
     impl<T: ErasedTarget + Send + Sync + 'static> AmbientTarget for T {
@@ -196,14 +197,14 @@ mod std_support {
             self
         }
 
-        fn as_super(&self) -> &dyn ErasedTarget {
+        fn as_super(&self) -> &(dyn ErasedTarget + Send + Sync + 'static) {
             self
         }
     }
 
     trait AmbientFilter: Any + ErasedFilter + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &dyn ErasedFilter;
+        fn as_super(&self) -> &(dyn ErasedFilter + Send + Sync + 'static);
     }
 
     impl<T: ErasedFilter + Send + Sync + 'static> AmbientFilter for T {
@@ -211,14 +212,14 @@ mod std_support {
             self
         }
 
-        fn as_super(&self) -> &dyn ErasedFilter {
+        fn as_super(&self) -> &(dyn ErasedFilter + Send + Sync + 'static) {
             self
         }
     }
 
     trait AmbientCtxt: Any + ErasedCtxt + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &dyn ErasedCtxt;
+        fn as_super(&self) -> &(dyn ErasedCtxt + Send + Sync + 'static);
     }
 
     impl<T: ErasedCtxt + Send + Sync + 'static> AmbientCtxt for T {
@@ -226,14 +227,14 @@ mod std_support {
             self
         }
 
-        fn as_super(&self) -> &dyn ErasedCtxt {
+        fn as_super(&self) -> &(dyn ErasedCtxt + Send + Sync + 'static) {
             self
         }
     }
 
     trait AmbientClock: Any + ErasedClock + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &dyn ErasedClock;
+        fn as_super(&self) -> &(dyn ErasedClock + Send + Sync + 'static);
     }
 
     impl<T: ErasedClock + Send + Sync + 'static> AmbientClock for T {
@@ -241,14 +242,14 @@ mod std_support {
             self
         }
 
-        fn as_super(&self) -> &dyn ErasedClock {
+        fn as_super(&self) -> &(dyn ErasedClock + Send + Sync + 'static) {
             self
         }
     }
 
     trait AmbientGenId: Any + ErasedGenId + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &dyn ErasedGenId;
+        fn as_super(&self) -> &(dyn ErasedGenId + Send + Sync + 'static);
     }
 
     impl<T: ErasedGenId + Send + Sync + 'static> AmbientGenId for T {
@@ -256,18 +257,18 @@ mod std_support {
             self
         }
 
-        fn as_super(&self) -> &dyn ErasedGenId {
+        fn as_super(&self) -> &(dyn ErasedGenId + Send + Sync + 'static) {
             self
         }
     }
 
     static AMBIENT: OnceLock<
         Ambient<
-            Box<dyn AmbientTarget>,
-            Box<dyn AmbientFilter>,
-            Box<dyn AmbientCtxt>,
-            Box<dyn AmbientClock>,
-            Box<dyn AmbientGenId>,
+            Box<dyn AmbientTarget + Send + Sync>,
+            Box<dyn AmbientFilter + Send + Sync>,
+            Box<dyn AmbientCtxt + Send + Sync>,
+            Box<dyn AmbientClock + Send + Sync>,
+            Box<dyn AmbientGenId + Send + Sync>,
         >,
     > = OnceLock::new();
 
@@ -311,7 +312,15 @@ mod std_support {
         })
     }
 
-    pub fn get() -> Option<Ambient<impl Target, impl Filter, impl Ctxt, impl Clock, impl GenId>> {
+    pub fn get() -> Option<
+        Ambient<
+            impl Target + Send + Sync + Copy,
+            impl Filter + Send + Sync + Copy,
+            impl Ctxt + Send + Sync + Copy,
+            impl Clock + Send + Sync + Copy,
+            impl GenId + Send + Sync + Copy,
+        >,
+    > {
         let ambient = AMBIENT.get()?;
 
         Some(Ambient {
