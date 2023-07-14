@@ -12,8 +12,8 @@ path = "main.rs"
 path = "../../"
 features = ["serde"]
 
-[dependencies.emit-otlp-logs]
-path = "../../targets/otlp-logs"
+[dependencies.emit-otlp]
+path = "../../targets/otlp"
 
 [dependencies.emit-term]
 path = "../../targets/term"

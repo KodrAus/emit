@@ -5,6 +5,12 @@ pub(crate) mod logs {
 }
 
 #[path = ""]
+pub(crate) mod trace {
+    #[path = "./proto/opentelemetry.proto.trace.v1.rs"]
+    pub(crate) mod v1;
+}
+
+#[path = ""]
 pub(crate) mod common {
     #[path = "./proto/opentelemetry.proto.common.v1.rs"]
     pub(crate) mod v1;
@@ -21,6 +27,12 @@ pub(crate) mod collector {
     #[path = ""]
     pub(crate) mod logs {
         #[path = "./proto/opentelemetry.proto.collector.logs.v1.rs"]
+        pub(crate) mod v1;
+    }
+
+    #[path = ""]
+    pub(crate) mod trace {
+        #[path = "./proto/opentelemetry.proto.collector.trace.v1.rs"]
         pub(crate) mod v1;
     }
 }

@@ -3,12 +3,12 @@ use crate::{
     key::to_key,
     value::to_value,
 };
-use emit_core::{id::Id, props::Props, template::Template};
+use emit_core::{id::Id, props::Props, template::Template, time::Timestamp};
 use opentelemetry_api::{
     trace::{TraceContextExt, Tracer},
     Context, ContextGuard, OrderMap,
 };
-use std::ops::ControlFlow;
+use std::{ops::ControlFlow, time::SystemTime};
 
 pub fn ctxt<T: Tracer>(tracer: T) -> OpenTelemetryTracesCtxt<T>
 where
@@ -31,10 +31,14 @@ where
     type Props = emit_core::empty::Empty;
     type Span = OpenTelemetrySpan;
 
-    fn open<P: Props>(&self, id: Id, tpl: Template, props: P) -> Self::Span {
+    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
         let span = self
             .0
             .span_builder(tpl.to_string())
+            .with_start_time(
+                ts.map(|ts| ts.to_system_time())
+                    .unwrap_or_else(SystemTime::now),
+            )
             .with_span_id(to_span_id(id))
             .with_trace_id(to_trace_id(id))
             .with_attributes_map({
@@ -80,9 +84,12 @@ where
         drop(span.active.take());
     }
 
-    fn close(&self, mut span: Self::Span) {
+    fn close(&self, ts: Option<Timestamp>, mut span: Self::Span) {
         if let Some(cx) = span.cx.take() {
-            cx.span().end();
+            cx.span().end_with_timestamp(
+                ts.map(|ts| ts.to_system_time())
+                    .unwrap_or_else(SystemTime::now),
+            );
         }
     }
 }
