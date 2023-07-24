@@ -1,6 +1,6 @@
 use opentelemetry_api::trace::{SpanId, TraceId};
 
-pub(crate) fn to_trace_id(id: emit_core::id::Id) -> TraceId {
+pub(crate) fn to_trace_id(id: emit_core::id::IdSource) -> TraceId {
     TraceId::from_bytes(
         id.trace()
             .map(|id| id.to_u128())
@@ -9,7 +9,7 @@ pub(crate) fn to_trace_id(id: emit_core::id::Id) -> TraceId {
     )
 }
 
-pub(crate) fn to_span_id(id: emit_core::id::Id) -> SpanId {
+pub(crate) fn to_span_id(id: emit_core::id::IdSource) -> SpanId {
     SpanId::from_bytes(
         id.span()
             .map(|id| id.to_u64())
@@ -18,11 +18,11 @@ pub(crate) fn to_span_id(id: emit_core::id::Id) -> SpanId {
     )
 }
 
-pub(crate) fn from_trace_span_ids(trace: TraceId, span: SpanId) -> emit_core::id::Id {
+pub(crate) fn from_trace_span_ids(trace: TraceId, span: SpanId) -> emit_core::id::IdSource {
     let trace_id = u128::from_be_bytes(trace.to_bytes());
     let span_id = u64::from_be_bytes(span.to_bytes());
 
-    emit_core::id::Id::new(
+    emit_core::id::IdSource::new(
         Some(emit_core::id::TraceId::from_u128(trace_id)),
         Some(emit_core::id::SpanId::from_u64(span_id)),
     )

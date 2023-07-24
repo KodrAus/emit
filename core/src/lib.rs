@@ -2,7 +2,6 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
-extern crate core;
 
 pub mod ambient;
 pub mod ctxt;

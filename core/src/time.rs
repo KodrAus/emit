@@ -1,8 +1,11 @@
-use core::{cmp, fmt, str, time::Duration};
+use core::{cmp, fmt, str, str::FromStr, time::Duration};
 
-use crate::empty::Empty;
+use crate::{
+    empty::Empty,
+    value::{ToValue, Value},
+};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(Duration);
 
 impl Timestamp {
@@ -29,6 +32,28 @@ impl fmt::Debug for Timestamp {
 impl fmt::Display for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt_rfc3339(*self, f)
+    }
+}
+
+impl FromStr for Timestamp {
+    type Err = ParseTimestampError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_rfc3339(s)
+    }
+}
+
+impl ToValue for Timestamp {
+    fn to_value(&self) -> Value {
+        Value::capture_display(self)
+    }
+}
+
+impl<'v> Value<'v> {
+    pub fn to_timestamp(&self) -> Option<Timestamp> {
+        self.downcast_ref::<Timestamp>()
+            .copied()
+            .or_else(|| self.parse())
     }
 }
 
@@ -104,6 +129,12 @@ impl<'a> Clock for dyn ErasedClock + Send + Sync + 'a {
         (self as &(dyn ErasedClock + 'a)).now()
     }
 }
+
+fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
+    todo!()
+}
+
+pub struct ParseTimestampError {}
 
 fn fmt_rfc3339(ts: Timestamp, f: &mut fmt::Formatter) -> fmt::Result {
     /*

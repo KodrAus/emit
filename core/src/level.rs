@@ -1,4 +1,5 @@
-use core::fmt;
+use crate::value::{ToValue, Value};
+use core::{fmt, str::FromStr};
 
 #[derive(Clone, Copy)]
 pub enum Level {
@@ -25,8 +26,32 @@ impl fmt::Display for Level {
     }
 }
 
+impl FromStr for Level {
+    type Err = ParseLevelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+pub struct ParseLevelError {}
+
 impl Default for Level {
     fn default() -> Self {
         Level::Info
+    }
+}
+
+impl ToValue for Level {
+    fn to_value(&self) -> Value {
+        Value::capture_display(self)
+    }
+}
+
+impl<'v> Value<'v> {
+    pub fn to_level(&self) -> Option<Level> {
+        self.downcast_ref::<Level>()
+            .copied()
+            .or_else(|| self.parse())
     }
 }

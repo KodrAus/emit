@@ -1,22 +1,20 @@
-use core::{borrow::Borrow, fmt, ops::ControlFlow};
+use core::{
+    fmt,
+    ops::{ControlFlow, RangeInclusive},
+};
 
 use crate::{
-    empty::Empty,
-    id::Id,
-    key::Key,
-    level::Level,
+    key::{Key, ToKey},
     props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
     time::Timestamp,
-    value::Value,
-    well_known,
+    value::{ToValue, Value},
+    well_known::{MESSAGE_KEY, TEMPLATE_KEY, TIMESTAMP_KEY, TIMESTAMP_START_KEY},
 };
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
-    ts: Option<Timestamp>,
-    id: Id,
-    lvl: Level,
+    ts: Option<RangeInclusive<Timestamp>>,
     tpl: Template<'a>,
     props: P,
 }
@@ -25,13 +23,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("Event");
 
-        if let Some(ref ts) = self.ts {
-            f.field("ts", ts);
-        }
-
-        f.field("lvl", &self.lvl).field("msg", &self.msg());
-
-        self.props.for_each(|k, v| {
+        self.all_props().for_each(|k, v| {
             f.field(k.as_str(), &v);
 
             ControlFlow::Continue(())
@@ -42,55 +34,58 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn new(ts: Option<Timestamp>, id: Id, lvl: Level, tpl: Template<'a>, props: P) -> Self {
+    pub fn point(ts: impl Into<Option<Timestamp>>, tpl: Template<'a>, props: P) -> Self {
+        Event::spanned(ts.into().map(|ts| ts..=ts), tpl, props)
+    }
+
+    pub fn spanned(
+        ts: impl Into<Option<RangeInclusive<Timestamp>>>,
+        tpl: Template<'a>,
+        props: P,
+    ) -> Self {
         Event {
-            ts,
-            id,
-            lvl,
+            ts: ts.into(),
             tpl,
             props,
         }
     }
 
-    pub fn ts(&self) -> Option<Timestamp> {
-        self.ts
-    }
-
-    pub fn lvl(&self) -> Level {
-        self.lvl
-    }
-
-    pub fn msg<'b>(&'b self) -> Render<'b, &'b P> {
+    pub fn message(&self) -> Render<&P> {
         self.tpl.render(&self.props)
     }
 
-    pub fn tpl<'b>(&'b self) -> Render<'b, Empty> {
-        self.tpl.render(Empty)
+    pub fn template(&self) -> Template {
+        self.tpl.by_ref()
     }
 
-    pub fn err<'b>(&'b self) -> Option<Value<'b>> {
-        self.props.get(well_known::ERR_KEY)
+    pub fn timestamp(&self) -> Option<Timestamp> {
+        self.ts.as_ref().map(|ts| *ts.start())
     }
 
-    pub fn id(&self) -> Id {
-        self.id
-    }
-
-    pub fn for_each<'b>(&'b self, for_each: impl FnMut(Key<'b>, Value<'b>) -> ControlFlow<()>) {
-        self.props.for_each(for_each)
-    }
-
-    pub fn get<'b>(&'b self, k: impl Borrow<str>) -> Option<Value<'b>> {
-        self.props.get(k)
+    pub fn timespan(&self) -> Option<RangeInclusive<Timestamp>> {
+        self.ts.as_ref().and_then(|ts| {
+            if *ts.start() != *ts.end() {
+                Some(ts.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub fn chain<U: Props>(self, other: U) -> Event<'a, Chain<P, U>> {
         Event {
             ts: self.ts,
-            id: self.id,
-            lvl: self.lvl,
             tpl: self.tpl,
             props: self.props.chain(other),
+        }
+    }
+
+    pub fn all_props(&self) -> AllProps<P> {
+        AllProps {
+            ts: self.ts.clone(),
+            tpl: self.tpl.by_ref(),
+            msg: self.message(),
+            props: self.props.by_ref(),
         }
     }
 
@@ -100,9 +95,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
         Event {
-            ts: self.ts,
-            id: self.id,
-            lvl: self.lvl,
+            ts: self.ts.clone(),
             tpl: self.tpl.by_ref(),
             props: self.props.by_ref(),
         }
@@ -110,11 +103,36 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn erase<'b>(&'b self) -> Event<'b, &'b dyn ErasedProps> {
         Event {
-            ts: self.ts,
-            id: self.id,
-            lvl: self.lvl,
+            ts: self.ts.clone(),
             tpl: self.tpl.by_ref(),
             props: &self.props,
         }
+    }
+}
+
+pub struct AllProps<'a, P> {
+    ts: Option<RangeInclusive<Timestamp>>,
+    tpl: Template<'a>,
+    msg: Render<'a, &'a P>,
+    props: ByRef<'a, P>,
+}
+
+impl<'a, P: Props> Props for AllProps<'a, P> {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
+        if let Some(ref ts) = self.ts {
+            if *ts.start() != *ts.end() {
+                for_each(TIMESTAMP_START_KEY.to_key(), ts.start().to_value());
+            }
+
+            for_each(TIMESTAMP_KEY.to_key(), ts.end().to_value());
+        }
+
+        for_each(TEMPLATE_KEY.to_key(), self.tpl.to_value());
+        for_each(MESSAGE_KEY.to_key(), self.tpl.to_value());
+
+        self.props.for_each(for_each);
     }
 }

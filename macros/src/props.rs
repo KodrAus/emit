@@ -164,7 +164,7 @@ impl Props {
 }
 
 pub fn ensure_not_reserved(kv: &KeyValue) -> Result<(), syn::Error> {
-    if emit_core::well_known::RESERVED.contains(&&*kv.label) {
+    if emit_core::well_known::is_reserved(&kv.label) {
         Err(syn::Error::new(
             kv.span(),
             format!("`{}` is a reserved identifier", kv.label),

@@ -1,84 +1,141 @@
-use crate::empty::Empty;
+use crate::{
+    empty::Empty,
+    value::{ToValue, Value},
+};
+use core::{
+    fmt,
+    num::{NonZeroU128, NonZeroU64},
+    str,
+    str::FromStr,
+};
 
 #[derive(Clone, Copy)]
-pub struct Id {
-    trace: TraceId,
-    span: SpanId,
+pub struct TraceId(NonZeroU128);
+
+impl fmt::Debug for TraceId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
+    }
+}
+
+impl fmt::Display for TraceId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
+    }
+}
+
+impl FromStr for TraceId {
+    type Err = ParseIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+impl ToValue for TraceId {
+    fn to_value(&self) -> Value {
+        Value::capture_display(self)
+    }
+}
+
+impl<'v> Value<'v> {
+    pub fn to_trace_id(&self) -> Option<TraceId> {
+        self.downcast_ref::<TraceId>()
+            .copied()
+            .or_else(|| self.parse())
+    }
+}
+
+impl TraceId {
+    pub fn new(v: NonZeroU128) -> Self {
+        TraceId(v)
+    }
+
+    pub fn from_u128(v: u128) -> Option<Self> {
+        Some(TraceId(NonZeroU128::new(v)?))
+    }
+
+    pub fn to_u128(&self) -> u128 {
+        self.0.get()
+    }
+
+    pub fn to_hex(&self) -> [u8; 32] {
+        let mut dst = [0; 32];
+        let src: [u8; 16] = self.0.get().to_be_bytes();
+
+        for i in 0..src.len() {
+            let b = src[i];
+
+            dst[i * 2] = HEX[(b >> 4) as usize];
+            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
+        }
+
+        dst
+    }
 }
 
 #[derive(Clone, Copy)]
-pub struct TraceId(u128);
+pub struct SpanId(NonZeroU64);
 
-#[derive(Clone, Copy)]
-pub struct SpanId(u64);
-
-impl Id {
-    pub const EMPTY: Self = Id {
-        trace: TraceId::EMPTY,
-        span: SpanId::EMPTY,
-    };
-
-    pub fn new(trace: Option<TraceId>, span: Option<SpanId>) -> Self {
-        Id {
-            trace: trace.unwrap_or(TraceId::EMPTY),
-            span: span.unwrap_or(SpanId::EMPTY),
-        }
-    }
-
-    pub fn or(&self, incoming: Id) -> Self {
-        Id::new(
-            self.trace().or(incoming.trace()),
-            self.span().or(incoming.span()),
-        )
-    }
-
-    pub fn or_gen(&self, incoming: Id, gen_id: impl GenId) -> Self {
-        Id::new(
-            // Use the trace id from the incoming, then our trace id, then try generate one
-            // Ids are more likely to share the same trace id
-            self.trace()
-                .or(incoming.trace())
-                .or_else(|| gen_id.gen_trace()),
-            // Use the span id from the incoming, then try generate one, then our span id
-            // Ids are more likely to have unique span ids
-            self.span()
-                .or_else(|| gen_id.gen_span())
-                .or(incoming.span()),
-        )
-    }
-
-    pub fn trace(&self) -> Option<TraceId> {
-        if self.trace.is_empty() {
-            None
-        } else {
-            Some(self.trace)
-        }
-    }
-
-    pub fn span(&self) -> Option<SpanId> {
-        if self.span.is_empty() {
-            None
-        } else {
-            Some(self.span)
-        }
+impl fmt::Debug for SpanId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
     }
 }
 
-impl Default for Id {
-    fn default() -> Self {
-        Self::EMPTY
+impl fmt::Display for SpanId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
     }
 }
 
-impl From<SpanId> for Id {
-    fn from(value: SpanId) -> Self {
-        Id::new(None, Some(value))
+impl FromStr for SpanId {
+    type Err = ParseIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
     }
 }
 
-impl From<TraceId> for Id {
-    fn from(value: TraceId) -> Self {
-        Id::new(Some(value), None)
+impl ToValue for SpanId {
+    fn to_value(&self) -> Value {
+        Value::capture_display(self)
+    }
+}
+
+impl<'v> Value<'v> {
+    pub fn to_span_id(&self) -> Option<SpanId> {
+        self.downcast_ref::<SpanId>()
+            .copied()
+            .or_else(|| self.parse())
+    }
+}
+
+impl SpanId {
+    pub fn new(v: NonZeroU64) -> Self {
+        SpanId(v)
+    }
+
+    pub fn from_u64(v: u64) -> Option<Self> {
+        Some(SpanId(NonZeroU64::new(v)?))
+    }
+
+    pub fn to_u64(&self) -> u64 {
+        self.0.get()
+    }
+
+    pub fn to_hex(&self) -> [u8; 16] {
+        let mut dst = [0; 16];
+        let src: [u8; 8] = self.0.get().to_be_bytes();
+
+        for i in 0..src.len() {
+            let b = src[i];
+
+            dst[i * 2] = HEX[(b >> 4) as usize];
+            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
+        }
+
+        dst
     }
 }
 
@@ -86,140 +143,58 @@ const HEX: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
 
-impl TraceId {
-    const EMPTY: Self = TraceId(0);
+pub struct ParseIdError {}
 
-    fn is_empty(&self) -> bool {
-        self.0 == Self::EMPTY.0
+pub trait IdSource {
+    fn trace_id(&self) -> Option<TraceId>;
+    fn span_id(&self) -> Option<SpanId>;
+}
+
+impl<'a, T: IdSource + ?Sized> IdSource for &'a T {
+    fn trace_id(&self) -> Option<TraceId> {
+        (**self).trace_id()
     }
 
-    pub fn from_u128(v: u128) -> Self {
-        TraceId(v)
-    }
-
-    pub fn to_u128(&self) -> u128 {
-        self.0
-    }
-
-    pub fn to_hex(&self) -> [u8; 32] {
-        let mut dst = [0; 32];
-        let src: [u8; 16] = self.0.to_be_bytes();
-
-        for i in 0..src.len() {
-            let b = src[i];
-
-            dst[i * 2] = HEX[(b >> 4) as usize];
-            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
-        }
-
-        dst
+    fn span_id(&self) -> Option<SpanId> {
+        (**self).span_id()
     }
 }
 
-impl SpanId {
-    const EMPTY: Self = SpanId(0);
-
-    fn is_empty(&self) -> bool {
-        self.0 == Self::EMPTY.0
+impl<'a, T: IdSource> IdSource for Option<T> {
+    fn trace_id(&self) -> Option<TraceId> {
+        self.as_ref().and_then(|id| id.trace_id())
     }
 
-    pub fn from_u64(v: u64) -> Self {
-        SpanId(v)
-    }
-
-    pub fn to_u64(&self) -> u64 {
-        self.0
-    }
-
-    pub fn to_hex(&self) -> [u8; 16] {
-        let mut dst = [0; 16];
-        let src: [u8; 8] = self.0.to_be_bytes();
-
-        for i in 0..src.len() {
-            let b = src[i];
-
-            dst[i * 2] = HEX[(b >> 4) as usize];
-            dst[i * 2 + 1] = HEX[(b & 0x0f) as usize];
-        }
-
-        dst
-    }
-}
-
-// TODO: Better name for this; may not always generate ids. Trace ids may come from a known source etc
-pub trait GenId {
-    fn gen(&self) -> Id {
-        Id::new(self.gen_trace(), self.gen_span())
-    }
-
-    fn gen_trace(&self) -> Option<TraceId>;
-    fn gen_span(&self) -> Option<SpanId>;
-}
-
-impl<'a, T: GenId + ?Sized> GenId for &'a T {
-    fn gen(&self) -> Id {
-        (**self).gen()
-    }
-
-    fn gen_trace(&self) -> Option<TraceId> {
-        (**self).gen_trace()
-    }
-
-    fn gen_span(&self) -> Option<SpanId> {
-        (**self).gen_span()
-    }
-}
-
-impl<'a, T: GenId> GenId for Option<T> {
-    fn gen(&self) -> Id {
-        self.as_ref()
-            .map(|id| Id::new(id.gen_trace(), id.gen_span()))
-            .unwrap_or_default()
-    }
-
-    fn gen_trace(&self) -> Option<TraceId> {
-        self.as_ref().and_then(|id| id.gen_trace())
-    }
-
-    fn gen_span(&self) -> Option<SpanId> {
-        self.as_ref().and_then(|id| id.gen_span())
+    fn span_id(&self) -> Option<SpanId> {
+        self.as_ref().and_then(|id| id.span_id())
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<'a, T: GenId + ?Sized + 'a> GenId for alloc::boxed::Box<T> {
-    fn gen(&self) -> Id {
-        (**self).gen()
+impl<'a, T: IdSource + ?Sized + 'a> IdSource for alloc::boxed::Box<T> {
+    fn trace_id(&self) -> Option<TraceId> {
+        (**self).trace_id()
     }
 
-    fn gen_trace(&self) -> Option<TraceId> {
-        (**self).gen_trace()
-    }
-
-    fn gen_span(&self) -> Option<SpanId> {
-        (**self).gen_span()
+    fn span_id(&self) -> Option<SpanId> {
+        (**self).span_id()
     }
 }
 
-impl GenId for Empty {
-    fn gen(&self) -> Id {
-        Default::default()
-    }
-
-    fn gen_trace(&self) -> Option<TraceId> {
+impl IdSource for Empty {
+    fn trace_id(&self) -> Option<TraceId> {
         None
     }
 
-    fn gen_span(&self) -> Option<SpanId> {
+    fn span_id(&self) -> Option<SpanId> {
         None
     }
 }
 
 mod internal {
-    use super::{Id, SpanId, TraceId};
+    use super::{SpanId, TraceId};
 
     pub trait DispatchGenId {
-        fn dispatch_gen(&self) -> Id;
         fn dispatch_gen_trace(&self) -> Option<TraceId>;
         fn dispatch_gen_span(&self) -> Option<SpanId>;
     }
@@ -229,54 +204,42 @@ mod internal {
     }
 }
 
-pub trait ErasedGenId: internal::SealedIdGenerator {}
+pub trait ErasedIdSource: internal::SealedIdGenerator {}
 
-impl<T: GenId> ErasedGenId for T {}
+impl<T: IdSource> ErasedIdSource for T {}
 
-impl<T: GenId> internal::SealedIdGenerator for T {
+impl<T: IdSource> internal::SealedIdGenerator for T {
     fn erase_gen_id(&self) -> crate::internal::Erased<&dyn internal::DispatchGenId> {
         crate::internal::Erased(self)
     }
 }
 
-impl<T: GenId> internal::DispatchGenId for T {
-    fn dispatch_gen(&self) -> Id {
-        self.gen()
-    }
-
+impl<T: IdSource> internal::DispatchGenId for T {
     fn dispatch_gen_trace(&self) -> Option<TraceId> {
-        self.gen_trace()
+        self.trace_id()
     }
 
     fn dispatch_gen_span(&self) -> Option<SpanId> {
-        self.gen_span()
+        self.span_id()
     }
 }
 
-impl<'a> GenId for dyn ErasedGenId + 'a {
-    fn gen(&self) -> Id {
-        self.erase_gen_id().0.dispatch_gen()
-    }
-
-    fn gen_trace(&self) -> Option<TraceId> {
+impl<'a> IdSource for dyn ErasedIdSource + 'a {
+    fn trace_id(&self) -> Option<TraceId> {
         self.erase_gen_id().0.dispatch_gen_trace()
     }
 
-    fn gen_span(&self) -> Option<SpanId> {
+    fn span_id(&self) -> Option<SpanId> {
         self.erase_gen_id().0.dispatch_gen_span()
     }
 }
 
-impl<'a> GenId for dyn ErasedGenId + Send + Sync + 'a {
-    fn gen(&self) -> Id {
-        (self as &(dyn ErasedGenId + 'a)).gen()
+impl<'a> IdSource for dyn ErasedIdSource + Send + Sync + 'a {
+    fn trace_id(&self) -> Option<TraceId> {
+        (self as &(dyn ErasedIdSource + 'a)).trace_id()
     }
 
-    fn gen_trace(&self) -> Option<TraceId> {
-        (self as &(dyn ErasedGenId + 'a)).gen_trace()
-    }
-
-    fn gen_span(&self) -> Option<SpanId> {
-        (self as &(dyn ErasedGenId + 'a)).gen_span()
+    fn span_id(&self) -> Option<SpanId> {
+        (self as &(dyn ErasedIdSource + 'a)).span_id()
     }
 }

@@ -1,23 +1,20 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     ops::ControlFlow::{self, *},
 };
 
 use emit_core::{
     ctxt::Ctxt,
-    id::Id,
     key::{Key, OwnedKey},
     props::Props,
-    template::Template,
-    time::Timestamp,
     value::{OwnedValue, Value},
 };
 
 // TODO: Optimize this
 thread_local! {
     static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {
-        id: Id::EMPTY,
-        props: Vec::new(),
+        props: HashMap::new(),
     });
 }
 
@@ -26,8 +23,7 @@ pub struct ThreadLocalCtxt;
 
 #[derive(Clone)]
 pub struct ThreadLocalSpan {
-    id: Id,
-    props: Vec<(OwnedKey, OwnedValue)>,
+    props: HashMap<OwnedKey, OwnedValue>,
 }
 
 impl Props for ThreadLocalSpan {
@@ -41,40 +37,31 @@ impl Props for ThreadLocalSpan {
 }
 
 impl Ctxt for ThreadLocalCtxt {
-    type Props = ThreadLocalSpan;
-    type Span = ThreadLocalSpan;
+    type CurrentProps = ThreadLocalSpan;
+    type LocalFrame = ThreadLocalSpan;
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
-        ACTIVE.with(|span| {
-            let span = &*span.borrow();
-
-            with(span.id, &span)
-        })
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
+        ACTIVE.with(|span| with(&*span.borrow()))
     }
 
-    fn current_id(&self) -> Id {
-        ACTIVE.with(|span| span.borrow().id)
-    }
-
-    fn open<P: Props>(&self, _: Option<Timestamp>, id: Id, _: Template, props: P) -> Self::Span {
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
         let mut span = ACTIVE.with(|span| span.borrow().clone());
 
-        span.id = id;
         props.for_each(|k, v| {
-            span.props.push((k.to_owned(), v.to_owned()));
+            span.props.insert(k.to_owned(), v.to_owned());
             Continue(())
         });
 
         span
     }
 
-    fn enter(&self, link: &mut Self::Span) {
+    fn enter(&self, link: &mut Self::LocalFrame) {
         ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
     }
 
-    fn exit(&self, link: &mut Self::Span) {
+    fn exit(&self, link: &mut Self::LocalFrame) {
         ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
     }
 
-    fn close(&self, _: Option<Timestamp>, _: Self::Span) {}
+    fn close(&self, _: Self::LocalFrame) {}
 }

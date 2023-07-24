@@ -75,7 +75,7 @@ impl<
         TCtxt: Ctxt + Send + Sync + 'static,
     > Setup<TTarget, TFilter, TCtxt>
 where
-    TCtxt::Span: Send + 'static,
+    TCtxt::LocalFrame: Send + 'static,
 {
     #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
     pub fn init(self) -> Init<&'static TTarget> {
@@ -85,7 +85,7 @@ where
                 .with_filter(self.filter)
                 .with_ctxt(self.ctxt)
                 .with_clock(self.platform.clock)
-                .with_gen_id(self.platform.gen_id),
+                .with_gen_id(self.platform.id_src),
         )
         .expect("already initialized");
 

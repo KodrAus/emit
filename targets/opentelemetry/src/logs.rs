@@ -3,6 +3,7 @@ use crate::{
     key::to_key,
     value::to_any_value,
 };
+use emit_core::well_known::WellKnown;
 use opentelemetry_api::{
     logs::{AnyValue, LogRecord, Logger as _, Severity},
     trace::{SpanContext, TraceFlags, TraceState},
@@ -21,7 +22,7 @@ pub fn target(logger: Logger) -> OpenTelemetryLogsTarget {
 pub struct OpenTelemetryLogsTarget(Logger);
 
 impl emit_core::target::Target for OpenTelemetryLogsTarget {
-    fn emit_event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
+    fn event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         self.0.emit(to_record(evt));
     }
 
@@ -45,18 +46,18 @@ fn to_record(evt: &emit_core::event::Event<impl emit_core::props::Props>) -> Log
             TraceState::default(),
         ))
         .with_timestamp(
-            evt.ts()
+            evt.timestamp()
                 .map(|ts| ts.to_system_time())
                 .unwrap_or_else(SystemTime::now),
         )
-        .with_severity_number(match evt.lvl() {
+        .with_severity_number(match evt.level().unwrap_or(emit_core::level::Level::Info) {
             emit_core::level::Level::Debug => Severity::Debug,
             emit_core::level::Level::Info => Severity::Info,
             emit_core::level::Level::Warn => Severity::Warn,
             emit_core::level::Level::Error => Severity::Error,
         })
-        .with_severity_text(evt.lvl().to_string())
-        .with_body(AnyValue::String(evt.msg().to_string().into()))
+        .with_severity_text(evt.level().to_string())
+        .with_body(AnyValue::String(evt.message().to_string().into()))
         .with_attributes({
             let mut attributes = OrderMap::<Key, AnyValue>::new();
 

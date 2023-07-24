@@ -1,6 +1,10 @@
 use core::{fmt, marker::PhantomData};
 
-use crate::{empty::Empty, props::Props, value::Value};
+use crate::{
+    empty::Empty,
+    props::Props,
+    value::{ToValue, Value},
+};
 
 #[derive(Clone)]
 pub struct Template<'a>(TemplateKind<'a>);
@@ -58,7 +62,7 @@ impl<'a> Template<'a> {
 
     pub fn as_str(&self) -> Option<&str> {
         match self.0.parts() {
-            [Part(PartKind::Text { value, .. })] => Some(value),
+            [part] => part.as_str(),
             _ => None,
         }
     }
@@ -77,6 +81,16 @@ impl<'a> Template<'a> {
         Render {
             tpl: self.by_ref(),
             props,
+        }
+    }
+}
+
+impl<'a> ToValue for Template<'a> {
+    fn to_value(&self) -> Value {
+        if let Some(tpl) = self.as_str() {
+            Value::from(tpl)
+        } else {
+            Value::from_display(self)
         }
     }
 }
@@ -106,30 +120,20 @@ impl<'a, P> Render<'a, P> {
 impl<'a, P: Props> Render<'a, P> {
     pub fn write(&self, mut writer: impl Write) -> fmt::Result {
         for part in self.tpl.0.parts() {
-            match part.0 {
-                PartKind::Text {
-                    value,
-                    value_static: _,
-                } => writer.write_text(value)?,
-                PartKind::Hole {
-                    label,
-                    ref formatter,
-                    label_static: _,
-                } => {
-                    if let Some(value) = self.props.get(label) {
-                        if let Some(formatter) = formatter {
-                            writer.write_hole_fmt(value, formatter.by_ref())?;
-                        } else {
-                            writer.write_hole_value(value)?;
-                        }
-                    } else {
-                        writer.write_hole_label(label)?;
-                    }
-                }
-            }
+            part.write(&mut writer, &self.props)?;
         }
 
         Ok(())
+    }
+}
+
+impl<'a, P: Props> ToValue for Render<'a, P> {
+    fn to_value(&self) -> Value {
+        if let Some(tpl) = self.as_str() {
+            Value::from(tpl)
+        } else {
+            Value::from_display(self)
+        }
     }
 }
 
@@ -213,32 +217,51 @@ pub struct Part<'a>(PartKind<'a>);
 impl<'a> Part<'a> {
     pub fn text(text: &'static str) -> Part<'a> {
         Part(PartKind::Text {
-            value: text,
+            value: text as *const str,
             value_static: Some(text),
+            #[cfg(feature = "alloc")]
+            value_owned: None,
+            _marker: PhantomData,
         })
     }
 
     pub fn text_ref(text: &'a str) -> Part<'a> {
         Part(PartKind::Text {
-            value: text,
+            value: text as *const str,
             value_static: None,
+            #[cfg(feature = "alloc")]
+            value_owned: None,
+            _marker: PhantomData,
         })
     }
 
     pub fn hole(label: &'static str) -> Part<'a> {
         Part(PartKind::Hole {
-            label,
+            label: label as *const str,
             label_static: Some(label),
             formatter: None,
+            #[cfg(feature = "alloc")]
+            label_owned: None,
+            _marker: PhantomData,
         })
     }
 
     pub fn hole_ref(label: &'a str) -> Part<'a> {
         Part(PartKind::Hole {
-            label,
+            label: label as *const str,
             label_static: None,
+            #[cfg(feature = "alloc")]
+            label_owned: None,
             formatter: None,
+            _marker: PhantomData,
         })
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self.0 {
+            PartKind::Text { value, .. } => Some(unsafe { &*value }),
+            _ => None,
+        }
     }
 
     pub fn by_ref<'b>(&'b self) -> Part<'b> {
@@ -246,63 +269,98 @@ impl<'a> Part<'a> {
             PartKind::Text {
                 value,
                 value_static,
+                ..
             } => Part(PartKind::Text {
                 value,
                 value_static,
+                #[cfg(feature = "alloc")]
+                value_owned: None,
+                _marker: PhantomData,
             }),
             PartKind::Hole {
                 label,
                 label_static,
                 ref formatter,
+                ..
             } => Part(PartKind::Hole {
                 label,
                 label_static,
-                formatter: formatter.as_ref().map(|formatter| formatter.by_ref()),
+                #[cfg(feature = "alloc")]
+                label_owned: None,
+                formatter: formatter.clone(),
+                _marker: PhantomData,
             }),
         }
     }
 
-    pub fn with_formatter(self, formatter: Formatter<'a>) -> Self {
+    fn to_owned(&self) -> Part<'static> {
+        todo!()
+    }
+
+    pub fn with_formatter(self, formatter: Formatter) -> Self {
         match self.0 {
-            PartKind::Text {
-                value,
-                value_static,
-            } => Part(PartKind::Text {
-                value,
-                value_static,
-            }),
+            #[cfg(not(feature = "alloc"))]
             PartKind::Hole {
                 label,
                 label_static,
                 formatter: _,
+                _marker,
             } => Part(PartKind::Hole {
                 label,
                 label_static,
                 formatter: Some(formatter),
+                _marker,
             }),
+            #[cfg(feature = "alloc")]
+            PartKind::Hole {
+                label,
+                label_static,
+                label_owned,
+                formatter: _,
+                _marker,
+            } => Part(PartKind::Hole {
+                label,
+                label_static,
+                label_owned,
+                formatter: Some(formatter),
+                _marker: PhantomData,
+            }),
+            part => Part(part),
+        }
+    }
+
+    fn write(&self, mut writer: impl Write, props: impl Props) -> fmt::Result {
+        match self.0 {
+            PartKind::Text { value, .. } => writer.write_text(unsafe { &*value }),
+            PartKind::Hole {
+                label,
+                ref formatter,
+                ..
+            } => {
+                let label = unsafe { &*label };
+
+                if let Some(value) = props.get(label) {
+                    if let Some(formatter) = formatter {
+                        writer.write_hole_fmt(value, formatter.clone())
+                    } else {
+                        writer.write_hole_value(value)
+                    }
+                } else {
+                    writer.write_hole_label(label)
+                }
+            }
         }
     }
 }
 
 #[derive(Clone)]
-pub struct Formatter<'a> {
+pub struct Formatter {
     fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result,
-    _marker: PhantomData<&'a dyn Fn(Value, &mut fmt::Formatter) -> fmt::Result>,
 }
 
-impl<'a> Formatter<'a> {
+impl Formatter {
     pub fn new(fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result) -> Self {
-        Formatter {
-            fmt,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn by_ref<'b>(&'b self) -> Formatter<'b> {
-        Formatter {
-            fmt: self.fmt,
-            _marker: PhantomData,
-        }
+        Formatter { fmt }
     }
 
     pub fn fmt(&self, value: Value, f: &mut fmt::Formatter) -> fmt::Result {
@@ -328,15 +386,54 @@ impl<'a> Formatter<'a> {
     }
 }
 
-#[derive(Clone)]
 enum PartKind<'a> {
     Text {
-        value: &'a str,
+        value: *const str,
         value_static: Option<&'static str>,
+        #[cfg(feature = "alloc")]
+        value_owned: Option<String>,
+        _marker: PhantomData<&'a str>,
     },
     Hole {
-        label: &'a str,
+        label: *const str,
         label_static: Option<&'static str>,
-        formatter: Option<Formatter<'a>>,
+        #[cfg(feature = "alloc")]
+        label_owned: Option<String>,
+        formatter: Option<Formatter>,
+        _marker: PhantomData<&'a str>,
     },
 }
+
+impl<'a> Clone for PartKind<'a> {
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
+#[cfg(feature = "alloc")]
+mod alloc_support {
+    use super::*;
+
+    pub struct OwnedTemplate(Vec<Part<'static>>);
+
+    impl<'a> Template<'a> {
+        pub fn to_owned(&self) -> OwnedTemplate {
+            let mut parts = Vec::new();
+
+            for part in self.0.parts() {
+                parts.push(part.to_owned());
+            }
+
+            OwnedTemplate(parts)
+        }
+    }
+
+    impl OwnedTemplate {
+        pub fn by_ref(&self) -> Template {
+            Template(TemplateKind::Parts(&self.0))
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+pub use self::alloc_support::*;

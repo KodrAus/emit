@@ -1,27 +1,18 @@
-use crate::{empty::Empty, id::Id, props::Props, template::Template, time::Timestamp};
+use crate::{empty::Empty, props::Props};
 
 pub trait Ctxt {
-    type Props: Props + ?Sized;
-    type Span;
+    type CurrentProps: Props + ?Sized;
+    type LocalFrame;
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span;
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame;
 
-    fn enter(&self, span: &mut Self::Span);
+    fn enter(&self, local: &mut Self::LocalFrame);
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F);
-    fn current_id(&self) -> Id {
-        let mut current = Id::EMPTY;
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F);
 
-        self.with_current(|id, _| {
-            current = id;
-        });
+    fn exit(&self, local: &mut Self::LocalFrame);
 
-        current
-    }
-
-    fn exit(&self, span: &mut Self::Span);
-
-    fn close(&self, ts: Option<Timestamp>, span: Self::Span);
+    fn close(&self, frame: Self::LocalFrame);
 
     fn by_ref(&self) -> ByRef<Self> {
         ByRef(self)
@@ -29,158 +20,137 @@ pub trait Ctxt {
 }
 
 impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
-    type Props = C::Props;
-    type Span = C::Span;
+    type CurrentProps = C::CurrentProps;
+    type LocalFrame = C::LocalFrame;
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
-        (**self).open(ts, id, tpl, props)
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+        (**self).open(props)
     }
 
-    fn enter(&self, span: &mut Self::Span) {
-        (**self).enter(span)
+    fn enter(&self, frame: &mut Self::LocalFrame) {
+        (**self).enter(frame)
     }
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
         (**self).with_current(with)
     }
 
-    fn current_id(&self) -> Id {
-        (**self).current_id()
+    fn exit(&self, frame: &mut Self::LocalFrame) {
+        (**self).exit(frame)
     }
 
-    fn exit(&self, span: &mut Self::Span) {
-        (**self).exit(span)
-    }
-
-    fn close(&self, ts: Option<Timestamp>, scope: Self::Span) {
-        (**self).close(ts, scope)
+    fn close(&self, frame: Self::LocalFrame) {
+        (**self).close(frame)
     }
 }
 
 impl<C: Ctxt> Ctxt for Option<C> {
-    type Props = Option<internal::Slot<C::Props>>;
-    type Span = Option<C::Span>;
+    type CurrentProps = Option<internal::Slot<C::CurrentProps>>;
+    type LocalFrame = Option<C::LocalFrame>;
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
         match self {
-            Some(ctxt) => ctxt
-                .with_current(|id, props| unsafe { with(id, &Some(internal::Slot::new(props))) }),
-            None => with(Id::EMPTY, &None),
+            Some(ctxt) => {
+                ctxt.with_current(|props| unsafe { with(&Some(internal::Slot::new(props))) })
+            }
+            None => with(&None),
         }
     }
 
-    fn current_id(&self) -> Id {
-        self.as_ref()
-            .map(|ctxt| ctxt.current_id())
-            .unwrap_or_default()
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+        self.as_ref().map(|ctxt| ctxt.open(props))
     }
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
-        self.as_ref().map(|ctxt| ctxt.open(ts, id, tpl, props))
-    }
-
-    fn enter(&self, span: &mut Self::Span) {
-        if let (Some(ctxt), Some(span)) = (self, span) {
+    fn enter(&self, frame: &mut Self::LocalFrame) {
+        if let (Some(ctxt), Some(span)) = (self, frame) {
             ctxt.enter(span)
         }
     }
 
-    fn exit(&self, span: &mut Self::Span) {
-        if let (Some(ctxt), Some(span)) = (self, span) {
+    fn exit(&self, frame: &mut Self::LocalFrame) {
+        if let (Some(ctxt), Some(span)) = (self, frame) {
             ctxt.exit(span)
         }
     }
 
-    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
-        if let (Some(ctxt), Some(span)) = (self, span) {
-            ctxt.close(ts, span)
+    fn close(&self, frame: Self::LocalFrame) {
+        if let (Some(ctxt), Some(span)) = (self, frame) {
+            ctxt.close(span)
         }
     }
 }
 
 #[cfg(feature = "alloc")]
 impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
-    type Props = C::Props;
-    type Span = C::Span;
+    type CurrentProps = C::CurrentProps;
+    type LocalFrame = C::LocalFrame;
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
         (**self).with_current(with)
     }
 
-    fn current_id(&self) -> Id {
-        (**self).current_id()
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+        (**self).open(props)
     }
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
-        (**self).open(ts, id, tpl, props)
+    fn enter(&self, frame: &mut Self::LocalFrame) {
+        (**self).enter(frame)
     }
 
-    fn enter(&self, span: &mut Self::Span) {
-        (**self).enter(span)
+    fn exit(&self, frame: &mut Self::LocalFrame) {
+        (**self).exit(frame)
     }
 
-    fn exit(&self, span: &mut Self::Span) {
-        (**self).exit(span)
-    }
-
-    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
-        (**self).close(ts, span)
+    fn close(&self, frame: Self::LocalFrame) {
+        (**self).close(frame)
     }
 }
 
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
-    type Props = T::Props;
+    type CurrentProps = T::CurrentProps;
 
-    type Span = T::Span;
+    type LocalFrame = T::LocalFrame;
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
-        self.0.open(ts, id, tpl, props)
+    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+        self.0.open(props)
     }
 
-    fn enter(&self, span: &mut Self::Span) {
-        self.0.enter(span)
+    fn enter(&self, frame: &mut Self::LocalFrame) {
+        self.0.enter(frame)
     }
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
         self.0.with_current(with)
     }
 
-    fn exit(&self, span: &mut Self::Span) {
-        self.0.exit(span)
+    fn exit(&self, frame: &mut Self::LocalFrame) {
+        self.0.exit(frame)
     }
 
-    fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
-        self.0.close(ts, span)
-    }
-
-    fn current_id(&self) -> Id {
-        self.0.current_id()
+    fn close(&self, frame: Self::LocalFrame) {
+        self.0.close(frame)
     }
 }
 
 impl Ctxt for Empty {
-    type Props = Empty;
-    type Span = Empty;
+    type CurrentProps = Empty;
+    type LocalFrame = Empty;
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
-        with(Id::EMPTY, &Empty)
+    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
+        with(&Empty)
     }
 
-    fn current_id(&self) -> Id {
-        Id::EMPTY
-    }
-
-    fn open<P: Props>(&self, _: Option<Timestamp>, _: Id, _: Template, _: P) -> Self::Span {
+    fn open<P: Props>(&self, _: P) -> Self::LocalFrame {
         Empty
     }
 
-    fn enter(&self, _: &mut Self::Span) {}
+    fn enter(&self, _: &mut Self::LocalFrame) {}
 
-    fn exit(&self, _: &mut Self::Span) {}
+    fn exit(&self, _: &mut Self::LocalFrame) {}
 
-    fn close(&self, _: Option<Timestamp>, _: Self::Span) {}
+    fn close(&self, _: Self::LocalFrame) {}
 }
 
 mod internal {
@@ -220,7 +190,7 @@ mod alloc_support {
         use core::{marker::PhantomData, mem, ops::ControlFlow};
 
         use crate::{
-            id::Id,
+            event::Event,
             key::Key,
             props::{ErasedProps, Props},
             template::Template,
@@ -228,40 +198,33 @@ mod alloc_support {
             value::Value,
         };
 
-        use super::ErasedScope;
+        use super::ErasedLocalFrame;
 
         pub trait DispatchCtxt {
-            fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, ErasedSlot));
-            fn dispatch_current_id(&self) -> Id;
+            fn dispatch_with_current(&self, with: &mut dyn FnMut(ErasedCurrentProps));
 
-            fn dispatch_open(
-                &self,
-                ts: Option<Timestamp>,
-                id: Id,
-                tpl: Template,
-                props: &dyn ErasedProps,
-            ) -> ErasedScope;
-            fn dispatch_enter(&self, span: &mut ErasedScope);
-            fn dispatch_exit(&self, span: &mut ErasedScope);
-            fn dispatch_close(&self, ts: Option<Timestamp>, span: ErasedScope);
+            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedLocalFrame;
+            fn dispatch_enter(&self, frame: &mut ErasedLocalFrame);
+            fn dispatch_exit(&self, frame: &mut ErasedLocalFrame);
+            fn dispatch_close(&self, frame: ErasedLocalFrame);
         }
 
         pub trait SealedCtxt {
             fn erase_ctxt(&self) -> crate::internal::Erased<&dyn DispatchCtxt>;
         }
 
-        pub struct ErasedSlot(
+        pub struct ErasedCurrentProps(
             *const dyn ErasedProps,
             PhantomData<fn(&mut dyn ErasedProps)>,
         );
 
-        impl ErasedSlot {
+        impl ErasedCurrentProps {
             pub(super) unsafe fn new<'a>(v: &'a impl Props) -> Self {
                 let v: &'a dyn ErasedProps = v;
                 let v: &'a (dyn ErasedProps + 'static) =
                     mem::transmute::<&'a dyn ErasedProps, &'a (dyn ErasedProps + 'static)>(v);
 
-                ErasedSlot(v as *const dyn ErasedProps, PhantomData)
+                ErasedCurrentProps(v as *const dyn ErasedProps, PhantomData)
             }
 
             pub(super) fn get<'a>(&'a self) -> &'a (dyn ErasedProps + 'a) {
@@ -269,7 +232,7 @@ mod alloc_support {
             }
         }
 
-        impl Props for ErasedSlot {
+        impl Props for ErasedCurrentProps {
             fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(
                 &'a self,
                 for_each: F,
@@ -279,15 +242,15 @@ mod alloc_support {
         }
     }
 
-    pub struct ErasedScope(Box<dyn Any + Send>);
+    pub struct ErasedLocalFrame(Box<dyn Any + Send>);
 
     pub trait ErasedCtxt: internal::SealedCtxt {}
 
-    impl<C: Ctxt> ErasedCtxt for C where C::Span: Send + 'static {}
+    impl<C: Ctxt> ErasedCtxt for C where C::LocalFrame: Send + 'static {}
 
     impl<C: Ctxt> internal::SealedCtxt for C
     where
-        C::Span: Send + 'static,
+        C::LocalFrame: Send + 'static,
     {
         fn erase_ctxt(&self) -> crate::internal::Erased<&dyn internal::DispatchCtxt> {
             crate::internal::Erased(self)
@@ -296,118 +259,88 @@ mod alloc_support {
 
     impl<C: Ctxt> internal::DispatchCtxt for C
     where
-        C::Span: Send + 'static,
+        C::LocalFrame: Send + 'static,
     {
-        fn dispatch_with_current(&self, with: &mut dyn FnMut(Id, internal::ErasedSlot)) {
-            self.with_current(move |id, props| {
-                with(id, unsafe { internal::ErasedSlot::new(&props) })
+        fn dispatch_with_current(&self, with: &mut dyn FnMut(internal::ErasedCurrentProps)) {
+            self.with_current(move |props| {
+                with(unsafe { internal::ErasedCurrentProps::new(&props) })
             })
         }
 
-        fn dispatch_current_id(&self) -> Id {
-            self.current_id()
+        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedLocalFrame {
+            ErasedLocalFrame(Box::new(self.open(props)))
         }
 
-        fn dispatch_open(
-            &self,
-            ts: Option<Timestamp>,
-            id: Id,
-            tpl: Template,
-            props: &dyn ErasedProps,
-        ) -> ErasedScope {
-            ErasedScope(Box::new(self.open(ts, id, tpl, props)))
-        }
-
-        fn dispatch_enter(&self, span: &mut ErasedScope) {
+        fn dispatch_enter(&self, span: &mut ErasedLocalFrame) {
             if let Some(span) = span.0.downcast_mut() {
                 self.enter(span)
             }
         }
 
-        fn dispatch_exit(&self, span: &mut ErasedScope) {
+        fn dispatch_exit(&self, span: &mut ErasedLocalFrame) {
             if let Some(span) = span.0.downcast_mut() {
                 self.exit(span)
             }
         }
 
-        fn dispatch_close(&self, ts: Option<Timestamp>, span: ErasedScope) {
+        fn dispatch_close(&self, span: ErasedLocalFrame) {
             if let Ok(span) = span.0.downcast() {
-                self.close(ts, *span)
+                self.close(*span)
             }
         }
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + 'a {
-        type Props = internal::ErasedSlot;
-        type Span = ErasedScope;
+        type CurrentProps = internal::ErasedCurrentProps;
+        type LocalFrame = ErasedLocalFrame;
 
-        fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
             let mut f = Some(with);
 
-            self.erase_ctxt().0.dispatch_with_current(&mut |id, props| {
-                f.take().expect("called multiple times")(id, &props)
+            self.erase_ctxt().0.dispatch_with_current(&mut |props| {
+                f.take().expect("called multiple times")(&props)
             });
         }
 
-        fn current_id(&self) -> Id {
-            self.erase_ctxt().0.dispatch_current_id()
+        fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+            self.erase_ctxt().0.dispatch_open(&props)
         }
 
-        fn open<P: Props>(
-            &self,
-            ts: Option<Timestamp>,
-            id: Id,
-            tpl: Template,
-            props: P,
-        ) -> Self::Span {
-            self.erase_ctxt().0.dispatch_open(ts, id, tpl, &props)
-        }
-
-        fn enter(&self, span: &mut Self::Span) {
+        fn enter(&self, span: &mut Self::LocalFrame) {
             self.erase_ctxt().0.dispatch_enter(span)
         }
 
-        fn exit(&self, span: &mut Self::Span) {
+        fn exit(&self, span: &mut Self::LocalFrame) {
             self.erase_ctxt().0.dispatch_exit(span)
         }
 
-        fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
-            self.erase_ctxt().0.dispatch_close(ts, span)
+        fn close(&self, span: Self::LocalFrame) {
+            self.erase_ctxt().0.dispatch_close(span)
         }
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + Send + Sync + 'a {
-        type Props = <dyn ErasedCtxt + 'a as Ctxt>::Props;
-        type Span = <dyn ErasedCtxt + 'a as Ctxt>::Span;
+        type CurrentProps = <dyn ErasedCtxt + 'a as Ctxt>::CurrentProps;
+        type LocalFrame = <dyn ErasedCtxt + 'a as Ctxt>::LocalFrame;
 
-        fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+        fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
             (self as &(dyn ErasedCtxt + 'a)).with_current(with)
         }
 
-        fn current_id(&self) -> Id {
-            (self as &(dyn ErasedCtxt + 'a)).current_id()
+        fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+            (self as &(dyn ErasedCtxt + 'a)).open(props)
         }
 
-        fn open<P: Props>(
-            &self,
-            ts: Option<Timestamp>,
-            id: Id,
-            tpl: Template,
-            props: P,
-        ) -> Self::Span {
-            (self as &(dyn ErasedCtxt + 'a)).open(ts, id, tpl, props)
-        }
-
-        fn enter(&self, span: &mut Self::Span) {
+        fn enter(&self, span: &mut Self::LocalFrame) {
             (self as &(dyn ErasedCtxt + 'a)).enter(span)
         }
 
-        fn exit(&self, span: &mut Self::Span) {
+        fn exit(&self, span: &mut Self::LocalFrame) {
             (self as &(dyn ErasedCtxt + 'a)).exit(span)
         }
 
-        fn close(&self, ts: Option<Timestamp>, span: Self::Span) {
-            (self as &(dyn ErasedCtxt + 'a)).close(ts, span)
+        fn close(&self, span: Self::LocalFrame) {
+            (self as &(dyn ErasedCtxt + 'a)).close(span)
         }
     }
 }

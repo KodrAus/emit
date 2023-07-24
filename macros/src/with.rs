@@ -4,12 +4,11 @@ use syn::{
     Stmt,
 };
 
-use crate::{
-    props::{self, Props},
-    template,
-};
+use crate::props::{self, Props};
 
 pub struct ExpandTokens {
+    pub sync_receiver: TokenStream,
+    pub async_receiver: TokenStream,
     pub item: TokenStream,
     pub input: TokenStream,
 }
@@ -23,14 +22,12 @@ impl Parse for Args {
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    let (_, template, props) = template::parse2::<Args>(opts.input)?;
+    let props = syn::parse2::<Props>(opts.input)?;
 
     // Ensure props don't use reserved identifiers
     for prop in props.iter() {
         props::ensure_not_reserved(prop)?;
     }
-
-    let template_tokens = template.template_tokens();
 
     let mut item = syn::parse2::<Stmt>(opts.item)?;
     match &mut item {
@@ -42,11 +39,12 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_sync(&props, template_tokens, quote!(#block)))?;
+            **block =
+                syn::parse2::<Block>(inject_sync(&props, opts.sync_receiver, quote!(#block)))?;
         }
         // A synchronous block
         Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_sync(&props, template_tokens, quote!(#block)))?;
+            *block = syn::parse2::<Block>(inject_sync(&props, opts.sync_receiver, quote!(#block)))?;
         }
         // An asynchronous function
         Stmt::Item(Item::Fn(ItemFn {
@@ -56,11 +54,13 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             },
             ..
         })) => {
-            **block = syn::parse2::<Block>(inject_async(&props, template_tokens, quote!(#block)))?;
+            **block =
+                syn::parse2::<Block>(inject_async(&props, opts.async_receiver, quote!(#block)))?;
         }
         // An asynchronous block
         Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
-            *block = syn::parse2::<Block>(inject_async(&props, template_tokens, quote!(#block)))?;
+            *block =
+                syn::parse2::<Block>(inject_async(&props, opts.async_receiver, quote!(#block)))?;
         }
         _ => return Err(syn::Error::new(item.span(), "unrecognized item type")),
     }
@@ -68,22 +68,22 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     Ok(quote!(#item))
 }
 
-fn inject_sync(props: &Props, template_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_sync(props: &Props, receiver_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        let mut __span = emit::span(emit::Id::EMPTY, #template_tokens, #props_tokens);
-        let __span_guard = __span.enter();
+        let mut __ctxt = emit::#receiver_tokens(#props_tokens);
+        let __ctxt_guard = __ctxt.enter();
 
         #body
     })
 }
 
-fn inject_async(props: &Props, template_tokens: TokenStream, body: TokenStream) -> TokenStream {
+fn inject_async(props: &Props, receiver_tokens: TokenStream, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        emit::span_future(emit::Id::EMPTY, #template_tokens, #props_tokens, async #body).await
+        emit::#receiver_tokens(#props_tokens, async #body).await
     })
 }
 

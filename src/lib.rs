@@ -12,89 +12,83 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    ctxt, empty, event, filter, id, key, level, props, target, template, time, value, well_known,
+    empty, event, filter, id, key, level, props, target, template, time, value, well_known,
 };
 
+pub mod ctxt {
+    pub use crate::local_frame::*;
+    #[doc(inline)]
+    pub use emit_core::ctxt::*;
+}
+
+use emit_core::{value::ToValue, well_known::WellKnown};
+
 pub use self::{
-    event::Event, id::Id, key::Key, level::Level, props::Props, template::Template,
-    time::Timestamp, value::Value,
+    event::Event, key::Key, level::Level, props::Props, template::Template, time::Timestamp,
+    value::Value,
 };
+
+use crate::ctxt::{LocalFrame, LocalFrameFuture};
 
 mod macro_hooks;
 mod platform;
 
-pub mod span;
+pub mod local_frame;
 
 #[cfg(feature = "std")]
 mod setup;
 
-pub fn emit(to: impl Target, when: impl Filter, lvl: Level, tpl: Template, props: impl Props) {
+#[track_caller]
+pub fn emit(evt: &Event<impl Props>) {
     let ambient = emit_core::ambient::get();
 
-    ambient.with_current(|id, current_props| {
-        let ts = ambient.now();
-        let props = props.chain(current_props);
+    base_emit(
+        ambient,
+        ambient,
+        ambient,
+        ambient,
+        evt.template(),
+        evt.props(),
+    );
+}
 
-        let evt = Event::new(ts, id, lvl, tpl, props);
+#[track_caller]
+fn base_emit(
+    to: impl Target,
+    when: impl Filter,
+    ctxt: impl Ctxt,
+    clock: impl Clock,
+    tpl: Template,
+    props: impl Props,
+) {
+    ctxt.with_current(|ctxt| {
+        let ts = clock.now();
 
-        if when.matches_event(&evt) && ambient.matches_event(&evt) {
-            to.emit_event(&evt);
-            ambient.emit_event(&evt);
+        let evt = Event::point(ts, tpl, props.chain(ctxt));
+
+        if when.matches(&evt) {
+            to.event(&evt);
         }
     });
 }
 
-pub fn span(
-    id: Id,
-    tpl: Template,
-    props: impl Props,
-) -> span::Span<impl Ctxt + Send + Sync + 'static, impl Clock + Send + Sync + 'static> {
-    let ambient = emit_core::ambient::get();
-
-    let id = id.or_gen(ambient.current_id(), ambient);
-    span::Span::new(ambient, ambient, id, tpl, props)
+#[track_caller]
+fn base_with(ctxt: impl Ctxt, props: impl Props) -> LocalFrame<impl Ctxt> {
+    LocalFrame::new(ctxt, props)
 }
 
-pub fn span_future<F: Future>(
-    id: Id,
-    tpl: Template,
+#[track_caller]
+fn base_with_future<F: Future>(
+    ctxt: impl Ctxt + Send + Sync + 'static,
     props: impl Props,
     future: F,
-) -> span::SpanFuture<impl Ctxt + Send + Sync + 'static, F, impl Clock + Send + Sync + 'static> {
-    let ambient = emit_core::ambient::get();
-
-    let id = id.or_gen(ambient.current_id(), ambient);
-    span::SpanFuture::new(ambient, ambient, id, tpl, props, future)
+) -> LocalFrameFuture<impl Ctxt + Send + Sync + 'static, F> {
+    LocalFrameFuture::new(ctxt, props, future)
 }
 
 #[cfg(feature = "std")]
 pub fn setup() -> setup::Setup {
     setup::Setup::default()
-}
-
-#[cfg(feature = "std")]
-pub fn target() -> impl Target {
-    emit_core::ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn filter() -> impl Filter {
-    emit_core::ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn ctxt() -> impl Ctxt {
-    emit_core::ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn clock() -> impl Clock {
-    emit_core::ambient::get()
-}
-
-#[cfg(feature = "std")]
-pub fn gen_id() -> impl id::GenId {
-    emit_core::ambient::get()
 }
 
 #[doc(hidden)]

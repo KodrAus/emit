@@ -1,12 +1,16 @@
 use core::{borrow::Borrow, ops::ControlFlow};
 
-use crate::{empty::Empty, key::Key, value::Value};
+use crate::{
+    empty::Empty,
+    key::{Key, ToKey},
+    value::{ToValue, Value},
+};
 
 pub trait Props {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F);
 
-    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
-        let key = key.borrow();
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.to_key();
         let mut value = None;
 
         self.for_each(|k, v| {
@@ -32,6 +36,13 @@ pub trait Props {
         }
     }
 
+    fn filter<F: Fn(Key, Value) -> bool>(self, filter: F) -> Filter<Self, F>
+    where
+        Self: Sized,
+    {
+        Filter { src: self, filter }
+    }
+
     fn by_ref(&self) -> ByRef<Self> {
         ByRef(self)
     }
@@ -42,7 +53,7 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
         (**self).for_each(for_each)
     }
 
-    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
         (**self).get(key)
     }
 }
@@ -63,13 +74,22 @@ impl<'a, P: Props + ?Sized + 'a> Props for alloc::boxed::Box<P> {
     }
 }
 
-impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
+impl<K: ToKey, V: ToValue> Props for (K, V) {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
+        for_each(self.0.to_key(), self.1.to_value());
+    }
+}
+
+impl<K: ToKey, V: ToValue> Props for [(K, V)] {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) {
         for (k, v) in self {
-            match for_each(k.by_ref(), v.by_ref()) {
+            match for_each(k.to_key(), v.to_value()) {
                 ControlFlow::Continue(()) => continue,
                 ControlFlow::Break(()) => return,
             }
@@ -77,7 +97,24 @@ impl<'k, 'v> Props for [(Key<'k>, Value<'v>)] {
     }
 }
 
-impl<'k, 'v, const N: usize> Props for [(Key<'k>, Value<'v>); N] {
+impl<K: ToKey, V: ToValue> Props for [Option<(K, V)>] {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
+        for (k, v) in self.iter().filter_map(|kv| kv.as_ref()) {
+            match for_each(k.to_key(), v.to_value()) {
+                ControlFlow::Continue(()) => continue,
+                ControlFlow::Break(()) => return,
+            }
+        }
+    }
+}
+
+impl<T, const N: usize> Props for [T; N]
+where
+    [T]: Props,
+{
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         (self as &[_]).for_each(for_each)
     }
@@ -114,7 +151,7 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
         self.second.for_each(for_each)
     }
 
-    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
         let key = key.borrow();
 
         self.first.get(key).or_else(|| self.second.get(key))
@@ -126,6 +163,35 @@ pub struct ByRef<'a, T: ?Sized>(&'a T);
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
         self.0.for_each(for_each)
+    }
+}
+
+pub struct Filter<T, F> {
+    src: T,
+    filter: F,
+}
+
+impl<T: Props, F: Fn(Key, Value) -> bool> Props for Filter<T, F> {
+    fn for_each<'kv, FE: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: FE,
+    ) {
+        self.src.for_each(|k, v| {
+            if (self.filter)(k.by_ref(), v.by_ref()) {
+                for_each(k, v)
+            } else {
+                ControlFlow::Continue(())
+            }
+        })
+    }
+
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.to_key();
+
+        match self.src.get(key.by_ref()) {
+            Some(value) if (self.filter)(key, value.by_ref()) => Some(value),
+            _ => None,
+        }
     }
 }
 
@@ -149,8 +215,8 @@ impl<'a> Props for SortedSlice<'a> {
         self.0.for_each(for_each)
     }
 
-    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
-        let key = Key::new_ref(key.borrow());
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.to_key();
 
         self.0
             .binary_search_by(|(k, _)| k.cmp(&key))
@@ -169,7 +235,8 @@ mod internal {
             &'kv self,
             for_each: &'f mut dyn FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>,
         );
-        fn dispatch_get<'v>(&'v self, key: &str) -> Option<Value<'v>>;
+
+        fn dispatch_get(&self, key: Key) -> Option<Value>;
     }
 
     pub trait SealedProps {
@@ -195,7 +262,7 @@ impl<P: Props> internal::DispatchProps for P {
         self.for_each(for_each)
     }
 
-    fn dispatch_get<'v>(&'v self, key: &str) -> Option<Value<'v>> {
+    fn dispatch_get<'v>(&'v self, key: Key) -> Option<Value<'v>> {
         self.get(key)
     }
 }
@@ -208,7 +275,7 @@ impl<'a> Props for dyn ErasedProps + 'a {
         self.erase_props().0.dispatch_for_each(&mut for_each)
     }
 
-    fn get<'v, K: Borrow<str>>(&'v self, key: K) -> Option<Value<'v>> {
-        self.erase_props().0.dispatch_get(key.borrow())
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
+        self.erase_props().0.dispatch_get(key.to_key())
     }
 }

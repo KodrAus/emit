@@ -1,9 +1,10 @@
+/*
 use crate::{
     id::{from_trace_span_ids, to_span_id, to_trace_id},
     key::to_key,
     value::to_value,
 };
-use emit_core::{id::Id, props::Props, template::Template, time::Timestamp};
+use emit_core::{id::IdSource, props::Props, template::Template, time::Timestamp};
 use opentelemetry_api::{
     trace::{TraceContextExt, Tracer},
     Context, ContextGuard, OrderMap,
@@ -28,10 +29,16 @@ impl<T: Tracer> emit_core::ctxt::Ctxt for OpenTelemetryTracesCtxt<T>
 where
     T::Span: Send + Sync + 'static,
 {
-    type Props = emit_core::empty::Empty;
-    type Span = OpenTelemetrySpan;
+    type CurrentProps = emit_core::empty::Empty;
+    type LocalFrame = OpenTelemetrySpan;
 
-    fn open<P: Props>(&self, ts: Option<Timestamp>, id: Id, tpl: Template, props: P) -> Self::Span {
+    fn open<P: Props>(
+        &self,
+        ts: Option<Timestamp>,
+        id: IdSource,
+        tpl: Template,
+        props: P,
+    ) -> Self::LocalFrame {
         let span = self
             .0
             .span_builder(tpl.to_string())
@@ -62,13 +69,13 @@ where
         }
     }
 
-    fn enter(&self, span: &mut Self::Span) {
+    fn enter(&self, span: &mut Self::LocalFrame) {
         if let Some(cx) = span.cx.take() {
             span.active = Some(cx.attach());
         }
     }
 
-    fn with_current<F: FnOnce(Id, &Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(IdSource, &Self::CurrentProps)>(&self, with: F) {
         let cx = Context::current();
 
         let id = from_trace_span_ids(
@@ -79,12 +86,12 @@ where
         with(id, &emit_core::empty::Empty)
     }
 
-    fn exit(&self, span: &mut Self::Span) {
+    fn exit(&self, span: &mut Self::LocalFrame) {
         span.cx = Some(Context::current());
         drop(span.active.take());
     }
 
-    fn close(&self, ts: Option<Timestamp>, mut span: Self::Span) {
+    fn close(&self, ts: Option<Timestamp>, mut span: Self::LocalFrame) {
         if let Some(cx) = span.cx.take() {
             cx.span().end_with_timestamp(
                 ts.map(|ts| ts.to_system_time())
@@ -93,3 +100,4 @@ where
         }
     }
 }
+*/

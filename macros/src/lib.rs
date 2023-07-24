@@ -23,9 +23,9 @@ mod fmt;
 mod hook;
 mod key;
 mod props;
-mod span;
 mod template;
 mod util;
+mod with;
 
 use util::ResultToTokens;
 
@@ -109,11 +109,13 @@ pub fn fmt(
 }
 
 #[proc_macro_attribute]
-pub fn span(
+pub fn with(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    span::expand_tokens(span::ExpandTokens {
+    with::expand_tokens(with::ExpandTokens {
+        sync_receiver: quote!(__private::__with),
+        async_receiver: quote!(__private::__with_future),
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })
@@ -251,7 +253,7 @@ pub fn as_error(
 fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
         emit::expand_tokens(emit::ExpandTokens {
-            receiver: quote!(emit),
+            receiver: quote!(__private::__emit),
             level,
             input: item,
         })

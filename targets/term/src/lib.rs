@@ -1,6 +1,7 @@
 use core::{fmt, time::Duration};
 use std::{cell::RefCell, io::Write};
 
+use emit::well_known::WellKnown;
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -14,7 +15,7 @@ thread_local! {
 }
 
 impl emit::target::Target for Stdout {
-    fn emit_event<P: emit::Props>(&self, evt: &emit::Event<P>) {
+    fn event<P: emit::Props>(&self, evt: &emit::Event<P>) {
         STDOUT.with(|buf| {
             match buf.try_borrow_mut() {
                 // If there are no overlapping references then use the cached buffer
@@ -50,13 +51,29 @@ impl emit::target::Target for Stdout {
 }
 
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
-    if let Some(ts) = evt.ts() {
-        let _ = write!(buf, "[{:.0} ", ts);
+    let mut header_empty = true;
+
+    if let Some(ts) = evt.timestamp() {
+        let _ = write!(buf, "[{:.0}", ts);
+
+        header_empty = false;
     }
 
-    let _ = write!(buf, "{}]: ", evt.lvl());
+    if let Some(level) = evt.props().level() {
+        if !header_empty {
+            let _ = write!(buf, " {}", level);
+        } else {
+            let _ = write!(buf, "[{}", level);
+        }
 
-    if let Ok(_) = evt.msg().write(Writer { buf }) {
+        header_empty = false;
+    }
+
+    if !header_empty {
+        let _ = write!(buf, "]: ");
+    }
+
+    if let Ok(_) = evt.message().write(Writer { buf }) {
         let _ = buf.write(b"\n");
         let _ = out.print(&buf);
     }

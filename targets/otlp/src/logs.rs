@@ -8,6 +8,7 @@ use crate::{
     value::to_value,
 };
 use emit_batcher::BatchError;
+use emit_core::well_known::WellKnown;
 use std::{collections::HashSet, ops::ControlFlow, time::Duration};
 
 pub fn http(dst: impl Into<String>) -> OtlpLogsTargetBuilder {
@@ -60,32 +61,34 @@ impl OtlpLogsTargetBuilder {
 }
 
 impl emit_core::target::Target for OtlpLogsTarget {
-    fn emit_event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
+    fn event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         let time_unix_nano = evt
-            .ts()
+            .timestamp()
             .map(|ts| ts.to_unix().as_nanos() as u64)
             .unwrap_or_default();
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let severity_number = match evt.lvl() {
+        let level = evt.props().level().unwrap_or(emit_core::level::Level::Info);
+
+        let severity_number = match level {
             emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
             emit_core::level::Level::Info => SeverityNumber::Info as i32,
             emit_core::level::Level::Warn => SeverityNumber::Warn as i32,
             emit_core::level::Level::Error => SeverityNumber::Error as i32,
         };
 
-        let severity_text = evt.lvl().to_string();
+        let severity_text = level.to_string();
 
         let body = Some(AnyValue {
-            value: Some(Value::StringValue(evt.msg().to_string())),
+            value: Some(Value::StringValue(evt.message().to_string())),
         });
 
         let mut attributes = Vec::new();
         let mut trace_id = Vec::new();
         let mut span_id = Vec::new();
 
-        if let (Some(trace), Some(span)) = (evt.id().trace(), evt.id().span()) {
+        if let (Some(trace), Some(span)) = (evt.props().trace_id(), evt.props().span_id()) {
             trace_id = trace.to_hex().to_vec();
             span_id = span.to_hex().to_vec();
         }

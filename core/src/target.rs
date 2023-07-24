@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub trait Target {
-    fn emit_event<P: Props>(&self, evt: &Event<P>);
+    fn event<P: Props>(&self, evt: &Event<P>);
 
     fn blocking_flush(&self, timeout: Duration);
 
@@ -27,8 +27,8 @@ pub trait Target {
 }
 
 impl<'a, T: Target + ?Sized> Target for &'a T {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        (**self).emit_event(evt)
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        (**self).event(evt)
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -38,8 +38,8 @@ impl<'a, T: Target + ?Sized> Target for &'a T {
 
 #[cfg(feature = "std")]
 impl<'a, T: Target + ?Sized + 'a> Target for Box<T> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        (**self).emit_event(evt)
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        (**self).event(evt)
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -48,10 +48,10 @@ impl<'a, T: Target + ?Sized + 'a> Target for Box<T> {
 }
 
 impl<T: Target> Target for Option<T> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+    fn event<P: Props>(&self, evt: &Event<P>) {
         match self {
-            Some(target) => target.emit_event(evt),
-            None => Empty.emit_event(evt),
+            Some(target) => target.event(evt),
+            None => Empty.event(evt),
         }
     }
 
@@ -64,12 +64,12 @@ impl<T: Target> Target for Option<T> {
 }
 
 impl Target for Empty {
-    fn emit_event<P: Props>(&self, _: &Event<P>) {}
+    fn event<P: Props>(&self, _: &Event<P>) {}
     fn blocking_flush(&self, _: Duration) {}
 }
 
 impl Target for fn(&Event<&dyn ErasedProps>) {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+    fn event<P: Props>(&self, evt: &Event<P>) {
         (self)(&evt.erase())
     }
 
@@ -79,7 +79,7 @@ impl Target for fn(&Event<&dyn ErasedProps>) {
 pub struct FromFn<F>(F);
 
 impl<F: Fn(&Event<&dyn ErasedProps>)> Target for FromFn<F> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
+    fn event<P: Props>(&self, evt: &Event<P>) {
         (self.0)(&evt.erase())
     }
 
@@ -96,9 +96,9 @@ pub struct And<T, U> {
 }
 
 impl<T: Target, U: Target> Target for And<T, U> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        self.lhs.emit_event(evt);
-        self.rhs.emit_event(evt);
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        self.lhs.event(evt);
+        self.rhs.event(evt);
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -112,8 +112,8 @@ impl<T: Target, U: Target> Target for And<T, U> {
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, T: Target + ?Sized> Target for ByRef<'a, T> {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        self.0.emit_event(evt)
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        self.0.event(evt)
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -127,7 +127,7 @@ mod internal {
     use crate::{event::Event, props::ErasedProps};
 
     pub trait DispatchTarget {
-        fn dispatch_emit_to(&self, evt: &Event<&dyn ErasedProps>);
+        fn dispatch_event(&self, evt: &Event<&dyn ErasedProps>);
         fn dispatch_blocking_flush(&self, timeout: Duration);
     }
 
@@ -147,8 +147,8 @@ impl<T: Target> internal::SealedTarget for T {
 }
 
 impl<T: Target> internal::DispatchTarget for T {
-    fn dispatch_emit_to(&self, evt: &Event<&dyn ErasedProps>) {
-        self.emit_event(evt)
+    fn dispatch_event(&self, evt: &Event<&dyn ErasedProps>) {
+        self.event(evt)
     }
 
     fn dispatch_blocking_flush(&self, timeout: Duration) {
@@ -157,8 +157,8 @@ impl<T: Target> internal::DispatchTarget for T {
 }
 
 impl<'a> Target for dyn ErasedTarget + 'a {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        self.erase_to().0.dispatch_emit_to(&evt.erase())
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        self.erase_to().0.dispatch_event(&evt.erase())
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -167,8 +167,8 @@ impl<'a> Target for dyn ErasedTarget + 'a {
 }
 
 impl<'a> Target for dyn ErasedTarget + Send + Sync + 'a {
-    fn emit_event<P: Props>(&self, evt: &Event<P>) {
-        (self as &(dyn ErasedTarget + 'a)).emit_event(evt)
+    fn event<P: Props>(&self, evt: &Event<P>) {
+        (self as &(dyn ErasedTarget + 'a)).event(evt)
     }
 
     fn blocking_flush(&self, timeout: Duration) {

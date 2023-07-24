@@ -1,10 +1,10 @@
-use crate::{id::GenId, time::Clock, Timestamp};
+use crate::{id::IdSource, time::Clock, Timestamp};
 
 #[cfg(not(feature = "std"))]
 use emit_core::empty::Empty;
 
 #[cfg(feature = "std")]
-use emit_core::{id::ErasedGenId, time::ErasedClock};
+use emit_core::{id::ErasedIdSource, time::ErasedClock};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;
@@ -13,7 +13,7 @@ pub(crate) mod system_clock;
 pub(crate) mod thread_local_ctxt;
 
 #[cfg(feature = "rng")]
-pub(crate) mod rng_gen_id;
+pub(crate) mod rng;
 
 #[cfg(feature = "std")]
 type DefaultTime = system_clock::SystemClock;
@@ -21,7 +21,7 @@ type DefaultTime = system_clock::SystemClock;
 type DefaultTime = Empty;
 
 #[cfg(feature = "rng")]
-type DefaultGenId = rng_gen_id::RngGenId;
+type DefaultIdSource = rng::Rng;
 #[cfg(not(feature = "rng"))]
 type DefaultGenId = Empty;
 
@@ -34,9 +34,9 @@ pub(crate) struct Platform {
     #[cfg(feature = "std")]
     pub(crate) clock: Box<dyn ErasedClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
-    pub(crate) gen_id: DefaultGenId,
+    pub(crate) gen_id: DefaultIdSource,
     #[cfg(feature = "std")]
-    pub(crate) gen_id: Box<dyn ErasedGenId + Send + Sync>,
+    pub(crate) id_src: Box<dyn ErasedIdSource + Send + Sync>,
 }
 
 impl Default for Platform {
@@ -53,9 +53,9 @@ impl Platform {
             #[cfg(feature = "std")]
             clock: Box::new(DefaultTime::default()),
             #[cfg(not(feature = "std"))]
-            gen_id: DefaultGenId::default(),
+            id_src: DefaultIdSource::default(),
             #[cfg(feature = "std")]
-            gen_id: Box::new(DefaultGenId::default()),
+            id_src: Box::new(DefaultIdSource::default()),
         }
     }
 }
@@ -66,16 +66,12 @@ impl Clock for Platform {
     }
 }
 
-impl GenId for Platform {
-    fn gen(&self) -> crate::Id {
-        self.gen_id.gen()
+impl IdSource for Platform {
+    fn trace_id(&self) -> Option<crate::id::TraceId> {
+        self.id_src.trace_id()
     }
 
-    fn gen_trace(&self) -> Option<crate::id::TraceId> {
-        self.gen_id.gen_trace()
-    }
-
-    fn gen_span(&self) -> Option<crate::id::SpanId> {
-        self.gen_id.gen_span()
+    fn span_id(&self) -> Option<crate::id::SpanId> {
+        self.id_src.span_id()
     }
 }

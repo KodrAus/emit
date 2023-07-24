@@ -30,7 +30,7 @@ async fn main() {
     emitter.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::span("Hello!", a, ax: 13)]
+#[emit::with(a, ax: 13)]
 async fn in_ctxt(a: i32) {
     in_ctxt2(5).await;
 
@@ -42,7 +42,7 @@ async fn in_ctxt(a: i32) {
     emit::info!("working on {#[emit::as_serde] work}");
 }
 
-#[emit::span("Hello!", b, bx: 90)]
+#[emit::with(b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     emit::warn!(
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",

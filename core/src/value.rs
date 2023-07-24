@@ -1,11 +1,77 @@
-use core::fmt;
+use core::{fmt, str::FromStr};
 
 #[derive(Clone)]
 pub struct Value<'v>(value_bag::ValueBag<'v>);
 
 impl<'v> Value<'v> {
+    pub fn capture_display(value: &'v (impl fmt::Display + 'static)) -> Self {
+        Value(value_bag::ValueBag::capture_display(value))
+    }
+
+    pub fn from_display(value: &'v impl fmt::Display) -> Self {
+        Value(value_bag::ValueBag::from_display(value))
+    }
+
     pub fn by_ref<'b>(&'b self) -> Value<'b> {
         Value(self.0.by_ref())
+    }
+
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
+
+    pub fn visit(&self, visitor: impl Visitor<'v>) {
+        struct Visit<V>(V);
+
+        impl<'v, V: Visitor<'v>> value_bag::visit::Visit<'v> for Visit<V> {
+            fn visit_any(&mut self, value: value_bag::ValueBag) -> Result<(), value_bag::Error> {
+                self.0.visit_any(Value(value));
+
+                Ok(())
+            }
+
+            fn visit_str(&mut self, value: &str) -> Result<(), value_bag::Error> {
+                self.0.visit_str(value);
+
+                Ok(())
+            }
+        }
+
+        let _ = self.0.visit(Visit(visitor));
+    }
+
+    pub fn parse<T: FromStr>(&self) -> Option<T> {
+        struct Extract<T>(Option<T>);
+
+        impl<'v, T: FromStr> Visitor<'v> for Extract<T> {
+            fn visit_any(&mut self, _: Value) {}
+
+            fn visit_str(&mut self, value: &str) {
+                self.0 = value.parse().ok();
+            }
+        }
+
+        let mut visitor = Extract(None);
+        self.visit(&mut visitor);
+        visitor.0
+    }
+}
+
+pub trait Visitor<'v> {
+    fn visit_any(&mut self, value: Value);
+
+    fn visit_str(&mut self, value: &str) {
+        self.visit_any(Value::from(value))
+    }
+}
+
+impl<'a, 'v, V: Visitor<'v> + ?Sized> Visitor<'v> for &'a mut V {
+    fn visit_any(&mut self, value: Value) {
+        (**self).visit_any(value)
+    }
+
+    fn visit_str(&mut self, value: &str) {
+        (**self).visit_str(value)
     }
 }
 
