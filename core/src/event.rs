@@ -1,20 +1,17 @@
-use core::{
-    fmt,
-    ops::{ControlFlow, RangeInclusive},
-};
+use core::{fmt, ops::ControlFlow};
 
 use crate::{
     key::{Key, ToKey},
     props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
-    time::Timestamp,
+    time::Extent,
     value::{ToValue, Value},
     well_known::{MESSAGE_KEY, TEMPLATE_KEY, TIMESTAMP_KEY, TIMESTAMP_START_KEY},
 };
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
-    ts: Option<RangeInclusive<Timestamp>>,
+    ts: Option<Extent>,
     tpl: Template<'a>,
     props: P,
 }
@@ -34,17 +31,9 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P: Props> Event<'a, P> {
-    pub fn point(ts: impl Into<Option<Timestamp>>, tpl: Template<'a>, props: P) -> Self {
-        Event::spanned(ts.into().map(|ts| ts..=ts), tpl, props)
-    }
-
-    pub fn spanned(
-        ts: impl Into<Option<RangeInclusive<Timestamp>>>,
-        tpl: Template<'a>,
-        props: P,
-    ) -> Self {
+    pub fn new(ts: Option<impl Into<Extent>>, tpl: Template<'a>, props: P) -> Self {
         Event {
-            ts: ts.into(),
+            ts: ts.map(Into::into),
             tpl,
             props,
         }
@@ -58,18 +47,8 @@ impl<'a, P: Props> Event<'a, P> {
         self.tpl.by_ref()
     }
 
-    pub fn timestamp(&self) -> Option<Timestamp> {
-        self.ts.as_ref().map(|ts| *ts.start())
-    }
-
-    pub fn timespan(&self) -> Option<RangeInclusive<Timestamp>> {
-        self.ts.as_ref().and_then(|ts| {
-            if *ts.start() != *ts.end() {
-                Some(ts.clone())
-            } else {
-                None
-            }
-        })
+    pub fn extent(&self) -> Option<&Extent> {
+        self.ts.as_ref()
     }
 
     pub fn chain<U: Props>(self, other: U) -> Event<'a, Chain<P, U>> {
@@ -111,7 +90,7 @@ impl<'a, P: Props> Event<'a, P> {
 }
 
 pub struct AllProps<'a, P> {
-    ts: Option<RangeInclusive<Timestamp>>,
+    ts: Option<Extent>,
     tpl: Template<'a>,
     msg: Render<'a, &'a P>,
     props: ByRef<'a, P>,
@@ -123,8 +102,8 @@ impl<'a, P: Props> Props for AllProps<'a, P> {
         mut for_each: F,
     ) {
         if let Some(ref ts) = self.ts {
-            if *ts.start() != *ts.end() {
-                for_each(TIMESTAMP_START_KEY.to_key(), ts.start().to_value());
+            if let Some(start) = ts.start() {
+                for_each(TIMESTAMP_START_KEY.to_key(), start.to_value());
             }
 
             for_each(TIMESTAMP_KEY.to_key(), ts.end().to_value());

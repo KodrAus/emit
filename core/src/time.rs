@@ -1,4 +1,4 @@
-use core::{cmp, fmt, str, str::FromStr, time::Duration};
+use core::{cmp, fmt, ops::RangeInclusive, str, str::FromStr, time::Duration};
 
 use crate::{
     empty::Empty,
@@ -54,6 +54,77 @@ impl<'v> Value<'v> {
         self.downcast_ref::<Timestamp>()
             .copied()
             .or_else(|| self.parse())
+    }
+}
+
+#[derive(Clone)]
+pub struct Extent(ExtentInner);
+
+#[derive(Clone)]
+enum ExtentInner {
+    Point(Timestamp),
+    Span(RangeInclusive<Timestamp>),
+}
+
+impl fmt::Debug for Extent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            ExtentInner::Point(ts) => fmt::Debug::fmt(&ts, f),
+            ExtentInner::Span(ref ts) => fmt::Debug::fmt(ts, f),
+        }
+    }
+}
+
+impl fmt::Display for Extent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            ExtentInner::Point(ts) => fmt::Display::fmt(&ts, f),
+            ExtentInner::Span(ref ts) => {
+                fmt::Display::fmt(ts.start(), f)?;
+                write!(f, "..=")?;
+                fmt::Display::fmt(ts.end(), f)
+            }
+        }
+    }
+}
+
+impl Extent {
+    pub fn point(ts: Timestamp) -> Extent {
+        Extent(ExtentInner::Point(ts))
+    }
+
+    pub fn span(ts: RangeInclusive<Timestamp>) -> Extent {
+        if ts.start() == ts.end() {
+            Extent::point(*ts.end())
+        } else {
+            Extent(ExtentInner::Span(ts))
+        }
+    }
+
+    pub fn start(&self) -> Option<&Timestamp> {
+        match self.0 {
+            ExtentInner::Point(_) => None,
+            ExtentInner::Span(ref ts) => Some(ts.start()),
+        }
+    }
+
+    pub fn end(&self) -> &Timestamp {
+        match self.0 {
+            ExtentInner::Point(ref ts) => ts,
+            ExtentInner::Span(ref ts) => ts.end(),
+        }
+    }
+}
+
+impl From<Timestamp> for Extent {
+    fn from(point: Timestamp) -> Extent {
+        Extent::point(point)
+    }
+}
+
+impl From<RangeInclusive<Timestamp>> for Extent {
+    fn from(span: RangeInclusive<Timestamp>) -> Extent {
+        Extent::span(span)
     }
 }
 

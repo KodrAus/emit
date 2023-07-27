@@ -23,6 +23,7 @@ mod fmt;
 mod hook;
 mod key;
 mod props;
+mod span;
 mod template;
 mod util;
 mod with;
@@ -67,7 +68,7 @@ Format a template.
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     emit::expand_tokens(emit::ExpandTokens {
-        receiver: quote!(format),
+        receiver: quote!(__private::__format),
         level: quote!(default()),
         input: TokenStream::from(item),
     })

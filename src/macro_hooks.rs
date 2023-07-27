@@ -1,22 +1,20 @@
-use core::{any::Any, fmt};
-
-use emit_core::value::{ToValue, Value};
+use core::{any::Any, fmt, future::Future};
 
 use emit_core::{
     ambient,
     ctxt::Ctxt,
     filter::Filter,
-    id::IdSource,
     level::Level,
     props::Props,
     target::Target,
     template::Template,
-    time::Clock,
-    well_known::{WellKnown, LEVEL_KEY},
+    time::{Clock, Extent},
+    value::Value,
+    well_known::LEVEL_KEY,
 };
+
 #[cfg(feature = "std")]
 use std::error::Error;
-use std::future::Future;
 
 use crate::{
     base_emit, base_with, base_with_future,
@@ -302,14 +300,21 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 }
 
 #[track_caller]
-pub fn __emit(to: impl Target, when: impl Filter, lvl: Level, tpl: Template, props: impl Props) {
+pub fn __emit(
+    to: impl Target,
+    when: impl Filter,
+    ts: Option<Extent>,
+    lvl: Level,
+    tpl: Template,
+    props: impl Props,
+) {
     let ambient = ambient::get();
 
     base_emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        ambient,
+        ts.or_else(|| ambient.now().map(Extent::point)),
         tpl,
         (LEVEL_KEY, lvl).chain(props),
     );

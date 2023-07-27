@@ -4,8 +4,9 @@
 extern crate alloc;
 
 use core::future::Future;
+use std::ops::RangeInclusive;
 
-use emit_core::{ctxt::Ctxt, filter::Filter, target::Target, time::Clock};
+use emit_core::{ctxt::Ctxt, filter::Filter, target::Target};
 
 #[doc(inline)]
 pub use emit_macros::*;
@@ -21,7 +22,11 @@ pub mod ctxt {
     pub use emit_core::ctxt::*;
 }
 
-use emit_core::{value::ToValue, well_known::WellKnown};
+use emit_core::{
+    time::{Clock, Extent},
+    value::ToValue,
+    well_known::WellKnown,
+};
 
 pub use self::{
     event::Event, key::Key, level::Level, props::Props, template::Template, time::Timestamp,
@@ -42,13 +47,18 @@ mod setup;
 pub fn emit(evt: &Event<impl Props>) {
     let ambient = emit_core::ambient::get();
 
+    let tpl = evt.template();
+    let props = evt.props();
+
     base_emit(
         ambient,
         ambient,
         ambient,
-        ambient,
-        evt.template(),
-        evt.props(),
+        evt.extent()
+            .cloned()
+            .or_else(|| ambient.now().map(Extent::point)),
+        tpl,
+        props,
     );
 }
 
@@ -57,14 +67,12 @@ fn base_emit(
     to: impl Target,
     when: impl Filter,
     ctxt: impl Ctxt,
-    clock: impl Clock,
+    ts: Option<Extent>,
     tpl: Template,
     props: impl Props,
 ) {
     ctxt.with_current(|ctxt| {
-        let ts = clock.now();
-
-        let evt = Event::point(ts, tpl, props.chain(ctxt));
+        let evt = Event::new(ts, tpl, props.chain(ctxt));
 
         if when.matches(&evt) {
             to.event(&evt);

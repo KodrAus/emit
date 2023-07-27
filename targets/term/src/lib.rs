@@ -53,7 +53,7 @@ impl emit::target::Target for Stdout {
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
     let mut header_empty = true;
 
-    if let Some(ts) = evt.timestamp() {
+    if let Some(ts) = evt.extent() {
         let _ = write!(buf, "[{:.0}", ts);
 
         header_empty = false;
