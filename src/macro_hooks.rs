@@ -1,4 +1,4 @@
-use core::{any::Any, fmt, future::Future};
+use core::{any::Any, fmt, future::Future, ops::RangeInclusive};
 
 use emit_core::{
     ambient,
@@ -8,7 +8,7 @@ use emit_core::{
     props::Props,
     target::Target,
     template::Template,
-    time::{Clock, Extent},
+    time::{Clock, Extent, Timestamp},
     value::Value,
     well_known::LEVEL_KEY,
 };
@@ -303,7 +303,7 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 pub fn __emit(
     to: impl Target,
     when: impl Filter,
-    ts: Option<Extent>,
+    ts: impl IntoExtent,
     lvl: Level,
     tpl: Template,
     props: impl Props,
@@ -314,10 +314,38 @@ pub fn __emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        ts.or_else(|| ambient.now().map(Extent::point)),
+        ts.into_extent().or_else(|| ambient.now().map(Into::into)),
         tpl,
         (LEVEL_KEY, lvl).chain(props),
     );
+}
+
+pub trait IntoExtent {
+    fn into_extent(self) -> Option<Extent>;
+}
+
+impl IntoExtent for Timestamp {
+    fn into_extent(self) -> Option<Extent> {
+        Some(Extent::from(self))
+    }
+}
+
+impl IntoExtent for RangeInclusive<Timestamp> {
+    fn into_extent(self) -> Option<Extent> {
+        Some(Extent::from(self))
+    }
+}
+
+impl<T: IntoExtent> IntoExtent for Option<T> {
+    fn into_extent(self) -> Option<Extent> {
+        self.and_then(IntoExtent::into_extent)
+    }
+}
+
+impl IntoExtent for emit_core::empty::Empty {
+    fn into_extent(self) -> Option<Extent> {
+        None
+    }
 }
 
 #[track_caller]
@@ -335,6 +363,16 @@ pub fn __with_future<F: Future>(
     let ambient = ambient::get();
 
     base_with_future(ambient, props, future)
+}
+
+pub fn __span_start() -> Option<Timestamp> {
+    ambient::get().now()
+}
+
+pub fn __span_end(start: Option<Timestamp>) -> impl IntoExtent {
+    let end = ambient::get().now();
+
+    start.and_then(|start| end.map(|end| start..=end))
 }
 
 #[cfg(test)]

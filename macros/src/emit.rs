@@ -20,9 +20,7 @@ struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut ts = Arg::token_stream("ts", |expr| {
-            Ok(quote!(Some(emit::time::Extent::from(#expr))))
-        });
+        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(#expr)));
         let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
         let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
 
@@ -32,7 +30,7 @@ impl Parse for Args {
         )?;
 
         Ok(Args {
-            ts: ts.take().unwrap_or_else(|| quote!(None)),
+            ts: ts.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
         })

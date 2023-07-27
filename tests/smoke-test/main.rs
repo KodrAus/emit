@@ -32,6 +32,8 @@ async fn main() {
 
 #[emit::with(a, ax: 13)]
 async fn in_ctxt(a: i32) {
+    let ts = emit::__private::__span_start();
+
     in_ctxt2(5).await;
 
     let work = Work {
@@ -39,7 +41,11 @@ async fn in_ctxt(a: i32) {
         description: "Some very important business".to_owned(),
     };
 
-    emit::info!("working on {#[emit::as_serde] work}");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let ts = emit::__private::__span_end(ts);
+
+    emit::info!(ts, "working on {#[emit::as_serde] work}");
 }
 
 #[emit::with(b, bx: 90)]

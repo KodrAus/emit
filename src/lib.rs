@@ -4,7 +4,6 @@
 extern crate alloc;
 
 use core::future::Future;
-use std::ops::RangeInclusive;
 
 use emit_core::{ctxt::Ctxt, filter::Filter, target::Target};
 
@@ -24,7 +23,6 @@ pub mod ctxt {
 
 use emit_core::{
     time::{Clock, Extent},
-    value::ToValue,
     well_known::WellKnown,
 };
 
