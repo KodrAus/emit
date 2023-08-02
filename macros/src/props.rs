@@ -70,7 +70,7 @@ impl Props {
     fn sorted_props_tokens<'a>(
         key_values: impl Iterator<Item = &'a TokenStream> + 'a,
     ) -> TokenStream {
-        quote!(emit::props::SortedSlice::new_ref(&[#(#key_values),*]))
+        quote!(emit::__private::__PrivateMacroProps::new_ref(&[#(#key_values),*]))
     }
 
     fn next_match_binding_ident(&mut self, span: Span) -> Ident {
@@ -145,7 +145,7 @@ impl Props {
         let previous = self.key_values.insert(
             label.clone(),
             KeyValue {
-                match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (#match_bound_ident.0.by_ref(), #match_bound_ident.1.by_ref())),
+                match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (#match_bound_ident.0, #match_bound_ident.1)),
                 direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
                 span: fv.span(),
                 label,
@@ -163,11 +163,11 @@ impl Props {
     }
 }
 
-pub fn ensure_not_reserved(kv: &KeyValue) -> Result<(), syn::Error> {
-    if emit_core::well_known::is_reserved(&kv.label) {
+pub fn ensure_not_reserved(k: &str, span: Span) -> Result<(), syn::Error> {
+    if emit_core::well_known::is_reserved(k) {
         Err(syn::Error::new(
-            kv.span(),
-            format!("`{}` is a reserved identifier", kv.label),
+            span,
+            format!("`{}` is a reserved identifier", k),
         ))
     } else {
         Ok(())

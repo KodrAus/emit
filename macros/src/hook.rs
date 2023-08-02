@@ -5,6 +5,7 @@ use quote::ToTokens;
 use syn::{
     parse::Parse,
     punctuated::Punctuated,
+    token::Comma,
     visit_mut::{self, VisitMut},
     Expr, ExprMethodCall, Ident,
 };
@@ -18,52 +19,52 @@ pub struct RenameHookTokens<P, T> {
     pub to: T,
 }
 
-pub fn rename_hook_tokens<T: Parse>(
-    opts: RenameHookTokens<impl Fn(&str) -> bool, impl FnOnce(&T) -> (TokenStream, TokenStream)>,
+pub fn rename_hook_tokens<A: Parse>(
+    opts: RenameHookTokens<
+        impl Fn(&str) -> bool,
+        impl Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> (TokenStream, TokenStream),
+    >,
 ) -> Result<TokenStream, syn::Error> {
     let mut hook = syn::parse2::<Hook>(opts.expr)?;
-
-    let (to_ident_tokens, to_arg_tokens) = (opts.to)(&syn::parse2::<T>(opts.args)?);
-
-    let to_ident = syn::parse2(to_ident_tokens)?;
-    let to_args = parse_comma_separated2(to_arg_tokens)?;
-
-    struct RenameVisitor<F> {
-        scratch: String,
-        predicate: F,
-        to_ident: Ident,
-        to_args: Punctuated<Expr, Token![,]>,
-    }
-
-    impl<F> VisitMut for RenameVisitor<F>
-    where
-        F: Fn(&str) -> bool,
-    {
-        fn visit_expr_mut(&mut self, node: &mut Expr) {
-            if let Expr::MethodCall(ExprMethodCall { method, args, .. }) = node {
-                self.scratch.clear();
-                write!(&mut self.scratch, "{}", method).expect("infallible write to string");
-
-                if (self.predicate)(&self.scratch) {
-                    *method = self.to_ident.clone();
-                    *args = self.to_args.clone();
-                }
-            }
-
-            // Delegate to the default impl to visit nested expressions.
-            visit_mut::visit_expr_mut(self, node);
-        }
-    }
 
     RenameVisitor {
         scratch: String::new(),
         predicate: opts.predicate,
-        to_ident,
-        to_args,
+        to: opts.to,
+        args: syn::parse2::<A>(opts.args)?,
     }
     .visit_expr_mut(&mut hook.expr);
 
     Ok(hook.to_token_stream())
+}
+
+struct RenameVisitor<P, A, T> {
+    scratch: String,
+    predicate: P,
+    args: A,
+    to: T,
+}
+
+impl<P, A, T> VisitMut for RenameVisitor<P, A, T>
+where
+    P: Fn(&str) -> bool,
+    T: Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> (TokenStream, TokenStream),
+{
+    fn visit_expr_method_call_mut(&mut self, i: &mut ExprMethodCall) {
+        let ExprMethodCall { method, args, .. } = i;
+
+        self.scratch.clear();
+        write!(&mut self.scratch, "{}", method).expect("infallible write to string");
+
+        if (self.predicate)(&self.scratch) {
+            let (to_ident_tokens, to_arg_tokens) = (self.to)(&self.args, &method, &args);
+
+            *method = syn::parse2(to_ident_tokens).expect("invalid ident");
+            *args = parse_comma_separated2(to_arg_tokens).expect("invalid args");
+        }
+
+        visit_mut::visit_expr_method_call_mut(self, i)
+    }
 }
 
 /**

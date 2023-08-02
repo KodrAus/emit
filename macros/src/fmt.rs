@@ -1,5 +1,8 @@
 use proc_macro2::TokenStream;
-use syn::{parse::Parse, spanned::Spanned, Attribute, ExprLit, FieldValue, LitStr};
+use syn::{
+    parse::Parse, punctuated::Punctuated, spanned::Spanned, token::Comma, Attribute, Expr, ExprLit,
+    FieldValue, Ident, LitStr,
+};
 
 use crate::{
     args::{self, Arg},
@@ -65,7 +68,7 @@ pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Er
         args: opts.args,
         expr: opts.expr,
         predicate: |ident: &str| ident.starts_with("__private_fmt"),
-        to: move |args: &Args| {
+        to: move |args: &Args, _: &Ident, _: &Punctuated<Expr, Comma>| {
             let fmt = args.to_format_args();
 
             let to_ident = quote!(__private_fmt_as);

@@ -21,10 +21,7 @@ pub mod ctxt {
     pub use emit_core::ctxt::*;
 }
 
-use emit_core::{
-    time::{Clock, Extent},
-    well_known::WellKnown,
-};
+use emit_core::time::{Clock, Extent};
 
 pub use self::{
     event::Event, key::Key, level::Level, props::Props, template::Template, time::Timestamp,
@@ -45,7 +42,7 @@ mod setup;
 pub fn emit(evt: &Event<impl Props>) {
     let ambient = emit_core::ambient::get();
 
-    let tpl = evt.template();
+    let tpl = evt.tpl();
     let props = evt.props();
 
     base_emit(

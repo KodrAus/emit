@@ -6,7 +6,6 @@ use crate::{
     id::IdSource,
     props::Props,
     target::Target,
-    template::Template,
     time::{Clock, Timestamp},
 };
 

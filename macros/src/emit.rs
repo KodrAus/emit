@@ -1,5 +1,5 @@
-use proc_macro2::TokenStream;
-use syn::{parse::Parse, FieldValue};
+use proc_macro2::{Span, TokenStream};
+use syn::{parse::Parse, FieldValue, Ident};
 
 use crate::{
     args::{self, Arg},
@@ -20,9 +20,21 @@ struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut ts = Arg::token_stream("ts", |expr| Ok(quote!(#expr)));
-        let mut to = Arg::token_stream("to", |expr| Ok(quote!(#expr)));
-        let mut when = Arg::token_stream("when", |expr| Ok(quote!(#expr)));
+        let mut ts = Arg::token_stream("ts", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
+        let mut to = Arg::token_stream("to", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
+        let mut when = Arg::token_stream("when", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
@@ -38,11 +50,19 @@ impl Parse for Args {
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    let (args, template, props) = template::parse2::<Args>(opts.input)?;
+    let (args, template, mut props) = template::parse2::<Args>(opts.input)?;
+
+    // Add the level as a property
+    let level_ident = Ident::new(emit_core::well_known::LVL_KEY, Span::call_site());
+    let level_value = opts.level;
+
+    props.push(&syn::parse2::<FieldValue>(
+        quote!(#level_ident: emit::Level::#level_value),
+    )?)?;
 
     // Ensure props don't use reserved identifiers
     for prop in props.iter() {
-        props::ensure_not_reserved(prop)?;
+        props::ensure_not_reserved(&prop.label, prop.span())?;
     }
 
     let props_match_input_tokens = props.match_input_tokens();
@@ -52,11 +72,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let ts_tokens = args.ts;
     let to_tokens = args.to;
     let when_tokens = args.when;
-
-    let level_tokens = {
-        let level = opts.level;
-        quote!(emit::Level::#level)
-    };
 
     let template_tokens = template.template_tokens();
 
@@ -69,7 +84,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                     #to_tokens,
                     #when_tokens,
                     #ts_tokens,
-                    #level_tokens,
                     #template_tokens,
                     #props_tokens,
                 )

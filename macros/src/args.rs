@@ -10,21 +10,22 @@ Arguments are set from a collection of field-values using either the `set_from_p
 */
 pub struct Arg<T> {
     key: &'static str,
-    set: Box<dyn FnMut(&Expr) -> Result<T, syn::Error>>,
+    set: Box<dyn FnMut(&FieldValue) -> Result<T, syn::Error>>,
     value: Option<T>,
 }
 
 impl Arg<bool> {
     pub fn bool(key: &'static str) -> Self {
-        Arg::new(key, move |expr| {
+        Arg::new(key, move |fv| {
             if let Expr::Lit(ExprLit {
-                lit: Lit::Bool(l), ..
-            }) = expr
+                lit: Lit::Bool(ref l),
+                ..
+            }) = fv.expr
             {
                 Ok(l.value)
             } else {
                 Err(syn::Error::new(
-                    expr.span(),
+                    fv.expr.span(),
                     format_args!("`{}` requires a boolean value", key),
                 ))
             }
@@ -34,15 +35,16 @@ impl Arg<bool> {
 
 impl Arg<String> {
     pub fn str(key: &'static str) -> Self {
-        Arg::new(key, move |expr| {
+        Arg::new(key, move |fv| {
             if let Expr::Lit(ExprLit {
-                lit: Lit::Str(l), ..
-            }) = expr
+                lit: Lit::Str(ref l),
+                ..
+            }) = fv.expr
             {
                 Ok(l.value())
             } else {
                 Err(syn::Error::new(
-                    expr.span(),
+                    fv.expr.span(),
                     format_args!("`{}` requires a string value", key),
                 ))
             }
@@ -53,7 +55,7 @@ impl Arg<String> {
 impl Arg<TokenStream> {
     pub fn token_stream(
         key: &'static str,
-        to_tokens: impl FnMut(&Expr) -> Result<TokenStream, syn::Error> + 'static,
+        to_tokens: impl FnMut(&FieldValue) -> Result<TokenStream, syn::Error> + 'static,
     ) -> Self {
         Arg::new(key, to_tokens)
     }
@@ -62,7 +64,7 @@ impl Arg<TokenStream> {
 impl<T> Arg<T> {
     pub fn new(
         key: &'static str,
-        to_custom: impl FnMut(&Expr) -> Result<T, syn::Error> + 'static,
+        to_custom: impl FnMut(&FieldValue) -> Result<T, syn::Error> + 'static,
     ) -> Self {
         Arg {
             key,
@@ -84,7 +86,7 @@ impl<T: Default> Arg<T> {
 
 pub trait ArgDef {
     fn key(&self) -> &str;
-    fn set(&mut self, expr: &Expr) -> Result<(), syn::Error>;
+    fn set(&mut self, fv: &FieldValue) -> Result<(), syn::Error>;
 }
 
 impl<T> ArgDef for Arg<T> {
@@ -92,15 +94,15 @@ impl<T> ArgDef for Arg<T> {
         self.key
     }
 
-    fn set(&mut self, expr: &Expr) -> Result<(), syn::Error> {
+    fn set(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
         if self.value.is_some() {
             return Err(syn::Error::new(
-                expr.span(),
+                fv.span(),
                 format_args!("a value for `{}` has already been specified", self.key),
             ));
         }
 
-        self.value = Some((self.set)(expr)?);
+        self.value = Some((self.set)(fv)?);
         Ok(())
     }
 }
@@ -114,7 +116,7 @@ pub fn set_from_field_values<'a, const N: usize>(
 
         for arg in &mut args {
             if arg.key() == key_name {
-                arg.set(&fv.expr)?;
+                arg.set(fv)?;
                 continue 'fields;
             }
         }

@@ -50,14 +50,14 @@ fn to_record(evt: &emit_core::event::Event<impl emit_core::props::Props>) -> Log
                 .map(|ts| ts.to_system_time())
                 .unwrap_or_else(SystemTime::now),
         )
-        .with_severity_number(match evt.level().unwrap_or(emit_core::level::Level::Info) {
+        .with_severity_number(match evt.lvl().unwrap_or(emit_core::level::Level::Info) {
             emit_core::level::Level::Debug => Severity::Debug,
             emit_core::level::Level::Info => Severity::Info,
             emit_core::level::Level::Warn => Severity::Warn,
             emit_core::level::Level::Error => Severity::Error,
         })
-        .with_severity_text(evt.level().to_string())
-        .with_body(AnyValue::String(evt.message().to_string().into()))
+        .with_severity_text(evt.lvl().to_string())
+        .with_body(AnyValue::String(evt.msg().to_string().into()))
         .with_attributes({
             let mut attributes = OrderMap::<Key, AnyValue>::new();
 

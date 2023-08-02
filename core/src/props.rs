@@ -195,36 +195,6 @@ impl<T: Props, F: Fn(Key, Value) -> bool> Props for Filter<T, F> {
     }
 }
 
-#[repr(transparent)]
-pub struct SortedSlice<'a>([(Key<'a>, Value<'a>)]);
-
-impl SortedSlice<'static> {
-    pub fn new(props: &'static [(Key<'static>, Value<'static>)]) -> &'static Self {
-        Self::new_ref(props)
-    }
-}
-
-impl<'a> SortedSlice<'a> {
-    pub fn new_ref<'b>(props: &'b [(Key<'a>, Value<'a>)]) -> &'b Self {
-        unsafe { &*(props as *const [(Key<'a>, Value<'a>)] as *const SortedSlice<'a>) }
-    }
-}
-
-impl<'a> Props for SortedSlice<'a> {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
-        self.0.for_each(for_each)
-    }
-
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
-        let key = key.to_key();
-
-        self.0
-            .binary_search_by(|(k, _)| k.cmp(&key))
-            .ok()
-            .map(|i| self.0[i].1.by_ref())
-    }
-}
-
 mod internal {
     use core::ops::ControlFlow;
 

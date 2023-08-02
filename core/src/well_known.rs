@@ -2,21 +2,20 @@ use crate::{
     id::{SpanId, TraceId},
     level::Level,
     props::Props,
+    time::Timestamp,
     value::Value,
 };
 
-pub const ERR_KEY: &'static str = "#err";
+pub const TS_KEY: &'static str = "#ts";
+pub const TSS_KEY: &'static str = "#tss";
+pub const MSG_KEY: &'static str = "#msg";
+pub const TPL_KEY: &'static str = "#tpl";
 
-pub const TIMESTAMP_KEY: &'static str = "#ts";
-pub const TIMESTAMP_START_KEY: &'static str = "#tss";
-
-pub const LEVEL_KEY: &'static str = "#lvl";
-pub const MESSAGE_KEY: &'static str = "#msg";
-pub const TEMPLATE_KEY: &'static str = "#tpl";
-
-pub const SPAN_KEY: &'static str = "#sp";
-pub const SPAN_PARENT_KEY: &'static str = "#spp";
-pub const TRACE_KEY: &'static str = "#tr";
+pub const ERR_KEY: &'static str = "err";
+pub const LVL_KEY: &'static str = "lvl";
+pub const SPAN_ID_KEY: &'static str = "span_id";
+pub const SPAN_PARENT_KEY: &'static str = "span_parent";
+pub const TRACE_ID_KEY: &'static str = "trace_id";
 
 pub const fn is_reserved(key: &str) -> bool {
     let key = key.as_bytes();
@@ -30,36 +29,42 @@ pub const fn is_reserved(key: &str) -> bool {
     }
 }
 
-pub trait WellKnown {
-    fn level(&self) -> Option<Level>;
+pub trait WellKnown: Props {
+    fn ts(&self) -> Option<Timestamp> {
+        self.get(TS_KEY)?.to_timestamp()
+    }
 
-    fn trace_id(&self) -> Option<TraceId>;
+    fn tss(&self) -> Option<Timestamp> {
+        self.get(TSS_KEY)?.to_timestamp()
+    }
 
-    fn span_id(&self) -> Option<SpanId>;
-
-    fn parent_span_id(&self) -> Option<SpanId>;
-
-    fn err(&self) -> Option<Value>;
-}
-
-impl<P: Props> WellKnown for P {
-    fn level(&self) -> Option<Level> {
-        self.get(LEVEL_KEY)?.to_level()
+    fn lvl(&self) -> Option<Level> {
+        self.get(LVL_KEY)?.to_level()
     }
 
     fn trace_id(&self) -> Option<TraceId> {
-        self.get(TRACE_KEY)?.to_trace_id()
+        self.get(TRACE_ID_KEY)?.to_trace_id()
     }
 
     fn span_id(&self) -> Option<SpanId> {
-        self.get(SPAN_KEY)?.to_span_id()
+        self.get(SPAN_ID_KEY)?.to_span_id()
     }
 
-    fn parent_span_id(&self) -> Option<SpanId> {
+    fn span_parent(&self) -> Option<SpanId> {
         self.get(SPAN_PARENT_KEY)?.to_span_id()
+    }
+
+    fn msg(&self) -> Option<Value> {
+        self.get(MSG_KEY)
+    }
+
+    fn tpl(&self) -> Option<Value> {
+        self.get(TPL_KEY)
     }
 
     fn err(&self) -> Option<Value> {
         self.get(ERR_KEY)
     }
 }
+
+impl<P: Props + ?Sized> WellKnown for P {}

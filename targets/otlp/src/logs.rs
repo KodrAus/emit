@@ -70,7 +70,7 @@ impl emit_core::target::Target for OtlpLogsTarget {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let level = evt.props().level().unwrap_or(emit_core::level::Level::Info);
+        let level = evt.props().lvl().unwrap_or(emit_core::level::Level::Info);
 
         let severity_number = match level {
             emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
@@ -82,7 +82,7 @@ impl emit_core::target::Target for OtlpLogsTarget {
         let severity_text = level.to_string();
 
         let body = Some(AnyValue {
-            value: Some(Value::StringValue(evt.message().to_string())),
+            value: Some(Value::StringValue(evt.msg().to_string())),
         });
 
         let mut attributes = Vec::new();

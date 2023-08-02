@@ -26,7 +26,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
     // Ensure props don't use reserved identifiers
     for prop in props.iter() {
-        props::ensure_not_reserved(prop)?;
+        props::ensure_not_reserved(&prop.label, prop.span())?;
     }
 
     let mut item = syn::parse2::<Stmt>(opts.item)?;

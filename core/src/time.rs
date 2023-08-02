@@ -122,9 +122,27 @@ impl From<Timestamp> for Extent {
     }
 }
 
+impl<'a> From<&'a Timestamp> for Extent {
+    fn from(point: &'a Timestamp) -> Extent {
+        Extent::point(*point)
+    }
+}
+
 impl From<RangeInclusive<Timestamp>> for Extent {
     fn from(span: RangeInclusive<Timestamp>) -> Extent {
         Extent::span(span)
+    }
+}
+
+impl<'a> From<&'a RangeInclusive<Timestamp>> for Extent {
+    fn from(span: &'a RangeInclusive<Timestamp>) -> Extent {
+        Extent::span(span.clone())
+    }
+}
+
+impl<'a> From<&'a Extent> for Extent {
+    fn from(extent: &'a Extent) -> Extent {
+        extent.clone()
     }
 }
 

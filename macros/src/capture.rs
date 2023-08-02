@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 
-use syn::{parse::Parse, spanned::Spanned, Attribute, FieldValue};
+use syn::{
+    parse::Parse, punctuated::Punctuated, spanned::Spanned, token::Comma, Attribute, Expr,
+    FieldValue, Ident,
+};
 
 use crate::{
     args::{self, Arg},
@@ -40,8 +43,8 @@ pub fn key_value_with_hook(attrs: &[Attribute], fv: &FieldValue) -> TokenStream 
 
     let key_tokens = key::key_with_hook(&[], &key_expr);
     let value_tokens = quote_spanned!(fv.span()=> {
-        use emit::__private::__PrivateCaptureHook;
-        (#expr).#fn_name()
+        use emit::__private::{__PrivateCaptureHook, __PrivateOptionalCaptureHook, __PrivateOptionalMapHook};
+        (#expr).__private_optional_capture_some().__private_optional_map_some(|v| v.#fn_name())
     });
 
     quote_spanned!(fv.span()=>
@@ -59,13 +62,13 @@ pub struct RenameHookTokens<T> {
 }
 
 pub fn rename_hook_tokens(
-    opts: RenameHookTokens<impl FnOnce(&Args) -> TokenStream>,
+    opts: RenameHookTokens<impl Fn(&Args) -> TokenStream>,
 ) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
         args: opts.args,
         expr: opts.expr,
         predicate: |ident: &str| ident.starts_with("__private_capture"),
-        to: move |args: &Args| {
+        to: move |args: &Args, _: &Ident, _: &Punctuated<Expr, Comma>| {
             let to_ident = (opts.to)(args);
 
             (to_ident, quote!())

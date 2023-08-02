@@ -22,6 +22,7 @@ mod filter;
 mod fmt;
 mod hook;
 mod key;
+mod optional;
 mod props;
 mod span;
 mod template;
@@ -110,13 +111,25 @@ pub fn fmt(
 }
 
 #[proc_macro_attribute]
+pub fn optional(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    optional::rename_hook_tokens(optional::RenameHookTokens {
+        args: TokenStream::from(args),
+        expr: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+#[proc_macro_attribute]
 pub fn with(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     with::expand_tokens(with::ExpandTokens {
-        sync_receiver: quote!(__private::__with),
-        async_receiver: quote!(__private::__with_future),
+        sync_receiver: quote!(__private::__private_with),
+        async_receiver: quote!(__private::__private_with_future),
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })
@@ -254,7 +267,7 @@ pub fn as_error(
 fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
         emit::expand_tokens(emit::ExpandTokens {
-            receiver: quote!(__private::__emit),
+            receiver: quote!(__private::__private_emit),
             level,
             input: item,
         })
@@ -275,9 +288,9 @@ fn capture_as(
         expr: TokenStream::from(expr),
         to: |args: &capture::Args| {
             if args.inspect {
-                as_fn
+                as_fn.clone()
             } else {
-                as_anon_fn
+                as_anon_fn.clone()
             }
         },
     })

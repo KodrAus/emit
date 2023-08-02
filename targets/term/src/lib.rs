@@ -59,7 +59,7 @@ fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Prop
         header_empty = false;
     }
 
-    if let Some(level) = evt.props().level() {
+    if let Some(level) = evt.props().lvl() {
         if !header_empty {
             let _ = write!(buf, " {}", level);
         } else {
@@ -73,7 +73,7 @@ fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Prop
         let _ = write!(buf, "]: ");
     }
 
-    if let Ok(_) = evt.message().write(Writer { buf }) {
+    if let Ok(_) = evt.msg().write(Writer { buf }) {
         let _ = buf.write(b"\n");
         let _ = out.print(&buf);
     }

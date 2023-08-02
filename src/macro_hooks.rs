@@ -1,16 +1,21 @@
-use core::{any::Any, fmt, future::Future, ops::RangeInclusive};
+use core::{
+    any::Any,
+    fmt,
+    future::Future,
+    ops::{ControlFlow, RangeInclusive},
+};
 
 use emit_core::{
     ambient,
     ctxt::Ctxt,
+    empty::Empty,
     filter::Filter,
-    level::Level,
+    key::ToKey,
     props::Props,
     target::Target,
     template::Template,
     time::{Clock, Extent, Timestamp},
     value::Value,
-    well_known::LEVEL_KEY,
 };
 
 #[cfg(feature = "std")]
@@ -175,6 +180,46 @@ impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
     }
 }
 
+pub trait __PrivateOptionalCaptureHook {
+    fn __private_optional_capture_some(&self) -> Option<&Self>;
+
+    fn __private_optional_capture_option(&self) -> &Self;
+}
+
+impl<T: ?Sized> __PrivateOptionalCaptureHook for T {
+    fn __private_optional_capture_some(&self) -> Option<&Self> {
+        Some(self)
+    }
+
+    fn __private_optional_capture_option(&self) -> &Self {
+        self
+    }
+}
+
+pub trait __PrivateOptionalMapHook<T> {
+    fn __private_optional_map_some<F: FnOnce(T) -> U, U>(self, map: F) -> Option<U>;
+
+    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> U, U: 'a>(
+        &'a self,
+        map: F,
+    ) -> Option<U>
+    where
+        T: 'a;
+}
+
+impl<T> __PrivateOptionalMapHook<T> for Option<T> {
+    fn __private_optional_map_some<F: FnOnce(T) -> U, U>(self, map: F) -> Option<U> {
+        self.map(map)
+    }
+
+    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> U, U: 'a>(
+        &'a self,
+        map: F,
+    ) -> Option<U> {
+        self.as_ref().map(map)
+    }
+}
+
 /**
 An API to the specialized `Capture` trait for consuming in a macro.
 
@@ -300,11 +345,10 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 }
 
 #[track_caller]
-pub fn __emit(
+pub fn __private_emit(
     to: impl Target,
     when: impl Filter,
-    ts: impl IntoExtent,
-    lvl: Level,
+    ts: impl EventExtent,
     tpl: Template,
     props: impl Props,
 ) {
@@ -314,49 +358,55 @@ pub fn __emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        ts.into_extent().or_else(|| ambient.now().map(Into::into)),
+        ts.to_extent().or_else(|| ambient.now().map(Extent::point)),
         tpl,
-        (LEVEL_KEY, lvl).chain(props),
+        props,
     );
 }
 
-pub trait IntoExtent {
-    fn into_extent(self) -> Option<Extent>;
+pub trait EventExtent {
+    fn to_extent(&self) -> Option<Extent>;
 }
 
-impl IntoExtent for Timestamp {
-    fn into_extent(self) -> Option<Extent> {
-        Some(Extent::from(self))
-    }
-}
-
-impl IntoExtent for RangeInclusive<Timestamp> {
-    fn into_extent(self) -> Option<Extent> {
-        Some(Extent::from(self))
-    }
-}
-
-impl<T: IntoExtent> IntoExtent for Option<T> {
-    fn into_extent(self) -> Option<Extent> {
-        self.and_then(IntoExtent::into_extent)
-    }
-}
-
-impl IntoExtent for emit_core::empty::Empty {
-    fn into_extent(self) -> Option<Extent> {
+impl EventExtent for Empty {
+    fn to_extent(&self) -> Option<Extent> {
         None
     }
 }
 
+impl EventExtent for Extent {
+    fn to_extent(&self) -> Option<Extent> {
+        Some(self.clone())
+    }
+}
+
+impl EventExtent for Timestamp {
+    fn to_extent(&self) -> Option<Extent> {
+        Some(Extent::point(*self))
+    }
+}
+
+impl EventExtent for RangeInclusive<Timestamp> {
+    fn to_extent(&self) -> Option<Extent> {
+        Some(Extent::span(self.clone()))
+    }
+}
+
+impl<T: EventExtent> EventExtent for Option<T> {
+    fn to_extent(&self) -> Option<Extent> {
+        self.as_ref().and_then(|ts| ts.to_extent())
+    }
+}
+
 #[track_caller]
-pub fn __with(props: impl Props) -> LocalFrame<impl Ctxt> {
+pub fn __private_with(props: impl Props) -> LocalFrame<impl Ctxt> {
     let ambient = ambient::get();
 
     base_with(ambient, props)
 }
 
 #[track_caller]
-pub fn __with_future<F: Future>(
+pub fn __private_with_future<F: Future>(
     props: impl Props,
     future: F,
 ) -> LocalFrameFuture<impl Ctxt + Send + Sync + 'static, F> {
@@ -365,14 +415,59 @@ pub fn __with_future<F: Future>(
     base_with_future(ambient, props, future)
 }
 
-pub fn __span_start() -> Option<Timestamp> {
+#[track_caller]
+pub fn __private_span_start() -> Option<Timestamp> {
     ambient::get().now()
 }
 
-pub fn __span_end(start: Option<Timestamp>) -> impl IntoExtent {
+#[track_caller]
+pub fn __private_span_end(start: Option<Timestamp>) -> Option<Extent> {
     let end = ambient::get().now();
 
-    start.and_then(|start| end.map(|end| start..=end))
+    start.and_then(|start| end.map(|end| Extent::span(start..=end)))
+}
+
+#[repr(transparent)]
+pub struct __PrivateMacroProps<'a>([(Key<'a>, Option<Value<'a>>)]);
+
+impl __PrivateMacroProps<'static> {
+    pub fn new(props: &'static [(Key<'static>, Option<Value<'static>>)]) -> &'static Self {
+        Self::new_ref(props)
+    }
+}
+
+impl<'a> __PrivateMacroProps<'a> {
+    pub fn new_ref<'b>(props: &'b [(Key<'a>, Option<Value<'a>>)]) -> &'b Self {
+        unsafe {
+            &*(props as *const [(Key<'a>, Option<Value<'a>>)] as *const __PrivateMacroProps<'a>)
+        }
+    }
+}
+
+impl<'a> Props for __PrivateMacroProps<'a> {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) {
+        for kv in &self.0 {
+            let k = &kv.0;
+
+            if let Some(ref v) = kv.1 {
+                if let ControlFlow::Break(()) = for_each(k.by_ref(), v.by_ref()) {
+                    return;
+                }
+            }
+        }
+    }
+
+    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.to_key();
+
+        self.0
+            .binary_search_by(|(k, _)| k.cmp(&key))
+            .ok()
+            .and_then(|i| self.0[i].1.as_ref().map(|v| v.by_ref()))
+    }
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@ async fn main() {
 
 #[emit::with(a, ax: 13)]
 async fn in_ctxt(a: i32) {
-    let ts = emit::__private::__span_start();
+    let ts = emit::__private::__private_span_start();
 
     in_ctxt2(5).await;
 
@@ -43,9 +43,9 @@ async fn in_ctxt(a: i32) {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let ts = emit::__private::__span_end(ts);
+    let ts = emit::__private::__private_span_end(ts);
 
-    emit::info!(ts, "working on {#[emit::as_serde] work}");
+    emit::info!(ts, "working on {#[emit::as_serde] work}",);
 }
 
 #[emit::with(b, bx: 90)]
@@ -54,5 +54,7 @@ async fn in_ctxt2(b: i32) {
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
         #[emit::fmt(">08")]
         x: 15,
+        #[emit::optional]
+        z: None::<i32>,
     );
 }
