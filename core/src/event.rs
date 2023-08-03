@@ -1,19 +1,63 @@
-use core::{fmt, ops::ControlFlow};
+use core::{
+    fmt,
+    ops::{ControlFlow, Range},
+};
 
 use crate::{
+    empty::Empty,
     key::{Key, ToKey},
     props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
-    time::{Extent, Timestamp},
+    time::Timestamp,
     value::{ToValue, Value},
     well_known::{MSG_KEY, TPL_KEY, TSS_KEY, TS_KEY},
 };
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
-    ts: Option<Extent>,
+    extent: Option<Range<Timestamp>>,
     tpl: Template<'a>,
     props: P,
+}
+
+pub trait Extent {
+    fn extent(&self) -> Option<Range<Timestamp>>;
+}
+
+impl<'a, T: Extent + ?Sized> Extent for &'a T {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        (**self).extent()
+    }
+}
+
+impl Extent for Empty {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        None
+    }
+}
+
+impl<'a, P> Extent for Event<'a, P> {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        self.extent().cloned()
+    }
+}
+
+impl Extent for Timestamp {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        Some(*self..*self)
+    }
+}
+
+impl Extent for Range<Timestamp> {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        Some(self.clone())
+    }
+}
+
+impl<T: Extent> Extent for Option<T> {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        self.as_ref().and_then(|ts| ts.extent())
+    }
 }
 
 impl<'a, P: Props> fmt::Debug for Event<'a, P> {
@@ -30,19 +74,21 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
     }
 }
 
-impl<'a, P: Props> Event<'a, P> {
-    pub fn new(ts: Option<impl Into<Extent>>, tpl: Template<'a>, props: P) -> Self {
+impl<'a, P> Event<'a, P> {
+    pub fn new(extent: impl Extent, tpl: Template<'a>, props: P) -> Self {
         Event {
-            ts: ts.map(Into::into),
+            extent: extent.extent(),
             tpl,
             props,
         }
     }
 
-    pub fn extent(&self) -> Option<&Extent> {
-        self.ts.as_ref()
+    pub fn extent(&self) -> Option<&Range<Timestamp>> {
+        self.extent.as_ref()
     }
+}
 
+impl<'a, P: Props> Event<'a, P> {
     pub fn msg(&self) -> Render<&P> {
         self.tpl.render(&self.props)
     }
@@ -53,7 +99,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn chain<U: Props>(self, other: U) -> Event<'a, Chain<P, U>> {
         Event {
-            ts: self.ts,
+            extent: self.extent,
             tpl: self.tpl,
             props: self.props.chain(other),
         }
@@ -64,15 +110,12 @@ impl<'a, P: Props> Event<'a, P> {
         mut for_each: F,
     ) {
         let mut reserved = || {
-            if let Some(ref ts) = self.ts {
-                if let Some(ts) = ts.to_point() {
-                    for_each(TS_KEY.to_key(), ts.to_value())?;
-                } else {
-                    let ts = ts.as_span();
-
+            if let Some(ref ts) = self.extent {
+                if ts.start != ts.end {
                     for_each(TSS_KEY.to_key(), ts.start.to_value())?;
-                    for_each(TS_KEY.to_key(), ts.end.to_value())?;
                 }
+
+                for_each(TS_KEY.to_key(), ts.end.to_value())?;
             }
 
             for_each(TPL_KEY.to_key(), self.tpl.to_value())?;
@@ -94,7 +137,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
         Event {
-            ts: self.ts.clone(),
+            extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: self.props.by_ref(),
         }
@@ -102,7 +145,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn erase<'b>(&'b self) -> Event<'b, &'b dyn ErasedProps> {
         Event {
-            ts: self.ts.clone(),
+            extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: &self.props,
         }

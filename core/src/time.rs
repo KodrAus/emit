@@ -1,4 +1,4 @@
-use core::{cmp, fmt, ops::Range, str, str::FromStr, time::Duration};
+use core::{cmp, fmt, str, str::FromStr, time::Duration};
 
 use crate::{
     empty::Empty,
@@ -54,95 +54,6 @@ impl<'v> Value<'v> {
         self.downcast_ref::<Timestamp>()
             .copied()
             .or_else(|| self.parse())
-    }
-}
-
-#[derive(Clone)]
-pub struct Extent(ExtentInner);
-
-#[derive(Clone)]
-enum ExtentInner {
-    Point(Range<Timestamp>),
-    Span(Range<Timestamp>),
-}
-
-impl fmt::Debug for Extent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            ExtentInner::Point(ref ts) => fmt::Debug::fmt(&ts.start, f),
-            ExtentInner::Span(ref ts) => fmt::Debug::fmt(ts, f),
-        }
-    }
-}
-
-impl fmt::Display for Extent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            ExtentInner::Point(ref ts) => fmt::Display::fmt(&ts.end, f),
-            ExtentInner::Span(ref ts) => {
-                fmt::Display::fmt(&ts.start, f)?;
-                write!(f, "..")?;
-                fmt::Display::fmt(&ts.end, f)
-            }
-        }
-    }
-}
-
-impl Extent {
-    pub fn point(ts: Timestamp) -> Extent {
-        Extent(ExtentInner::Point(ts..ts))
-    }
-
-    pub fn span(ts: Range<Timestamp>) -> Extent {
-        if ts.start == ts.end {
-            Extent::point(ts.end)
-        } else {
-            Extent(ExtentInner::Span(ts))
-        }
-    }
-
-    pub fn as_span(&self) -> &Range<Timestamp> {
-        match self.0 {
-            ExtentInner::Point(ref ts) => ts,
-            ExtentInner::Span(ref ts) => ts,
-        }
-    }
-
-    pub fn to_point(&self) -> Option<&Timestamp> {
-        match self.0 {
-            ExtentInner::Point(ref ts) => Some(&ts.start),
-            ExtentInner::Span(_) => None,
-        }
-    }
-}
-
-impl From<Timestamp> for Extent {
-    fn from(point: Timestamp) -> Extent {
-        Extent::point(point)
-    }
-}
-
-impl<'a> From<&'a Timestamp> for Extent {
-    fn from(point: &'a Timestamp) -> Extent {
-        Extent::point(*point)
-    }
-}
-
-impl From<Range<Timestamp>> for Extent {
-    fn from(span: Range<Timestamp>) -> Extent {
-        Extent::span(span)
-    }
-}
-
-impl<'a> From<&'a Range<Timestamp>> for Extent {
-    fn from(span: &'a Range<Timestamp>) -> Extent {
-        Extent::span(span.clone())
-    }
-}
-
-impl<'a> From<&'a Extent> for Extent {
-    fn from(extent: &'a Extent) -> Extent {
-        extent.clone()
     }
 }
 

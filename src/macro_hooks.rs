@@ -8,16 +8,16 @@ use core::{
 use emit_core::{
     ambient,
     ctxt::Ctxt,
-    empty::Empty,
     filter::Filter,
     key::ToKey,
     props::Props,
     target::Target,
     template::Template,
-    time::{Clock, Extent, Timestamp},
+    time::{Clock, Timestamp},
     value::Value,
 };
 
+use emit_core::event::Extent;
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -348,7 +348,7 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 pub fn __private_emit(
     to: impl Target,
     when: impl Filter,
-    ts: impl EventExtent,
+    extent: impl Extent,
     tpl: Template,
     props: impl Props,
 ) {
@@ -358,44 +358,10 @@ pub fn __private_emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        ts.to_extent().or_else(|| ambient.now().map(Extent::point)),
+        extent.extent().or_else(|| ambient.now().map(|ts| ts..ts)),
         tpl,
         props,
     );
-}
-
-pub trait EventExtent {
-    fn to_extent(&self) -> Option<Extent>;
-}
-
-impl EventExtent for Empty {
-    fn to_extent(&self) -> Option<Extent> {
-        None
-    }
-}
-
-impl EventExtent for Extent {
-    fn to_extent(&self) -> Option<Extent> {
-        Some(self.clone())
-    }
-}
-
-impl EventExtent for Timestamp {
-    fn to_extent(&self) -> Option<Extent> {
-        Some(Extent::point(*self))
-    }
-}
-
-impl EventExtent for Range<Timestamp> {
-    fn to_extent(&self) -> Option<Extent> {
-        Some(Extent::span(self.clone()))
-    }
-}
-
-impl<T: EventExtent> EventExtent for Option<T> {
-    fn to_extent(&self) -> Option<Extent> {
-        self.as_ref().and_then(|ts| ts.to_extent())
-    }
 }
 
 #[track_caller]
@@ -421,10 +387,10 @@ pub fn __private_span_start() -> Option<Timestamp> {
 }
 
 #[track_caller]
-pub fn __private_span_end(start: Option<Timestamp>) -> Option<Extent> {
+pub fn __private_span_end(start: Option<Timestamp>) -> impl Extent {
     let end = ambient::get().now();
 
-    start.and_then(|start| end.map(|end| Extent::span(start..end)))
+    start.and_then(|start| end.map(|end| start..end))
 }
 
 #[repr(transparent)]

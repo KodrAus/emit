@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use core::future::Future;
+use core::{future::Future, ops::Range};
 
 use emit_core::{ctxt::Ctxt, filter::Filter, target::Target};
 
@@ -21,7 +21,7 @@ pub mod ctxt {
     pub use emit_core::ctxt::*;
 }
 
-use emit_core::time::{Clock, Extent};
+use emit_core::time::Clock;
 
 pub use self::{
     event::Event, key::Key, level::Level, props::Props, template::Template, time::Timestamp,
@@ -51,7 +51,7 @@ pub fn emit(evt: &Event<impl Props>) {
         ambient,
         evt.extent()
             .cloned()
-            .or_else(|| ambient.now().map(Extent::point)),
+            .or_else(|| ambient.now().map(|ts| ts..ts)),
         tpl,
         props,
     );
@@ -62,7 +62,7 @@ fn base_emit(
     to: impl Target,
     when: impl Filter,
     ctxt: impl Ctxt,
-    ts: Option<Extent>,
+    ts: Option<Range<Timestamp>>,
     tpl: Template,
     props: impl Props,
 ) {

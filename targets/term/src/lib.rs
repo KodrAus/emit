@@ -54,7 +54,13 @@ fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Prop
     let mut header_empty = true;
 
     if let Some(ts) = evt.extent() {
-        let _ = write!(buf, "[{:.0}", ts);
+        let _ = write!(buf, "[");
+
+        if ts.start != ts.end {
+            let _ = write!(buf, "{:.0}..", ts.start);
+        }
+
+        let _ = write!(buf, "{:.0}", ts.end);
 
         header_empty = false;
     }
