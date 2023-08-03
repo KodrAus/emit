@@ -1,4 +1,4 @@
-use core::{cmp, fmt, ops::RangeInclusive, str, str::FromStr, time::Duration};
+use core::{cmp, fmt, ops::Range, str, str::FromStr, time::Duration};
 
 use crate::{
     empty::Empty,
@@ -62,14 +62,14 @@ pub struct Extent(ExtentInner);
 
 #[derive(Clone)]
 enum ExtentInner {
-    Point(Timestamp),
-    Span(RangeInclusive<Timestamp>),
+    Point(Range<Timestamp>),
+    Span(Range<Timestamp>),
 }
 
 impl fmt::Debug for Extent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            ExtentInner::Point(ts) => fmt::Debug::fmt(&ts, f),
+            ExtentInner::Point(ref ts) => fmt::Debug::fmt(&ts.start, f),
             ExtentInner::Span(ref ts) => fmt::Debug::fmt(ts, f),
         }
     }
@@ -78,11 +78,11 @@ impl fmt::Debug for Extent {
 impl fmt::Display for Extent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            ExtentInner::Point(ts) => fmt::Display::fmt(&ts, f),
+            ExtentInner::Point(ref ts) => fmt::Display::fmt(&ts.end, f),
             ExtentInner::Span(ref ts) => {
-                fmt::Display::fmt(ts.start(), f)?;
-                write!(f, "..=")?;
-                fmt::Display::fmt(ts.end(), f)
+                fmt::Display::fmt(&ts.start, f)?;
+                write!(f, "..")?;
+                fmt::Display::fmt(&ts.end, f)
             }
         }
     }
@@ -90,28 +90,28 @@ impl fmt::Display for Extent {
 
 impl Extent {
     pub fn point(ts: Timestamp) -> Extent {
-        Extent(ExtentInner::Point(ts))
+        Extent(ExtentInner::Point(ts..ts))
     }
 
-    pub fn span(ts: RangeInclusive<Timestamp>) -> Extent {
-        if ts.start() == ts.end() {
-            Extent::point(*ts.end())
+    pub fn span(ts: Range<Timestamp>) -> Extent {
+        if ts.start == ts.end {
+            Extent::point(ts.end)
         } else {
             Extent(ExtentInner::Span(ts))
         }
     }
 
-    pub fn start(&self) -> Option<&Timestamp> {
+    pub fn as_span(&self) -> &Range<Timestamp> {
         match self.0 {
-            ExtentInner::Point(_) => None,
-            ExtentInner::Span(ref ts) => Some(ts.start()),
+            ExtentInner::Point(ref ts) => ts,
+            ExtentInner::Span(ref ts) => ts,
         }
     }
 
-    pub fn end(&self) -> &Timestamp {
+    pub fn to_point(&self) -> Option<&Timestamp> {
         match self.0 {
-            ExtentInner::Point(ref ts) => ts,
-            ExtentInner::Span(ref ts) => ts.end(),
+            ExtentInner::Point(ref ts) => Some(&ts.start),
+            ExtentInner::Span(_) => None,
         }
     }
 }
@@ -128,14 +128,14 @@ impl<'a> From<&'a Timestamp> for Extent {
     }
 }
 
-impl From<RangeInclusive<Timestamp>> for Extent {
-    fn from(span: RangeInclusive<Timestamp>) -> Extent {
+impl From<Range<Timestamp>> for Extent {
+    fn from(span: Range<Timestamp>) -> Extent {
         Extent::span(span)
     }
 }
 
-impl<'a> From<&'a RangeInclusive<Timestamp>> for Extent {
-    fn from(span: &'a RangeInclusive<Timestamp>) -> Extent {
+impl<'a> From<&'a Range<Timestamp>> for Extent {
+    fn from(span: &'a Range<Timestamp>) -> Extent {
         Extent::span(span.clone())
     }
 }

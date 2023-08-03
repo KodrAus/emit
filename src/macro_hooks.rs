@@ -2,7 +2,7 @@ use core::{
     any::Any,
     fmt,
     future::Future,
-    ops::{ControlFlow, RangeInclusive},
+    ops::{ControlFlow, Range},
 };
 
 use emit_core::{
@@ -386,7 +386,7 @@ impl EventExtent for Timestamp {
     }
 }
 
-impl EventExtent for RangeInclusive<Timestamp> {
+impl EventExtent for Range<Timestamp> {
     fn to_extent(&self) -> Option<Extent> {
         Some(Extent::span(self.clone()))
     }
@@ -424,7 +424,7 @@ pub fn __private_span_start() -> Option<Timestamp> {
 pub fn __private_span_end(start: Option<Timestamp>) -> Option<Extent> {
     let end = ambient::get().now();
 
-    start.and_then(|start| end.map(|end| Extent::span(start..=end)))
+    start.and_then(|start| end.map(|end| Extent::span(start..end)))
 }
 
 #[repr(transparent)]

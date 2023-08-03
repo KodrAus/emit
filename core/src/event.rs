@@ -39,14 +39,6 @@ impl<'a, P: Props> Event<'a, P> {
         }
     }
 
-    pub fn ts(&self) -> Option<Timestamp> {
-        self.extent().map(|ts| *ts.end())
-    }
-
-    pub fn tss(&self) -> Option<Timestamp> {
-        self.extent().and_then(|ts| ts.start().cloned())
-    }
-
     pub fn extent(&self) -> Option<&Extent> {
         self.ts.as_ref()
     }
@@ -71,16 +63,27 @@ impl<'a, P: Props> Event<'a, P> {
         &'kv self,
         mut for_each: F,
     ) {
-        if let Some(ref ts) = self.ts {
-            if let Some(start) = ts.start() {
-                for_each(TSS_KEY.to_key(), start.to_value());
+        let mut reserved = || {
+            if let Some(ref ts) = self.ts {
+                if let Some(ts) = ts.to_point() {
+                    for_each(TS_KEY.to_key(), ts.to_value())?;
+                } else {
+                    let ts = ts.as_span();
+
+                    for_each(TSS_KEY.to_key(), ts.start.to_value())?;
+                    for_each(TS_KEY.to_key(), ts.end.to_value())?;
+                }
             }
 
-            for_each(TS_KEY.to_key(), ts.end().to_value());
-        }
+            for_each(TPL_KEY.to_key(), self.tpl.to_value())?;
+            for_each(MSG_KEY.to_key(), Msg::new_ref(self).to_value())?;
 
-        for_each(TPL_KEY.to_key(), self.tpl.to_value());
-        for_each(MSG_KEY.to_key(), Msg::new_ref(self).to_value());
+            ControlFlow::Continue(())
+        };
+
+        if let ControlFlow::Break(()) = reserved() {
+            return;
+        }
 
         self.props.for_each(for_each);
     }
