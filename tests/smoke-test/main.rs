@@ -30,9 +30,9 @@ async fn main() {
     emitter.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::with(a, ax: 13)]
+#[emit::with(span_id: emit::new_span_id(), a)]
 async fn in_ctxt(a: i32) {
-    let ts = emit::__private::__private_span_start();
+    let timer = emit::start_timer();
 
     in_ctxt2(5).await;
 
@@ -43,9 +43,7 @@ async fn in_ctxt(a: i32) {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let ts = emit::__private::__private_span_end(ts);
-
-    emit::info!(ts, "working on {#[emit::as_serde] work}",);
+    emit::info!(ts: timer.stop(), "finished {#[emit::as_serde] work}");
 }
 
 #[emit::with(b, bx: 90)]

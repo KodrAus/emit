@@ -10,6 +10,7 @@ use emit_core::{ctxt::Ctxt, filter::Filter, target::Target};
 #[doc(inline)]
 pub use emit_macros::*;
 
+use emit_core::id::{IdSource, SpanId, TraceId};
 #[doc(inline)]
 pub use emit_core::{
     empty, event, filter, id, key, level, props, target, template, time, value, well_known,
@@ -21,7 +22,7 @@ pub mod ctxt {
     pub use emit_core::ctxt::*;
 }
 
-use emit_core::time::Clock;
+use emit_core::time::{Clock, Timer};
 
 pub use self::{
     event::Event, key::Key, level::Level, props::Props, template::Template, time::Timestamp,
@@ -55,6 +56,18 @@ pub fn emit(evt: &Event<impl Props>) {
         tpl,
         props,
     );
+}
+
+pub fn start_timer() -> Timer<impl Clock + Send + Sync + 'static> {
+    Timer::start(emit_core::ambient::get())
+}
+
+pub fn new_span_id() -> Option<SpanId> {
+    emit_core::ambient::get().span_id()
+}
+
+pub fn new_trace_id() -> Option<TraceId> {
+    emit_core::ambient::get().trace_id()
 }
 
 #[track_caller]

@@ -1,23 +1,11 @@
-use core::{
-    any::Any,
-    fmt,
-    future::Future,
-    ops::{ControlFlow, Range},
-};
+use core::{any::Any, fmt, future::Future, ops::ControlFlow};
 
 use emit_core::{
-    ambient,
-    ctxt::Ctxt,
-    filter::Filter,
-    key::ToKey,
-    props::Props,
-    target::Target,
-    template::Template,
-    time::{Clock, Timestamp},
-    value::Value,
+    ambient, ctxt::Ctxt, filter::Filter, key::ToKey, props::Props, target::Target,
+    template::Template, time::Clock, value::Value,
 };
 
-use emit_core::event::Extent;
+use emit_core::{event::Extent, id::SpanId, value::ToValue};
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -35,7 +23,7 @@ The parameter lets us choose the way values are captured, since many
 types can be captured in lots of different ways.
 */
 pub trait Capture<T: ?Sized> {
-    fn capture(&self) -> Value;
+    fn capture(&self) -> Option<Value>;
 }
 
 /**
@@ -63,15 +51,30 @@ pub enum CaptureAnonSerde {}
 
 pub enum CaptureError {}
 
+pub enum CaptureSpanId {}
+
 impl CaptureSized for CaptureDisplay {}
 impl CaptureSized for CaptureDebug {}
 impl CaptureSized for CaptureSval {}
 impl CaptureSized for CaptureSerde {}
 impl CaptureSized for CaptureError {}
+impl CaptureSized for CaptureSpanId {}
 
 impl<T: CaptureSized + ?Sized> Capture<T> for str {
-    fn capture(&self) -> Value {
-        Value::from(self)
+    fn capture(&self) -> Option<Value> {
+        Some(Value::from(self))
+    }
+}
+
+impl Capture<CaptureSpanId> for SpanId {
+    fn capture(&self) -> Option<Value> {
+        Some(self.to_value())
+    }
+}
+
+impl<T: Capture<CaptureSpanId>> Capture<CaptureSpanId> for Option<T> {
+    fn capture(&self) -> Option<Value> {
+        self.as_ref().and_then(|v| v.capture())
     }
 }
 
@@ -79,14 +82,14 @@ impl<T> Capture<CaptureDisplay> for T
 where
     T: fmt::Display + Any,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::capture_display(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::capture_display(self).into())
     }
 }
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_dyn_display(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_dyn_display(self).into())
     }
 }
 
@@ -94,8 +97,8 @@ impl<T> Capture<CaptureAnonDisplay> for T
 where
     T: fmt::Display,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_display(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_display(self).into())
     }
 }
 
@@ -103,14 +106,14 @@ impl<T> Capture<CaptureDebug> for T
 where
     T: fmt::Debug + Any,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::capture_debug(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::capture_debug(self).into())
     }
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_dyn_debug(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_dyn_debug(self).into())
     }
 }
 
@@ -118,8 +121,8 @@ impl<T> Capture<CaptureAnonDebug> for T
 where
     T: fmt::Debug,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_debug(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_debug(self).into())
     }
 }
 
@@ -128,8 +131,8 @@ impl<T> Capture<CaptureSval> for T
 where
     T: sval::Value + Any,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::capture_sval2(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::capture_sval2(self).into())
     }
 }
 
@@ -138,8 +141,8 @@ impl<T> Capture<CaptureAnonSval> for T
 where
     T: sval::Value,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_sval2(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_sval2(self).into())
     }
 }
 
@@ -148,8 +151,8 @@ impl<T> Capture<CaptureSerde> for T
 where
     T: serde::Serialize + Any,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::capture_serde1(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::capture_serde1(self).into())
     }
 }
 
@@ -158,8 +161,8 @@ impl<T> Capture<CaptureAnonSerde> for T
 where
     T: serde::Serialize,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_serde1(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_serde1(self).into())
     }
 }
 
@@ -168,15 +171,15 @@ impl<T> Capture<CaptureError> for T
 where
     T: Error + 'static,
 {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::capture_error(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::capture_error(self).into())
     }
 }
 
 #[cfg(feature = "std")]
 impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
-    fn capture(&self) -> Value {
-        value_bag::ValueBag::from_dyn_error(self).into()
+    fn capture(&self) -> Option<Value> {
+        Some(value_bag::ValueBag::from_dyn_error(self).into())
     }
 }
 
@@ -197,9 +200,9 @@ impl<T: ?Sized> __PrivateOptionalCaptureHook for T {
 }
 
 pub trait __PrivateOptionalMapHook<T> {
-    fn __private_optional_map_some<F: FnOnce(T) -> U, U>(self, map: F) -> Option<U>;
+    fn __private_optional_map_some<F: FnOnce(T) -> Option<U>, U>(self, map: F) -> Option<U>;
 
-    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> U, U: 'a>(
+    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> Option<U>, U: 'a>(
         &'a self,
         map: F,
     ) -> Option<U>
@@ -208,15 +211,15 @@ pub trait __PrivateOptionalMapHook<T> {
 }
 
 impl<T> __PrivateOptionalMapHook<T> for Option<T> {
-    fn __private_optional_map_some<F: FnOnce(T) -> U, U>(self, map: F) -> Option<U> {
-        self.map(map)
+    fn __private_optional_map_some<F: FnOnce(T) -> Option<U>, U>(self, map: F) -> Option<U> {
+        self.and_then(map)
     }
 
-    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> U, U: 'a>(
+    fn __private_optional_map_option<'a, F: FnOnce(&'a T) -> Option<U>, U: 'a>(
         &'a self,
         map: F,
     ) -> Option<U> {
-        self.as_ref().map(map)
+        self.as_ref().and_then(map)
     }
 }
 
@@ -234,72 +237,79 @@ so that when a bound isn't satisfied we get a more accurate type error.
 contexts. (We're expecting non-hygienic spans to support value interpolation).
 */
 pub trait __PrivateCaptureHook {
-    fn __private_capture_as_default(&self) -> Value
+    fn __private_capture_as_default(&self) -> Option<Value>
     where
         Self: Capture<WithDefault>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_display(&self) -> Value
+    fn __private_capture_as_display(&self) -> Option<Value>
     where
         Self: Capture<CaptureDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_display(&self) -> Value
+    fn __private_capture_anon_as_display(&self) -> Option<Value>
     where
         Self: Capture<CaptureAnonDisplay>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_debug(&self) -> Value
+    fn __private_capture_as_debug(&self) -> Option<Value>
     where
         Self: Capture<CaptureDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_debug(&self) -> Value
+    fn __private_capture_anon_as_debug(&self) -> Option<Value>
     where
         Self: Capture<CaptureAnonDebug>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_sval(&self) -> Value
+    fn __private_capture_as_sval(&self) -> Option<Value>
     where
         Self: Capture<CaptureSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_sval(&self) -> Value
+    fn __private_capture_anon_as_sval(&self) -> Option<Value>
     where
         Self: Capture<CaptureAnonSval>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_serde(&self) -> Value
+    fn __private_capture_as_serde(&self) -> Option<Value>
     where
         Self: Capture<CaptureSerde>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_anon_as_serde(&self) -> Value
+    fn __private_capture_anon_as_serde(&self) -> Option<Value>
     where
         Self: Capture<CaptureAnonSerde>,
     {
         Capture::capture(self)
     }
 
-    fn __private_capture_as_error(&self) -> Value
+    fn __private_capture_as_error(&self) -> Option<Value>
     where
         Self: Capture<CaptureError>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_capture_as_span_id(&self) -> Option<Value>
+    where
+        Self: Capture<CaptureSpanId>,
     {
         Capture::capture(self)
     }
@@ -379,18 +389,6 @@ pub fn __private_with_future<F: Future>(
     let ambient = ambient::get();
 
     base_with_future(ambient, props, future)
-}
-
-#[track_caller]
-pub fn __private_span_start() -> Option<Timestamp> {
-    ambient::get().now()
-}
-
-#[track_caller]
-pub fn __private_span_end(start: Option<Timestamp>) -> impl Extent {
-    let end = ambient::get().now();
-
-    start.and_then(|start| end.map(|end| start..end))
 }
 
 #[repr(transparent)]

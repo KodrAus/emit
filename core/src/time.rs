@@ -1,4 +1,4 @@
-use core::{cmp, fmt, str, str::FromStr, time::Duration};
+use core::{cmp, fmt, ops::Range, str, str::FromStr, time::Duration};
 
 use crate::{
     empty::Empty,
@@ -127,6 +127,29 @@ impl<'a> Clock for dyn ErasedClock + 'a {
 impl<'a> Clock for dyn ErasedClock + Send + Sync + 'a {
     fn now(&self) -> Option<Timestamp> {
         (self as &(dyn ErasedClock + 'a)).now()
+    }
+}
+
+pub struct Timer<C> {
+    start: Option<Timestamp>,
+    clock: C,
+}
+
+impl<C: Clock> Timer<C> {
+    pub fn start(clock: C) -> Self {
+        Timer {
+            start: clock.now(),
+            clock,
+        }
+    }
+
+    pub fn stop(self) -> Option<Range<Timestamp>> {
+        let end = self.clock.now();
+
+        match (self.start, end) {
+            (Some(start), Some(end)) => Some(start..end),
+            _ => None,
+        }
     }
 }
 
