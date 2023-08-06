@@ -31,7 +31,7 @@ async fn main() {
     emitter.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::with(span_id: emit::new_span_id(), a)]
+#[emit::with(span_id: emit::new_span_id(), span_parent: emit::current_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     let extent = emit::start_timer();
 

@@ -18,21 +18,18 @@ pub use emit_core::{
 pub mod local_frame;
 
 pub use self::{
-    ctxt::Ctxt,
+    ctxt::{Ctxt, ErasedCtxt},
     event::Event,
-    filter::Filter,
-    id::{IdGen, SpanId, TraceId},
+    filter::{ErasedFilter, Filter},
+    id::{ErasedIdGen, IdGen, SpanId, TraceId},
     key::Key,
     level::Level,
     props::Props,
-    target::Target,
+    target::{ErasedTarget, Target},
     template::Template,
-    time::{Clock, Timer, Timestamp},
+    time::{Clock, ErasedClock, Timer, Timestamp},
     value::Value,
-};
-use self::{
-    ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdGen, target::ErasedTarget,
-    time::ErasedClock,
+    well_known::WellKnown,
 };
 
 mod macro_hooks;
@@ -127,8 +124,30 @@ pub fn new_span_id() -> Option<SpanId> {
 }
 
 #[track_caller]
+pub fn current_span_id() -> Option<SpanId> {
+    let mut span_id = None;
+
+    ambient().with_current(|ctxt| {
+        span_id = ctxt.span_id();
+    });
+
+    span_id
+}
+
+#[track_caller]
 pub fn new_trace_id() -> Option<TraceId> {
     ambient().new_trace_id()
+}
+
+#[track_caller]
+pub fn current_trace_id() -> Option<TraceId> {
+    let mut trace_id = None;
+
+    ambient().with_current(|ctxt| {
+        trace_id = ctxt.trace_id();
+    });
+
+    trace_id
 }
 
 #[cfg(feature = "std")]
