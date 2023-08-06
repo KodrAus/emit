@@ -1,4 +1,10 @@
-use core::{cmp, fmt, ops::Range, str, str::FromStr, time::Duration};
+use core::{
+    cmp, fmt,
+    ops::{Range, Sub},
+    str,
+    str::FromStr,
+    time::Duration,
+};
 
 use crate::{
     empty::Empty,
@@ -46,6 +52,22 @@ impl FromStr for Timestamp {
 impl ToValue for Timestamp {
     fn to_value(&self) -> Value {
         Value::capture_display(self)
+    }
+}
+
+impl Sub for Timestamp {
+    type Output = Duration;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0.sub(rhs.0)
+    }
+}
+
+impl<'a> Sub<&'a Timestamp> for Timestamp {
+    type Output = Duration;
+
+    fn sub(self, rhs: &'a Timestamp) -> Self::Output {
+        self.0.sub(rhs.0)
     }
 }
 
@@ -130,6 +152,7 @@ impl<'a> Clock for dyn ErasedClock + Send + Sync + 'a {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Timer<C> {
     start: Option<Timestamp>,
     clock: C,
@@ -143,13 +166,17 @@ impl<C: Clock> Timer<C> {
         }
     }
 
-    pub fn stop(self) -> Option<Range<Timestamp>> {
+    pub fn extent(&self) -> Option<Range<Timestamp>> {
         let end = self.clock.now();
 
         match (self.start, end) {
             (Some(start), Some(end)) => Some(start..end),
             _ => None,
         }
+    }
+
+    pub fn elapsed(&self) -> Option<Duration> {
+        self.extent().map(|ex| ex.end - ex.start)
     }
 }
 

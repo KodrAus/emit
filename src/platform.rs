@@ -1,10 +1,10 @@
-use crate::{id::IdSource, time::Clock, Timestamp};
+use crate::{id::IdGen, time::Clock, Timestamp};
 
 #[cfg(not(feature = "std"))]
 use emit_core::empty::Empty;
 
 #[cfg(feature = "std")]
-use emit_core::{id::ErasedIdSource, time::ErasedClock};
+use emit_core::{id::ErasedIdGen, time::ErasedClock};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;
@@ -21,7 +21,7 @@ type DefaultTime = system_clock::SystemClock;
 type DefaultTime = Empty;
 
 #[cfg(feature = "rng")]
-type DefaultIdSource = rng::Rng;
+type DefaultIdGen = rng::Rng;
 #[cfg(not(feature = "rng"))]
 type DefaultGenId = Empty;
 
@@ -34,9 +34,9 @@ pub(crate) struct Platform {
     #[cfg(feature = "std")]
     pub(crate) clock: Box<dyn ErasedClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
-    pub(crate) gen_id: DefaultIdSource,
+    pub(crate) gen_id: DefaultIdGen,
     #[cfg(feature = "std")]
-    pub(crate) id_src: Box<dyn ErasedIdSource + Send + Sync>,
+    pub(crate) id_gen: Box<dyn ErasedIdGen + Send + Sync>,
 }
 
 impl Default for Platform {
@@ -53,9 +53,9 @@ impl Platform {
             #[cfg(feature = "std")]
             clock: Box::new(DefaultTime::default()),
             #[cfg(not(feature = "std"))]
-            id_src: DefaultIdSource::default(),
+            id_gen: DefaultIdGen::default(),
             #[cfg(feature = "std")]
-            id_src: Box::new(DefaultIdSource::default()),
+            id_gen: Box::new(DefaultIdGen::default()),
         }
     }
 }
@@ -66,12 +66,12 @@ impl Clock for Platform {
     }
 }
 
-impl IdSource for Platform {
-    fn trace_id(&self) -> Option<crate::id::TraceId> {
-        self.id_src.trace_id()
+impl IdGen for Platform {
+    fn new_trace_id(&self) -> Option<crate::id::TraceId> {
+        self.id_gen.new_trace_id()
     }
 
-    fn span_id(&self) -> Option<crate::id::SpanId> {
-        self.id_src.span_id()
+    fn new_span_id(&self) -> Option<crate::id::SpanId> {
+        self.id_gen.new_span_id()
     }
 }

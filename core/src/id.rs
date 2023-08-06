@@ -145,48 +145,48 @@ const HEX: [u8; 16] = [
 
 pub struct ParseIdError {}
 
-pub trait IdSource {
-    fn trace_id(&self) -> Option<TraceId>;
-    fn span_id(&self) -> Option<SpanId>;
+pub trait IdGen {
+    fn new_trace_id(&self) -> Option<TraceId>;
+    fn new_span_id(&self) -> Option<SpanId>;
 }
 
-impl<'a, T: IdSource + ?Sized> IdSource for &'a T {
-    fn trace_id(&self) -> Option<TraceId> {
-        (**self).trace_id()
+impl<'a, T: IdGen + ?Sized> IdGen for &'a T {
+    fn new_trace_id(&self) -> Option<TraceId> {
+        (**self).new_trace_id()
     }
 
-    fn span_id(&self) -> Option<SpanId> {
-        (**self).span_id()
+    fn new_span_id(&self) -> Option<SpanId> {
+        (**self).new_span_id()
     }
 }
 
-impl<'a, T: IdSource> IdSource for Option<T> {
-    fn trace_id(&self) -> Option<TraceId> {
-        self.as_ref().and_then(|id| id.trace_id())
+impl<'a, T: IdGen> IdGen for Option<T> {
+    fn new_trace_id(&self) -> Option<TraceId> {
+        self.as_ref().and_then(|id| id.new_trace_id())
     }
 
-    fn span_id(&self) -> Option<SpanId> {
-        self.as_ref().and_then(|id| id.span_id())
+    fn new_span_id(&self) -> Option<SpanId> {
+        self.as_ref().and_then(|id| id.new_span_id())
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<'a, T: IdSource + ?Sized + 'a> IdSource for alloc::boxed::Box<T> {
-    fn trace_id(&self) -> Option<TraceId> {
-        (**self).trace_id()
+impl<'a, T: IdGen + ?Sized + 'a> IdGen for alloc::boxed::Box<T> {
+    fn new_trace_id(&self) -> Option<TraceId> {
+        (**self).new_trace_id()
     }
 
-    fn span_id(&self) -> Option<SpanId> {
-        (**self).span_id()
+    fn new_span_id(&self) -> Option<SpanId> {
+        (**self).new_span_id()
     }
 }
 
-impl IdSource for Empty {
-    fn trace_id(&self) -> Option<TraceId> {
+impl IdGen for Empty {
+    fn new_trace_id(&self) -> Option<TraceId> {
         None
     }
 
-    fn span_id(&self) -> Option<SpanId> {
+    fn new_span_id(&self) -> Option<SpanId> {
         None
     }
 }
@@ -195,51 +195,51 @@ mod internal {
     use super::{SpanId, TraceId};
 
     pub trait DispatchGenId {
-        fn dispatch_gen_trace(&self) -> Option<TraceId>;
-        fn dispatch_gen_span(&self) -> Option<SpanId>;
+        fn dispatch_new_trace_id(&self) -> Option<TraceId>;
+        fn dispatch_new_span_id(&self) -> Option<SpanId>;
     }
 
-    pub trait SealedIdGenerator {
-        fn erase_gen_id(&self) -> crate::internal::Erased<&dyn DispatchGenId>;
+    pub trait SealedIdGen {
+        fn erase_id_gen(&self) -> crate::internal::Erased<&dyn DispatchGenId>;
     }
 }
 
-pub trait ErasedIdSource: internal::SealedIdGenerator {}
+pub trait ErasedIdGen: internal::SealedIdGen {}
 
-impl<T: IdSource> ErasedIdSource for T {}
+impl<T: IdGen> ErasedIdGen for T {}
 
-impl<T: IdSource> internal::SealedIdGenerator for T {
-    fn erase_gen_id(&self) -> crate::internal::Erased<&dyn internal::DispatchGenId> {
+impl<T: IdGen> internal::SealedIdGen for T {
+    fn erase_id_gen(&self) -> crate::internal::Erased<&dyn internal::DispatchGenId> {
         crate::internal::Erased(self)
     }
 }
 
-impl<T: IdSource> internal::DispatchGenId for T {
-    fn dispatch_gen_trace(&self) -> Option<TraceId> {
-        self.trace_id()
+impl<T: IdGen> internal::DispatchGenId for T {
+    fn dispatch_new_trace_id(&self) -> Option<TraceId> {
+        self.new_trace_id()
     }
 
-    fn dispatch_gen_span(&self) -> Option<SpanId> {
-        self.span_id()
-    }
-}
-
-impl<'a> IdSource for dyn ErasedIdSource + 'a {
-    fn trace_id(&self) -> Option<TraceId> {
-        self.erase_gen_id().0.dispatch_gen_trace()
-    }
-
-    fn span_id(&self) -> Option<SpanId> {
-        self.erase_gen_id().0.dispatch_gen_span()
+    fn dispatch_new_span_id(&self) -> Option<SpanId> {
+        self.new_span_id()
     }
 }
 
-impl<'a> IdSource for dyn ErasedIdSource + Send + Sync + 'a {
-    fn trace_id(&self) -> Option<TraceId> {
-        (self as &(dyn ErasedIdSource + 'a)).trace_id()
+impl<'a> IdGen for dyn ErasedIdGen + 'a {
+    fn new_trace_id(&self) -> Option<TraceId> {
+        self.erase_id_gen().0.dispatch_new_trace_id()
     }
 
-    fn span_id(&self) -> Option<SpanId> {
-        (self as &(dyn ErasedIdSource + 'a)).span_id()
+    fn new_span_id(&self) -> Option<SpanId> {
+        self.erase_id_gen().0.dispatch_new_span_id()
+    }
+}
+
+impl<'a> IdGen for dyn ErasedIdGen + Send + Sync + 'a {
+    fn new_trace_id(&self) -> Option<TraceId> {
+        (self as &(dyn ErasedIdGen + 'a)).new_trace_id()
+    }
+
+    fn new_span_id(&self) -> Option<SpanId> {
+        (self as &(dyn ErasedIdGen + 'a)).new_span_id()
     }
 }

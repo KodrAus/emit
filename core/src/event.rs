@@ -8,7 +8,7 @@ use crate::{
     key::{Key, ToKey},
     props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
-    time::Timestamp,
+    time::{Clock, Timer, Timestamp},
     value::{ToValue, Value},
     well_known::{MSG_KEY, TPL_KEY, TSS_KEY, TS_KEY},
 };
@@ -51,6 +51,12 @@ impl Extent for Timestamp {
 impl Extent for Range<Timestamp> {
     fn extent(&self) -> Option<Range<Timestamp>> {
         Some(self.clone())
+    }
+}
+
+impl<C: Clock> Extent for Timer<C> {
+    fn extent(&self) -> Option<Range<Timestamp>> {
+        self.extent()
     }
 }
 

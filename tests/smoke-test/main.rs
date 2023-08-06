@@ -33,7 +33,7 @@ async fn main() {
 
 #[emit::with(span_id: emit::new_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
-    let timer = emit::start_timer();
+    let extent = emit::start_timer();
 
     let r = async {
         in_ctxt2(5).await;
@@ -56,8 +56,8 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     .await;
 
     match r {
-        Ok(_) => emit::info!(extent: timer.stop(), "in_ctxt finished"),
-        Err(ref err) => emit::warn!(extent: timer.stop(), "in_ctxt failed with {err}"),
+        Ok(_) => emit::info!(extent, "in_ctxt finished"),
+        Err(ref err) => emit::warn!(extent, "in_ctxt failed with {err}"),
     }
 
     r

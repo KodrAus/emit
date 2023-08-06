@@ -20,7 +20,7 @@ use std::error::Error;
 
 use crate::{
     base_emit, base_with, base_with_future,
-    ctxt::{LocalFrame, LocalFrameFuture},
+    local_frame::{LocalFrame, LocalFrameFuture},
     template::{Formatter, Part},
     Key,
 };

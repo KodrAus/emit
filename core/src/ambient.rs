@@ -3,7 +3,7 @@ use crate::{
     empty::Empty,
     event::Event,
     filter::Filter,
-    id::IdSource,
+    id::IdGen,
     props::Props,
     target::Target,
     time::{Clock, Timestamp},
@@ -164,21 +164,21 @@ impl<TTarget, TFilter, TCtxt, TClock: Clock, TGenId> Clock
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TClock, TGenId: IdSource> IdSource
+impl<TTarget, TFilter, TCtxt, TClock, TGenId: IdGen> IdGen
     for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
 {
-    fn trace_id(&self) -> Option<crate::id::TraceId> {
-        self.gen_id.trace_id()
+    fn new_trace_id(&self) -> Option<crate::id::TraceId> {
+        self.gen_id.new_trace_id()
     }
 
-    fn span_id(&self) -> Option<crate::id::SpanId> {
-        self.gen_id.span_id()
+    fn new_span_id(&self) -> Option<crate::id::SpanId> {
+        self.gen_id.new_span_id()
     }
 }
 
 #[cfg(not(feature = "std"))]
-pub fn get(
-) -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt, impl Clock, impl IdSource>> {
+pub fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt, impl Clock, impl IdGen>>
+{
     None::<&'static Ambient>
 }
 
@@ -188,7 +188,7 @@ mod std_support {
     use std::sync::OnceLock;
 
     use crate::{
-        ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdSource, target::ErasedTarget,
+        ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdGen, target::ErasedTarget,
         time::ErasedClock,
     };
 
@@ -254,17 +254,17 @@ mod std_support {
         }
     }
 
-    trait AmbientGenId: Any + ErasedIdSource + Send + Sync + 'static {
+    trait AmbientGenId: Any + ErasedIdGen + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
-        fn as_super(&self) -> &(dyn ErasedIdSource + Send + Sync + 'static);
+        fn as_super(&self) -> &(dyn ErasedIdGen + Send + Sync + 'static);
     }
 
-    impl<T: ErasedIdSource + Send + Sync + 'static> AmbientGenId for T {
+    impl<T: ErasedIdGen + Send + Sync + 'static> AmbientGenId for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
 
-        fn as_super(&self) -> &(dyn ErasedIdSource + Send + Sync + 'static) {
+        fn as_super(&self) -> &(dyn ErasedIdGen + Send + Sync + 'static) {
             self
         }
     }
@@ -296,7 +296,7 @@ mod std_support {
         TCtxt: Ctxt + Send + Sync + 'static,
         TCtxt::LocalFrame: Send + 'static,
         TClock: Clock + Send + Sync + 'static,
-        TGenId: IdSource + Send + Sync + 'static,
+        TGenId: IdGen + Send + Sync + 'static,
     {
         AMBIENT
             .set(Ambient {
@@ -325,7 +325,7 @@ mod std_support {
             impl Filter + Send + Sync + Copy,
             impl Ctxt + Send + Sync + Copy,
             impl Clock + Send + Sync + Copy,
-            impl IdSource + Send + Sync + Copy,
+            impl IdGen + Send + Sync + Copy,
         >,
     > {
         let ambient = AMBIENT.get()?;
