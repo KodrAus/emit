@@ -321,11 +321,11 @@ mod std_support {
 
     pub fn get() -> Option<
         Ambient<
-            &'static dyn ErasedTarget,
-            &'static dyn ErasedFilter,
-            &'static dyn ErasedCtxt,
-            &'static dyn ErasedClock,
-            &'static dyn ErasedIdGen,
+            &'static (dyn ErasedTarget + Send + Sync),
+            &'static (dyn ErasedFilter + Send + Sync),
+            &'static (dyn ErasedCtxt + Send + Sync),
+            &'static (dyn ErasedClock + Send + Sync),
+            &'static (dyn ErasedIdGen + Send + Sync),
         >,
     > {
         let ambient = AMBIENT.get()?;

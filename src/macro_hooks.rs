@@ -427,7 +427,7 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_with(props: impl Props) -> LocalFrame<impl Ctxt> {
+pub fn __private_with(props: impl Props) -> LocalFrame<impl Ctxt + Send + Sync + 'static> {
     let ambient = ambient::get();
 
     base_with(ambient, props)
