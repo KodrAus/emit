@@ -1,6 +1,6 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
-use std::time::Duration;
+use std::{io, time::Duration};
 
 #[macro_use]
 extern crate serde_derive;
@@ -25,25 +25,42 @@ async fn main() {
         )
         .init();
 
-    in_ctxt(78).await;
+    let _ = in_ctxt(78).await;
+    let _ = in_ctxt(71).await;
 
     emitter.blocking_flush(Duration::from_secs(5));
 }
 
 #[emit::with(span_id: emit::new_span_id(), a)]
-async fn in_ctxt(a: i32) {
+async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     let timer = emit::start_timer();
 
-    in_ctxt2(5).await;
+    let r = async {
+        in_ctxt2(5).await;
 
-    let work = Work {
-        id: 42,
-        description: "Some very important business".to_owned(),
-    };
+        let work = Work {
+            id: 42,
+            description: "Some very important business".to_owned(),
+        };
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
+        emit::info!("working on {#[emit::as_serde] work}");
 
-    emit::info!(ts: timer.stop(), "finished {#[emit::as_serde] work}");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        if a % 2 == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "`a` is even"))
+        }
+    }
+    .await;
+
+    match r {
+        Ok(_) => emit::info!(extent: timer.stop(), "in_ctxt finished"),
+        Err(ref err) => emit::warn!(extent: timer.stop(), "in_ctxt failed with {err}"),
+    }
+
+    r
 }
 
 #[emit::with(b, bx: 90)]

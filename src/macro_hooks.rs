@@ -1,11 +1,20 @@
 use core::{any::Any, fmt, future::Future, ops::ControlFlow};
 
 use emit_core::{
-    ambient, ctxt::Ctxt, filter::Filter, key::ToKey, props::Props, target::Target,
-    template::Template, time::Clock, value::Value,
+    ambient,
+    ctxt::Ctxt,
+    event::Extent,
+    filter::Filter,
+    id::{SpanId, TraceId},
+    key::ToKey,
+    level::Level,
+    props::Props,
+    target::Target,
+    template::Template,
+    time::Clock,
+    value::{ToValue, Value},
 };
 
-use emit_core::{event::Extent, id::SpanId, value::ToValue};
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -35,7 +44,7 @@ pub type WithDefault = CaptureDisplay;
 A marker trait used to allow a single implementation for capturing common unsized
 types for any sized capture strategy.
 */
-pub trait CaptureSized {}
+pub trait CaptureStr {}
 
 pub enum CaptureDisplay {}
 pub enum CaptureAnonDisplay {}
@@ -49,18 +58,23 @@ pub enum CaptureAnonSval {}
 pub enum CaptureSerde {}
 pub enum CaptureAnonSerde {}
 
+pub enum CaptureLevel {}
+
 pub enum CaptureError {}
 
 pub enum CaptureSpanId {}
+pub enum CaptureTraceId {}
 
-impl CaptureSized for CaptureDisplay {}
-impl CaptureSized for CaptureDebug {}
-impl CaptureSized for CaptureSval {}
-impl CaptureSized for CaptureSerde {}
-impl CaptureSized for CaptureError {}
-impl CaptureSized for CaptureSpanId {}
+impl CaptureStr for CaptureDisplay {}
+impl CaptureStr for CaptureDebug {}
+impl CaptureStr for CaptureSval {}
+impl CaptureStr for CaptureSerde {}
+impl CaptureStr for CaptureLevel {}
+impl CaptureStr for CaptureError {}
+impl CaptureStr for CaptureSpanId {}
+impl CaptureStr for CaptureTraceId {}
 
-impl<T: CaptureSized + ?Sized> Capture<T> for str {
+impl<T: CaptureStr + ?Sized> Capture<T> for str {
     fn capture(&self) -> Option<Value> {
         Some(Value::from(self))
     }
@@ -73,6 +87,30 @@ impl Capture<CaptureSpanId> for SpanId {
 }
 
 impl<T: Capture<CaptureSpanId>> Capture<CaptureSpanId> for Option<T> {
+    fn capture(&self) -> Option<Value> {
+        self.as_ref().and_then(|v| v.capture())
+    }
+}
+
+impl Capture<CaptureTraceId> for TraceId {
+    fn capture(&self) -> Option<Value> {
+        Some(self.to_value())
+    }
+}
+
+impl<T: Capture<CaptureTraceId>> Capture<CaptureTraceId> for Option<T> {
+    fn capture(&self) -> Option<Value> {
+        self.as_ref().and_then(|v| v.capture())
+    }
+}
+
+impl Capture<CaptureLevel> for Level {
+    fn capture(&self) -> Option<Value> {
+        Some(self.to_value())
+    }
+}
+
+impl<T: Capture<CaptureLevel>> Capture<CaptureLevel> for Option<T> {
     fn capture(&self) -> Option<Value> {
         self.as_ref().and_then(|v| v.capture())
     }
@@ -300,6 +338,13 @@ pub trait __PrivateCaptureHook {
         Capture::capture(self)
     }
 
+    fn __private_capture_as_level(&self) -> Option<Value>
+    where
+        Self: Capture<CaptureLevel>,
+    {
+        Capture::capture(self)
+    }
+
     fn __private_capture_as_error(&self) -> Option<Value>
     where
         Self: Capture<CaptureError>,
@@ -310,6 +355,13 @@ pub trait __PrivateCaptureHook {
     fn __private_capture_as_span_id(&self) -> Option<Value>
     where
         Self: Capture<CaptureSpanId>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_capture_as_trace_id(&self) -> Option<Value>
+    where
+        Self: Capture<CaptureTraceId>,
     {
         Capture::capture(self)
     }
