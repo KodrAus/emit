@@ -10,6 +10,10 @@ use emit_core::{
 
 use crate::platform::{DefaultCtxt, Platform};
 
+pub fn setup() -> Setup {
+    Setup::default()
+}
+
 type DefaultTarget = Empty;
 type DefaultFilter = Empty;
 
@@ -85,7 +89,7 @@ where
                 .with_filter(self.filter)
                 .with_ctxt(self.ctxt)
                 .with_clock(self.platform.clock)
-                .with_gen_id(self.platform.id_gen),
+                .with_id_gen(self.platform.id_gen),
         )
         .expect("already initialized");
 

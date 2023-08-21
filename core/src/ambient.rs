@@ -10,13 +10,13 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TClock = Empty, TGenId = Empty>
+pub struct Ambient<TTarget = Empty, TFilter = Empty, TCtxt = Empty, TClock = Empty, TIdGen = Empty>
 {
     target: TTarget,
     filter: TFilter,
     ctxt: TCtxt,
     clock: TClock,
-    gen_id: TGenId,
+    id_gen: TIdGen,
 }
 
 impl Default for Ambient {
@@ -32,23 +32,23 @@ impl Ambient {
             filter: Empty,
             ctxt: Empty,
             clock: Empty,
-            gen_id: Empty,
+            id_gen: Empty,
         }
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TClock, TGenId> Ambient<TTarget, TFilter, TCtxt, TClock, TGenId> {
+impl<TTarget, TFilter, TCtxt, TClock, TIdGen> Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen> {
     pub fn target(&self) -> &TTarget {
         &self.target
     }
 
-    pub fn with_target<U>(self, target: U) -> Ambient<U, TFilter, TCtxt, TClock, TGenId> {
+    pub fn with_target<U>(self, target: U) -> Ambient<U, TFilter, TCtxt, TClock, TIdGen> {
         Ambient {
             target,
             filter: self.filter,
             ctxt: self.ctxt,
             clock: self.clock,
-            gen_id: self.gen_id,
+            id_gen: self.id_gen,
         }
     }
 
@@ -56,13 +56,13 @@ impl<TTarget, TFilter, TCtxt, TClock, TGenId> Ambient<TTarget, TFilter, TCtxt, T
         &self.filter
     }
 
-    pub fn with_filter<U>(self, filter: U) -> Ambient<TTarget, U, TCtxt, TClock, TGenId> {
+    pub fn with_filter<U>(self, filter: U) -> Ambient<TTarget, U, TCtxt, TClock, TIdGen> {
         Ambient {
             target: self.target,
             filter,
             ctxt: self.ctxt,
             clock: self.clock,
-            gen_id: self.gen_id,
+            id_gen: self.id_gen,
         }
     }
 
@@ -70,13 +70,13 @@ impl<TTarget, TFilter, TCtxt, TClock, TGenId> Ambient<TTarget, TFilter, TCtxt, T
         &self.ctxt
     }
 
-    pub fn with_ctxt<U>(self, ctxt: U) -> Ambient<TTarget, TFilter, U, TClock, TGenId> {
+    pub fn with_ctxt<U>(self, ctxt: U) -> Ambient<TTarget, TFilter, U, TClock, TIdGen> {
         Ambient {
             target: self.target,
             filter: self.filter,
             ctxt,
             clock: self.clock,
-            gen_id: self.gen_id,
+            id_gen: self.id_gen,
         }
     }
 
@@ -84,33 +84,33 @@ impl<TTarget, TFilter, TCtxt, TClock, TGenId> Ambient<TTarget, TFilter, TCtxt, T
         &self.clock
     }
 
-    pub fn with_clock<U>(self, clock: U) -> Ambient<TTarget, TFilter, TCtxt, U, TGenId> {
+    pub fn with_clock<U>(self, clock: U) -> Ambient<TTarget, TFilter, TCtxt, U, TIdGen> {
         Ambient {
             target: self.target,
             filter: self.filter,
             ctxt: self.ctxt,
             clock,
-            gen_id: self.gen_id,
+            id_gen: self.id_gen,
         }
     }
 
-    pub fn gen_id(&self) -> &TGenId {
-        &self.gen_id
+    pub fn id_gen(&self) -> &TIdGen {
+        &self.id_gen
     }
 
-    pub fn with_gen_id<U>(self, gen_id: U) -> Ambient<TTarget, TFilter, TCtxt, TClock, U> {
+    pub fn with_id_gen<U>(self, id_gen: U) -> Ambient<TTarget, TFilter, TCtxt, TClock, U> {
         Ambient {
             target: self.target,
             filter: self.filter,
             ctxt: self.ctxt,
             clock: self.clock,
-            gen_id,
+            id_gen,
         }
     }
 }
 
-impl<TTarget: Target, TFilter, TCtxt, TClock, TGenId> Target
-    for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
+impl<TTarget: Target, TFilter, TCtxt, TClock, TIdGen> Target
+    for Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>
 {
     fn event<P: Props>(&self, evt: &Event<P>) {
         self.target.event(evt)
@@ -121,16 +121,16 @@ impl<TTarget: Target, TFilter, TCtxt, TClock, TGenId> Target
     }
 }
 
-impl<TTarget, TFilter: Filter, TCtxt, TClock, TGenId> Filter
-    for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
+impl<TTarget, TFilter: Filter, TCtxt, TClock, TIdGen> Filter
+    for Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>
 {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
         self.filter.matches(evt)
     }
 }
 
-impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TGenId> Ctxt
-    for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
+impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TIdGen> Ctxt
+    for Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>
 {
     type CurrentProps = TCtxt::CurrentProps;
     type LocalFrame = TCtxt::LocalFrame;
@@ -156,29 +156,31 @@ impl<TTarget, TFilter, TCtxt: Ctxt, TClock, TGenId> Ctxt
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TClock: Clock, TGenId> Clock
-    for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
+impl<TTarget, TFilter, TCtxt, TClock: Clock, TIdGen> Clock
+    for Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>
 {
     fn now(&self) -> Option<Timestamp> {
         self.clock.now()
     }
 }
 
-impl<TTarget, TFilter, TCtxt, TClock, TGenId: IdGen> IdGen
-    for Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>
+impl<TTarget, TFilter, TCtxt, TClock, TIdGen: IdGen> IdGen
+    for Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>
 {
     fn new_trace_id(&self) -> Option<crate::id::TraceId> {
-        self.gen_id.new_trace_id()
+        self.id_gen.new_trace_id()
     }
 
     fn new_span_id(&self) -> Option<crate::id::SpanId> {
-        self.gen_id.new_span_id()
+        self.id_gen.new_span_id()
     }
 }
 
 #[cfg(not(feature = "std"))]
-pub fn get() -> Option<&'static Ambient<impl Target, impl Filter, impl Ctxt, impl Clock, impl IdGen>>
-{
+pub type Get = Option<&'static Ambient>;
+
+#[cfg(not(feature = "std"))]
+pub fn get() -> Get {
     None::<&'static Ambient>
 }
 
@@ -279,15 +281,15 @@ mod std_support {
         >,
     > = OnceLock::new();
 
-    pub fn init<TTarget, TFilter, TCtxt, TClock, TGenId>(
-        ambient: Ambient<TTarget, TFilter, TCtxt, TClock, TGenId>,
+    pub fn init<TTarget, TFilter, TCtxt, TClock, TIdGen>(
+        ambient: Ambient<TTarget, TFilter, TCtxt, TClock, TIdGen>,
     ) -> Option<
         Ambient<
             &'static TTarget,
             &'static TFilter,
             &'static TCtxt,
             &'static TClock,
-            &'static TGenId,
+            &'static TIdGen,
         >,
     >
     where
@@ -296,7 +298,7 @@ mod std_support {
         TCtxt: Ctxt + Send + Sync + 'static,
         TCtxt::LocalFrame: Send + 'static,
         TClock: Clock + Send + Sync + 'static,
-        TGenId: IdGen + Send + Sync + 'static,
+        TIdGen: IdGen + Send + Sync + 'static,
     {
         AMBIENT
             .set(Ambient {
@@ -304,7 +306,7 @@ mod std_support {
                 filter: Box::new(ambient.filter),
                 ctxt: Box::new(ambient.ctxt),
                 clock: Box::new(ambient.clock),
-                gen_id: Box::new(ambient.gen_id),
+                id_gen: Box::new(ambient.id_gen),
             })
             .ok()?;
 
@@ -315,11 +317,11 @@ mod std_support {
             filter: ambient.filter.as_any().downcast_ref()?,
             ctxt: ambient.ctxt.as_any().downcast_ref()?,
             clock: ambient.clock.as_any().downcast_ref()?,
-            gen_id: ambient.gen_id.as_any().downcast_ref()?,
+            id_gen: ambient.id_gen.as_any().downcast_ref()?,
         })
     }
 
-    pub fn get() -> Option<
+    pub type Get = Option<
         Ambient<
             &'static (dyn ErasedTarget + Send + Sync),
             &'static (dyn ErasedFilter + Send + Sync),
@@ -327,7 +329,9 @@ mod std_support {
             &'static (dyn ErasedClock + Send + Sync),
             &'static (dyn ErasedIdGen + Send + Sync),
         >,
-    > {
+    >;
+
+    pub fn get() -> Get {
         let ambient = AMBIENT.get()?;
 
         Some(Ambient {
@@ -335,7 +339,7 @@ mod std_support {
             filter: ambient.filter.as_super(),
             ctxt: ambient.ctxt.as_super(),
             clock: ambient.clock.as_super(),
-            gen_id: ambient.gen_id.as_super(),
+            id_gen: ambient.id_gen.as_super(),
         })
     }
 }

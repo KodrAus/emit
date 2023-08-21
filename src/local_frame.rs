@@ -1,11 +1,11 @@
-use emit_core::{ctxt::Ctxt, props::Props};
-use std::{
+use core::{
     future::Future,
     marker::PhantomData,
     mem,
     pin::Pin,
     task::{Context, Poll},
 };
+use emit_core::{ctxt::Ctxt, props::Props};
 
 pub struct LocalFrame<C: Ctxt> {
     scope: mem::ManuallyDrop<C::LocalFrame>,

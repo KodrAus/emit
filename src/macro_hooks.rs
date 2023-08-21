@@ -3,7 +3,7 @@ use core::{any::Any, fmt, future::Future, ops::ControlFlow};
 use emit_core::{
     ambient,
     ctxt::Ctxt,
-    event::Extent,
+    extent::Extent,
     filter::Filter,
     id::{SpanId, TraceId},
     key::ToKey,

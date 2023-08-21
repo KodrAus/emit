@@ -4,11 +4,11 @@ use core::{
 };
 
 use crate::{
-    empty::Empty,
+    extent::Extent,
     key::{Key, ToKey},
     props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
-    time::{Clock, Timer, Timestamp},
+    time::Timestamp,
     value::{ToValue, Value},
     well_known::{MSG_KEY, TPL_KEY, TSS_KEY, TS_KEY},
 };
@@ -18,52 +18,6 @@ pub struct Event<'a, P> {
     extent: Option<Range<Timestamp>>,
     tpl: Template<'a>,
     props: P,
-}
-
-pub trait Extent {
-    fn extent(&self) -> Option<Range<Timestamp>>;
-}
-
-impl<'a, T: Extent + ?Sized> Extent for &'a T {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        (**self).extent()
-    }
-}
-
-impl Extent for Empty {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        None
-    }
-}
-
-impl<'a, P> Extent for Event<'a, P> {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        self.extent().cloned()
-    }
-}
-
-impl Extent for Timestamp {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        Some(*self..*self)
-    }
-}
-
-impl Extent for Range<Timestamp> {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        Some(self.clone())
-    }
-}
-
-impl<C: Clock> Extent for Timer<C> {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        self.extent()
-    }
-}
-
-impl<T: Extent> Extent for Option<T> {
-    fn extent(&self) -> Option<Range<Timestamp>> {
-        self.as_ref().and_then(|ts| ts.extent())
-    }
 }
 
 impl<'a, P: Props> fmt::Debug for Event<'a, P> {

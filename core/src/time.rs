@@ -119,16 +119,16 @@ mod internal {
         fn dispatch_now(&self) -> Option<Timestamp>;
     }
 
-    pub trait SealedTime {
+    pub trait SealedClock {
         fn erase_clock(&self) -> crate::internal::Erased<&dyn DispatchClock>;
     }
 }
 
-pub trait ErasedClock: internal::SealedTime {}
+pub trait ErasedClock: internal::SealedClock {}
 
 impl<T: Clock> ErasedClock for T {}
 
-impl<T: Clock> internal::SealedTime for T {
+impl<T: Clock> internal::SealedClock for T {
     fn erase_clock(&self) -> crate::internal::Erased<&dyn internal::DispatchClock> {
         crate::internal::Erased(self)
     }
@@ -189,7 +189,7 @@ fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
 
     Licensed under Apache 2.0
     */
-    
+
     if fmt.len() > 30 || fmt.len() < 19 {
         unimplemented!("invalid len {}", fmt.len());
     }

@@ -18,16 +18,16 @@ pub use emit_core::{
 pub mod local_frame;
 
 pub use self::{
-    ctxt::{Ctxt, ErasedCtxt},
+    ctxt::Ctxt,
     event::Event,
-    filter::{ErasedFilter, Filter},
-    id::{ErasedIdGen, IdGen, SpanId, TraceId},
+    filter::Filter,
+    id::{IdGen, SpanId, TraceId},
     key::Key,
     level::Level,
     props::Props,
-    target::{ErasedTarget, Target},
+    target::Target,
     template::Template,
-    time::{Clock, ErasedClock, Timer, Timestamp},
+    time::{Clock, Timer, Timestamp},
     value::Value,
     well_known::WellKnown,
 };
@@ -89,45 +89,30 @@ pub fn emit(evt: &Event<impl Props>) {
     );
 }
 
-pub type Ambient = Option<
-    emit_core::ambient::Ambient<
-        &'static (dyn ErasedTarget + Send + Sync),
-        &'static (dyn ErasedFilter + Send + Sync),
-        &'static (dyn ErasedCtxt + Send + Sync),
-        &'static (dyn ErasedClock + Send + Sync),
-        &'static (dyn ErasedIdGen + Send + Sync),
-    >,
->;
+pub type With = LocalFrame<emit_core::ambient::Get>;
 
-pub type With = LocalFrame<Ambient>;
-
-pub type StartTimer = Timer<Ambient>;
-
-#[track_caller]
-pub fn ambient() -> Ambient {
-    emit_core::ambient::get()
-}
+pub type StartTimer = Timer<emit_core::ambient::Get>;
 
 #[track_caller]
 pub fn with(props: impl Props) -> With {
-    base_with(ambient(), props)
+    base_with(emit_core::ambient::get(), props)
 }
 
 #[track_caller]
 pub fn start_timer() -> StartTimer {
-    Timer::start(ambient())
+    Timer::start(emit_core::ambient::get())
 }
 
 #[track_caller]
 pub fn new_span_id() -> Option<SpanId> {
-    ambient().new_span_id()
+    emit_core::ambient::get().new_span_id()
 }
 
 #[track_caller]
 pub fn current_span_id() -> Option<SpanId> {
     let mut span_id = None;
 
-    ambient().with_current(|ctxt| {
+    emit_core::ambient::get().with_current(|ctxt| {
         span_id = ctxt.span_id();
     });
 
@@ -136,14 +121,14 @@ pub fn current_span_id() -> Option<SpanId> {
 
 #[track_caller]
 pub fn new_trace_id() -> Option<TraceId> {
-    ambient().new_trace_id()
+    emit_core::ambient::get().new_trace_id()
 }
 
 #[track_caller]
 pub fn current_trace_id() -> Option<TraceId> {
     let mut trace_id = None;
 
-    ambient().with_current(|ctxt| {
+    emit_core::ambient::get().with_current(|ctxt| {
         trace_id = ctxt.trace_id();
     });
 

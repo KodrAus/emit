@@ -9,6 +9,7 @@ pub mod ambient;
 pub mod ctxt;
 pub mod empty;
 pub mod event;
+pub mod extent;
 pub mod filter;
 pub mod id;
 pub mod key;
