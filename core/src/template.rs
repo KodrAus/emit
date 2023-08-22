@@ -410,6 +410,9 @@ enum PartKind<'a> {
     },
 }
 
+unsafe impl<'a> Send for PartKind<'a> {}
+unsafe impl<'a> Sync for PartKind<'a> {}
+
 impl<'a> Clone for PartKind<'a> {
     fn clone(&self) -> Self {
         match self {

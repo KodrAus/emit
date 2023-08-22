@@ -1,9 +1,11 @@
-use core::{borrow::Borrow, fmt, hash};
+use core::{borrow::Borrow, fmt, hash, marker::PhantomData};
 
-#[derive(Clone)]
 pub struct Key<'k> {
-    value_ref: &'k str,
+    value: *const str,
     value_static: Option<&'static str>,
+    #[cfg(feature = "alloc")]
+    value_owned: Option<Box<str>>,
+    _marker: PhantomData<&'k str>,
 }
 
 impl<'k> fmt::Debug for Key<'k> {
@@ -18,30 +20,85 @@ impl<'k> fmt::Display for Key<'k> {
     }
 }
 
-impl<'k> Key<'k> {
-    pub fn new(k: &'static str) -> Key<'k> {
-        Key {
-            value_ref: k,
-            value_static: Some(k),
+unsafe impl<'k> Send for Key<'k> {}
+unsafe impl<'k> Sync for Key<'k> {}
+
+impl<'k> Clone for Key<'k> {
+    fn clone(&self) -> Self {
+        match self {
+            #[cfg(feature = "alloc")]
+            Key {
+                value_static,
+                value_owned,
+                value,
+                _marker,
+            } => match value_owned {
+                Some(value_owned) => {
+                    let value_owned = value_owned.clone();
+
+                    Key {
+                        value: &*value_owned as *const str,
+                        value_owned: Some(value_owned),
+                        value_static: None,
+                        _marker: PhantomData,
+                    }
+                }
+                None => Key {
+                    value: *value,
+                    value_static: *value_static,
+                    value_owned: None,
+                    _marker: PhantomData,
+                },
+            },
+            #[cfg(not(feature = "alloc"))]
+            Key {
+                value,
+                value_static,
+                _marker,
+            } => Key {
+                value: *value,
+                value_static: *value_static,
+                _marker: PhantomData,
+            },
         }
     }
+}
 
+impl Key<'static> {
+    pub fn new(k: &'static str) -> Self {
+        Key {
+            value: k as *const str,
+            value_static: Some(k),
+            #[cfg(feature = "alloc")]
+            value_owned: None,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'k> Key<'k> {
     pub fn new_ref(k: &'k str) -> Key<'k> {
         Key {
-            value_ref: k,
+            value: k as *const str,
             value_static: None,
+            #[cfg(feature = "alloc")]
+            value_owned: None,
+            _marker: PhantomData,
         }
     }
 
     pub fn by_ref<'b>(&'b self) -> Key<'b> {
         Key {
-            value_ref: self.value_ref,
+            value: self.value,
             value_static: self.value_static,
+            #[cfg(feature = "alloc")]
+            value_owned: None,
+            _marker: PhantomData,
         }
     }
 
     pub fn as_str(&self) -> &str {
-        self.value_ref
+        unsafe { &(*self.value) }
     }
 
     pub fn as_static_str(&self) -> Option<&'static str> {
@@ -141,124 +198,27 @@ impl ToKey for str {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::borrow::{Cow, ToOwned};
-
     use super::*;
 
-    #[derive(Clone)]
-    pub struct OwnedKey(Cow<'static, str>);
+    impl Key<'static> {
+        pub fn new_owned(key: impl Into<Box<str>>) -> Self {
+            let value = key.into();
+
+            Key {
+                value: &*value as *const str,
+                value_static: None,
+                value_owned: Some(value),
+                _marker: PhantomData,
+            }
+        }
+    }
 
     impl<'k> Key<'k> {
-        pub fn to_owned(&self) -> OwnedKey {
+        pub fn to_owned(&self) -> Key<'static> {
             match self.value_static {
-                Some(key) => OwnedKey(Cow::Borrowed(key)),
-                None => OwnedKey(Cow::Owned(self.value_ref.to_owned())),
+                Some(key) => Key::new(key),
+                None => Key::new_owned(self.as_str()),
             }
-        }
-    }
-
-    impl OwnedKey {
-        pub fn by_ref<'k>(&'k self) -> Key<'k> {
-            match self.0 {
-                Cow::Borrowed(key) => Key::new(key),
-                Cow::Owned(ref key) => Key::new_ref(key),
-            }
-        }
-
-        pub fn as_str(&self) -> &str {
-            &self.0
-        }
-    }
-
-    impl<'k> From<Key<'k>> for OwnedKey {
-        fn from(key: Key<'k>) -> Self {
-            key.to_owned()
-        }
-    }
-
-    impl<'k> From<&'k OwnedKey> for Key<'k> {
-        fn from(key: &'k OwnedKey) -> Self {
-            key.by_ref()
-        }
-    }
-
-    impl ToKey for OwnedKey {
-        fn to_key(&self) -> Key {
-            self.by_ref()
-        }
-    }
-
-    impl hash::Hash for OwnedKey {
-        fn hash<H: hash::Hasher>(&self, state: &mut H) {
-            self.as_str().hash(state)
-        }
-    }
-
-    impl PartialEq<OwnedKey> for OwnedKey {
-        fn eq(&self, other: &OwnedKey) -> bool {
-            self.as_str() == other.as_str()
-        }
-    }
-
-    impl Eq for OwnedKey {}
-
-    impl PartialEq<str> for OwnedKey {
-        fn eq(&self, other: &str) -> bool {
-            self.as_str() == other
-        }
-    }
-
-    impl PartialEq<OwnedKey> for str {
-        fn eq(&self, other: &OwnedKey) -> bool {
-            self == other.as_str()
-        }
-    }
-
-    impl<'a> PartialEq<&'a str> for OwnedKey {
-        fn eq(&self, other: &&'a str) -> bool {
-            self.as_str() == *other
-        }
-    }
-
-    impl<'a> PartialEq<OwnedKey> for &'a str {
-        fn eq(&self, other: &OwnedKey) -> bool {
-            *self == other.as_str()
-        }
-    }
-
-    impl<'a> PartialEq<Key<'a>> for OwnedKey {
-        fn eq(&self, other: &Key<'a>) -> bool {
-            self.as_str() == other
-        }
-    }
-
-    impl<'a> PartialEq<OwnedKey> for Key<'a> {
-        fn eq(&self, other: &OwnedKey) -> bool {
-            self == other.as_str()
-        }
-    }
-
-    impl PartialOrd<OwnedKey> for OwnedKey {
-        fn partial_cmp(&self, other: &OwnedKey) -> Option<core::cmp::Ordering> {
-            self.as_str().partial_cmp(other.as_str())
-        }
-    }
-
-    impl Ord for OwnedKey {
-        fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-            self.as_str().cmp(other.as_str())
-        }
-    }
-
-    impl Borrow<str> for OwnedKey {
-        fn borrow(&self) -> &str {
-            self.as_str()
-        }
-    }
-
-    impl AsRef<str> for OwnedKey {
-        fn as_ref(&self) -> &str {
-            self.as_str()
         }
     }
 }
