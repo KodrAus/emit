@@ -1,21 +1,17 @@
-use core::{
-    fmt,
-    ops::{ControlFlow, Range},
-};
+use core::fmt;
 
 use crate::{
-    extent::Extent,
+    extent::{Extent, ToExtent},
     key::{Key, ToKey},
-    props::{ByRef, Chain, ErasedProps, Props},
+    props::{ByRef, Chain, ControlFlow, ErasedProps, Props},
     template::{Render, Template},
-    time::Timestamp,
     value::{ToValue, Value},
-    well_known::{MSG_KEY, TPL_KEY, TSS_KEY, TS_KEY},
+    well_known::{MSG_KEY, TPL_KEY},
 };
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
-    extent: Option<Range<Timestamp>>,
+    extent: Extent,
     tpl: Template<'a>,
     props: P,
 }
@@ -35,16 +31,16 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 }
 
 impl<'a, P> Event<'a, P> {
-    pub fn new(extent: impl Extent, tpl: Template<'a>, props: P) -> Self {
+    pub fn new(extent: impl ToExtent, tpl: Template<'a>, props: P) -> Self {
         Event {
-            extent: extent.extent(),
+            extent: extent.to_extent(),
             tpl,
             props,
         }
     }
 
-    pub fn extent(&self) -> Option<&Range<Timestamp>> {
-        self.extent.as_ref()
+    pub fn extent(&self) -> &Extent {
+        &self.extent
     }
 }
 
@@ -65,30 +61,8 @@ impl<'a, P: Props> Event<'a, P> {
         }
     }
 
-    pub fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) {
-        let mut reserved = || {
-            if let Some(ref ts) = self.extent {
-                if ts.start != ts.end {
-                    for_each(TSS_KEY.to_key(), ts.start.to_value())?;
-                }
-
-                for_each(TS_KEY.to_key(), ts.end.to_value())?;
-            }
-
-            for_each(TPL_KEY.to_key(), self.tpl.to_value())?;
-            for_each(MSG_KEY.to_key(), Msg::new_ref(self).to_value())?;
-
-            ControlFlow::Continue(())
-        };
-
-        if let ControlFlow::Break(()) = reserved() {
-            return;
-        }
-
-        self.props.for_each(for_each);
+    pub fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(&'kv self, for_each: F) {
+        let _ = Props::for_each(self, for_each);
     }
 
     pub fn props(&self) -> &P {
@@ -112,9 +86,23 @@ impl<'a, P: Props> Event<'a, P> {
     }
 }
 
+impl<'a, P> ToExtent for Event<'a, P> {
+    fn to_extent(&self) -> Extent {
+        self.extent.clone()
+    }
+}
+
 impl<'a, P: Props> Props for Event<'a, P> {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(&'kv self, for_each: F) {
-        self.for_each(for_each)
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow {
+        self.extent.for_each(&mut for_each)?;
+
+        for_each(TPL_KEY.to_key(), self.tpl.to_value())?;
+        for_each(MSG_KEY.to_key(), Msg::new_ref(self).to_value())?;
+
+        self.props.for_each(for_each)
     }
 }
 

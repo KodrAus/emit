@@ -1,13 +1,8 @@
-use core::{
-    cmp, fmt,
-    ops::{Range, Sub},
-    str,
-    str::FromStr,
-    time::Duration,
-};
+use core::{cmp, fmt, ops::Sub, str, str::FromStr, time::Duration};
 
 use crate::{
     empty::Empty,
+    extent::Extent,
     value::{ToValue, Value},
 };
 
@@ -166,17 +161,13 @@ impl<C: Clock> Timer<C> {
         }
     }
 
-    pub fn extent(&self) -> Option<Range<Timestamp>> {
+    pub fn extent(&self) -> Extent {
         let end = self.clock.now();
 
         match (self.start, end) {
-            (Some(start), Some(end)) => Some(start..end),
-            _ => None,
+            (Some(start), Some(end)) => Extent::span(start..end),
+            _ => Extent::empty(),
         }
-    }
-
-    pub fn elapsed(&self) -> Option<Duration> {
-        self.extent().map(|ex| ex.end - ex.start)
     }
 }
 

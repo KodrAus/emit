@@ -6,16 +6,17 @@ use crate::{
     value::Value,
 };
 
-pub const TS_KEY: &'static str = "#ts";
-pub const TSS_KEY: &'static str = "#tss";
+pub const TIMESTAMP_KEY: &'static str = "#ts";
+pub const TIMESTAMP_START_KEY: &'static str = "#tss";
 pub const MSG_KEY: &'static str = "#msg";
 pub const TPL_KEY: &'static str = "#tpl";
 
 pub const ERR_KEY: &'static str = "err";
 pub const LVL_KEY: &'static str = "lvl";
-pub const SPAN_ID_KEY: &'static str = "span_id";
-pub const SPAN_PARENT_KEY: &'static str = "span_parent";
-pub const TRACE_ID_KEY: &'static str = "trace_id";
+pub const MODULE_KEY: &'static str = "mod";
+pub const TRACE_ID_KEY: &'static str = "tr";
+pub const SPAN_ID_KEY: &'static str = "sp";
+pub const SPAN_PARENT_KEY: &'static str = "spp";
 
 pub const fn is_reserved(key: &str) -> bool {
     let key = key.as_bytes();
@@ -30,16 +31,20 @@ pub const fn is_reserved(key: &str) -> bool {
 }
 
 pub trait WellKnown: Props {
-    fn ts(&self) -> Option<Timestamp> {
-        self.get(TS_KEY)?.to_timestamp()
+    fn timestamp(&self) -> Option<Timestamp> {
+        self.get(TIMESTAMP_KEY)?.to_timestamp()
     }
 
-    fn tss(&self) -> Option<Timestamp> {
-        self.get(TSS_KEY)?.to_timestamp()
+    fn timestamp_start(&self) -> Option<Timestamp> {
+        self.get(TIMESTAMP_START_KEY)?.to_timestamp()
     }
 
     fn lvl(&self) -> Option<Level> {
         self.get(LVL_KEY)?.to_level()
+    }
+
+    fn module(&self) -> Option<Value> {
+        self.get(MODULE_KEY)
     }
 
     fn trace_id(&self) -> Option<TraceId> {
