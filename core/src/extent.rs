@@ -49,6 +49,14 @@ impl Extent {
     pub fn is_empty(&self) -> bool {
         self.0.is_none()
     }
+
+    pub fn or_else<T: ToExtent>(&self, or_else: impl FnOnce() -> T) -> Self {
+        if self.0.is_none() {
+            or_else().to_extent()
+        } else {
+            self.clone()
+        }
+    }
 }
 
 impl From<Timestamp> for Extent {

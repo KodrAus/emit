@@ -60,6 +60,12 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         quote!(#level_ident: emit::Level::#level_value),
     )?)?;
 
+    // Add the location as a property
+    let loc_ident = Ident::new(emit_core::well_known::LOCATION_KEY, Span::call_site());
+    props.push(&syn::parse2::<FieldValue>(
+        quote!(#loc_ident: emit::__private::caller()),
+    )?)?;
+
     // Ensure props don't use reserved identifiers
     for prop in props.iter() {
         props::ensure_not_reserved(&prop.label, prop.span())?;

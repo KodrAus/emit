@@ -1,9 +1,8 @@
-use core::{any::Any, fmt, future::Future, ops::ControlFlow};
+use core::{any::Any, fmt, future::Future, ops::ControlFlow, panic::Location};
 
 use emit_core::{
     ambient,
     ctxt::Ctxt,
-    extent::Extent,
     filter::Filter,
     id::{SpanId, TraceId},
     key::ToKey,
@@ -421,11 +420,7 @@ pub fn __private_emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        extent
-            .to_extent()
-            .range()
-            .cloned()
-            .or_else(|| ambient.now().map(|ts| ts..ts)),
+        extent.to_extent().or_else(|| ambient.now()),
         tpl,
         props,
     );
@@ -446,6 +441,11 @@ pub fn __private_with_future<F: Future>(
     let ambient = ambient::get();
 
     base_with_future(ambient, props, future)
+}
+
+#[track_caller]
+pub fn caller() -> &'static Location<'static> {
+    Location::caller()
 }
 
 #[repr(transparent)]

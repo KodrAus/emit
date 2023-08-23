@@ -82,10 +82,7 @@ pub fn emit(evt: &Event<impl Props>) {
         ambient,
         ambient,
         ambient,
-        evt.extent()
-            .range()
-            .cloned()
-            .or_else(|| ambient.now().map(|ts| ts..ts)),
+        evt.extent().or_else(|| ambient.now()),
         tpl,
         props,
     );

@@ -98,27 +98,13 @@ impl<K: ToKey, V: ToValue> Props for (K, V) {
     }
 }
 
-// TODO: Make this based on `Props`
-impl<K: ToKey, V: ToValue> Props for [(K, V)] {
+impl<P: Props> Props for [P] {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow {
-        for (k, v) in self {
-            for_each(k.to_key(), v.to_value())?;
-        }
-
-        Continue(())
-    }
-}
-
-impl<K: ToKey, V: ToValue> Props for [Option<(K, V)>] {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow {
-        for (k, v) in self.iter().filter_map(|kv| kv.as_ref()) {
-            for_each(k.to_key(), v.to_value())?;
+        for p in self {
+            p.for_each(&mut for_each)?;
         }
 
         Continue(())

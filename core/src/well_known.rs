@@ -13,7 +13,7 @@ pub const TPL_KEY: &'static str = "#tpl";
 
 pub const ERR_KEY: &'static str = "err";
 pub const LVL_KEY: &'static str = "lvl";
-pub const MODULE_KEY: &'static str = "mod";
+pub const LOCATION_KEY: &'static str = "loc";
 pub const TRACE_ID_KEY: &'static str = "trace_id";
 pub const SPAN_ID_KEY: &'static str = "span_id";
 pub const SPAN_PARENT_KEY: &'static str = "span_parent";
@@ -43,8 +43,8 @@ pub trait WellKnown: Props {
         self.get(LVL_KEY)?.to_level()
     }
 
-    fn module(&self) -> Option<Value> {
-        self.get(MODULE_KEY)
+    fn location(&self) -> Option<Value> {
+        self.get(LOCATION_KEY)
     }
 
     fn trace_id(&self) -> Option<TraceId> {
