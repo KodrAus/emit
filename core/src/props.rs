@@ -90,8 +90,11 @@ impl<'a, P: Props + ?Sized + 'a> Props for alloc::boxed::Box<P> {
 }
 
 impl<K: ToKey, V: ToValue> Props for (K, V) {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(&'kv self, mut for_each: F) {
-        for_each(self.0.to_key(), self.1.to_value());
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow {
+        for_each(self.0.to_key(), self.1.to_value())
     }
 }
 
@@ -135,7 +138,12 @@ where
 }
 
 impl Props for Empty {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(&'kv self, _: F) {}
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
+        &'kv self,
+        _: F,
+    ) -> ControlFlow {
+        Continue(())
+    }
 }
 
 pub struct Chain<T, U> {

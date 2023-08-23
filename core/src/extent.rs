@@ -6,34 +6,80 @@ use crate::{
     value::{ToValue, Value},
     well_known::{TIMESTAMP_KEY, TIMESTAMP_START_KEY},
 };
-use core::ops::Range;
+use core::{fmt, ops::Range};
 
 #[derive(Debug, Clone)]
 pub struct Extent(Option<Range<Timestamp>>);
 
 impl Extent {
-    pub fn point(ts: Timestamp) -> Self {
-        Extent(Some(ts..ts))
+    pub fn new(ts: Range<Timestamp>) -> Self {
+        Extent(Some(ts))
     }
 
-    pub fn span(ts: Range<Timestamp>) -> Self {
-        Extent(Some(ts))
+    pub fn point(ts: Timestamp) -> Self {
+        Extent(Some(ts..ts))
     }
 
     pub fn empty() -> Self {
         Extent(None)
     }
 
+    pub fn range(&self) -> Option<&Range<Timestamp>> {
+        self.0.as_ref()
+    }
+
     pub fn to_point(&self) -> Option<&Timestamp> {
         self.0.as_ref().map(|ts| &ts.end)
     }
 
-    pub fn to_span(&self) -> Option<&Range<Timestamp>> {
-        self.0.as_ref().filter(|ts| ts.start != ts.end)
+    pub fn is_point(&self) -> bool {
+        self.0
+            .as_ref()
+            .map(|ts| ts.start == ts.end)
+            .unwrap_or(false)
+    }
+
+    pub fn is_span(&self) -> bool {
+        self.0
+            .as_ref()
+            .map(|ts| ts.start != ts.end)
+            .unwrap_or(false)
     }
 
     pub fn is_empty(&self) -> bool {
         self.0.is_none()
+    }
+}
+
+impl From<Timestamp> for Extent {
+    fn from(value: Timestamp) -> Self {
+        Extent::point(value)
+    }
+}
+
+impl From<Range<Timestamp>> for Extent {
+    fn from(value: Range<Timestamp>) -> Self {
+        Extent::new(value)
+    }
+}
+
+impl From<Option<Range<Timestamp>>> for Extent {
+    fn from(value: Option<Range<Timestamp>>) -> Self {
+        Extent(value)
+    }
+}
+
+impl fmt::Display for Extent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.0 {
+            Some(ref ts) if ts.start != ts.end => {
+                fmt::Display::fmt(&ts.start, f)?;
+                f.write_str("..")?;
+                fmt::Display::fmt(&ts.end, f)
+            }
+            Some(ref ts) => fmt::Display::fmt(&ts.end, f),
+            None => Ok(()),
+        }
     }
 }
 
@@ -78,6 +124,12 @@ impl<T: ToExtent> ToExtent for Option<T> {
     }
 }
 
+impl ToExtent for Extent {
+    fn to_extent(&self) -> Extent {
+        self.clone()
+    }
+}
+
 impl ToExtent for Timestamp {
     fn to_extent(&self) -> Extent {
         Extent::point(*self)
@@ -86,7 +138,7 @@ impl ToExtent for Timestamp {
 
 impl ToExtent for Range<Timestamp> {
     fn to_extent(&self) -> Extent {
-        Extent::span(self.clone())
+        Extent::new(self.clone())
     }
 }
 

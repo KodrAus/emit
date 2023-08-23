@@ -53,14 +53,10 @@ impl emit::target::Target for Stdout {
 fn print(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
     let mut header_empty = true;
 
-    if let Some(ts) = evt.extent() {
+    if !evt.extent().is_empty() {
         let _ = write!(buf, "[");
 
-        if ts.start != ts.end {
-            let _ = write!(buf, "{:.0}..", ts.start);
-        }
-
-        let _ = write!(buf, "{:.0}", ts.end);
+        let _ = write!(buf, "{:.0}", evt.extent());
 
         header_empty = false;
     }

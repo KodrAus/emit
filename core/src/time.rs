@@ -165,7 +165,7 @@ impl<C: Clock> Timer<C> {
         let end = self.clock.now();
 
         match (self.start, end) {
-            (Some(start), Some(end)) => Extent::span(start..end),
+            (Some(start), Some(end)) => Extent::new(start..end),
             _ => Extent::empty(),
         }
     }

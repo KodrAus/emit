@@ -15,6 +15,7 @@ use emit_core::{
     value::{ToValue, Value},
 };
 
+use emit_core::extent::ToExtent;
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -410,7 +411,7 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 pub fn __private_emit(
     to: impl Target,
     when: impl Filter,
-    extent: impl Extent,
+    extent: impl ToExtent,
     tpl: Template,
     props: impl Props,
 ) {
@@ -420,7 +421,11 @@ pub fn __private_emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        extent.extent().or_else(|| ambient.now().map(|ts| ts..ts)),
+        extent
+            .to_extent()
+            .range()
+            .cloned()
+            .or_else(|| ambient.now().map(|ts| ts..ts)),
         tpl,
         props,
     );
@@ -464,16 +469,16 @@ impl<'a> Props for __PrivateMacroProps<'a> {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
-    ) {
+    ) -> ControlFlow<()> {
         for kv in &self.0 {
             let k = &kv.0;
 
             if let Some(ref v) = kv.1 {
-                if let ControlFlow::Break(()) = for_each(k.by_ref(), v.by_ref()) {
-                    return;
-                }
+                for_each(k.by_ref(), v.by_ref())?;
             }
         }
+
+        ControlFlow::Continue(())
     }
 
     fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {

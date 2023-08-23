@@ -10,6 +10,7 @@ use crate::local_frame::{LocalFrame, LocalFrameFuture};
 #[doc(inline)]
 pub use emit_macros::*;
 
+use emit_core::extent::{Extent, ToExtent};
 #[doc(inline)]
 pub use emit_core::{
     ctxt, empty, event, filter, id, key, level, props, target, template, time, value, well_known,
@@ -43,7 +44,7 @@ fn base_emit(
     to: impl Target,
     when: impl Filter,
     ctxt: impl Ctxt,
-    ts: Option<Range<Timestamp>>,
+    ts: impl ToExtent,
     tpl: Template,
     props: impl Props,
 ) {
@@ -82,6 +83,7 @@ pub fn emit(evt: &Event<impl Props>) {
         ambient,
         ambient,
         evt.extent()
+            .range()
             .cloned()
             .or_else(|| ambient.now().map(|ts| ts..ts)),
         tpl,

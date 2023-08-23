@@ -27,12 +27,15 @@ pub struct ThreadLocalSpan {
 }
 
 impl Props for ThreadLocalSpan {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(&'a self, mut for_each: F) {
+    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(
+        &'a self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
         for (k, v) in &self.props {
-            if let Break(()) = for_each(k.by_ref(), v.by_ref()) {
-                break;
-            }
+            for_each(k.by_ref(), v.by_ref())?;
         }
+
+        Continue(())
     }
 }
 

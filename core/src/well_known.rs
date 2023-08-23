@@ -14,9 +14,9 @@ pub const TPL_KEY: &'static str = "#tpl";
 pub const ERR_KEY: &'static str = "err";
 pub const LVL_KEY: &'static str = "lvl";
 pub const MODULE_KEY: &'static str = "mod";
-pub const TRACE_ID_KEY: &'static str = "tr";
-pub const SPAN_ID_KEY: &'static str = "sp";
-pub const SPAN_PARENT_KEY: &'static str = "spp";
+pub const TRACE_ID_KEY: &'static str = "trace_id";
+pub const SPAN_ID_KEY: &'static str = "span_id";
+pub const SPAN_PARENT_KEY: &'static str = "span_parent";
 
 pub const fn is_reserved(key: &str) -> bool {
     let key = key.as_bytes();
