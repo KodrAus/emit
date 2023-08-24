@@ -24,11 +24,6 @@ impl Parse for Args {
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let props = syn::parse2::<Props>(opts.input)?;
 
-    // Ensure props don't use reserved identifiers
-    for prop in props.iter() {
-        props::ensure_not_reserved(&prop.label, prop.span())?;
-    }
-
     let mut item = syn::parse2::<Stmt>(opts.item)?;
     match &mut item {
         // A synchronous function

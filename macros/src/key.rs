@@ -61,11 +61,6 @@ impl Parse for Args {
                 .ok_or_else(|| syn::Error::new(input.span(), "the `name` argument is missing"))?
         };
 
-        // Ensure key literals are not reserved
-        if let Name::Str(ref name) = name {
-            props::ensure_not_reserved(&name, span)?;
-        }
-
         Ok(Args { name })
     }
 }

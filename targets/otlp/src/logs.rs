@@ -70,7 +70,7 @@ impl emit_core::emitter::Emitter for OtlpLogsTarget {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let level = evt.lvl().unwrap_or(emit_core::level::Level::Info);
+        let level = evt.props().lvl().unwrap_or(emit_core::level::Level::Info);
 
         let severity_number = match level {
             emit_core::level::Level::Debug => SeverityNumber::Debug as i32,

@@ -1,16 +1,5 @@
-use crate::{
-    empty::Empty,
-    key::{Key, ToKey},
-    props::Props,
-    timestamp::Timestamp,
-    value::{ToValue, Value},
-    well_known::{TIMESTAMP_KEY, TIMESTAMP_START_KEY},
-};
-use core::{
-    fmt,
-    ops::{ControlFlow, Range},
-    time::Duration,
-};
+use crate::{empty::Empty, timestamp::Timestamp};
+use core::{fmt, ops::Range, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct Extent(Option<Range<Timestamp>>);
@@ -107,23 +96,6 @@ impl fmt::Display for Extent {
             }
             Some(ref ts) => fmt::Display::fmt(&ts.end, f),
             None => Ok(()),
-        }
-    }
-}
-
-impl Props for Extent {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        if let Some(ref ts) = self.0 {
-            if ts.start != ts.end {
-                for_each(TIMESTAMP_START_KEY.to_key(), ts.start.to_value())?;
-            }
-
-            for_each(TIMESTAMP_KEY.to_key(), ts.end.to_value())
-        } else {
-            ControlFlow::Continue(())
         }
     }
 }

@@ -66,11 +66,6 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         quote!(#loc_ident: emit::__private::caller()),
     )?)?;
 
-    // Ensure props don't use reserved identifiers
-    for prop in props.iter() {
-        props::ensure_not_reserved(&prop.label, prop.span())?;
-    }
-
     let props_match_input_tokens = props.match_input_tokens();
     let props_match_binding_tokens = props.match_binding_tokens();
     let props_tokens = props.match_bound_tokens();

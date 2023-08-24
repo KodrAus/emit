@@ -162,14 +162,3 @@ impl Props {
         Ok(())
     }
 }
-
-pub fn ensure_not_reserved(k: &str, span: Span) -> Result<(), syn::Error> {
-    if emit_core::well_known::is_reserved(k) {
-        Err(syn::Error::new(
-            span,
-            format!("`{}` is a reserved identifier", k),
-        ))
-    } else {
-        Ok(())
-    }
-}
