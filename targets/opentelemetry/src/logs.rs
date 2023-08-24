@@ -21,8 +21,8 @@ pub fn target(logger: Logger) -> OpenTelemetryLogsTarget {
 
 pub struct OpenTelemetryLogsTarget(Logger);
 
-impl emit_core::target::Target for OpenTelemetryLogsTarget {
-    fn event<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
+impl emit_core::emitter::Emitter for OpenTelemetryLogsTarget {
+    fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         self.0.emit(to_record(evt));
     }
 

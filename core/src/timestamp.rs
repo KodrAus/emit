@@ -1,4 +1,4 @@
-use core::{cmp, fmt, ops::Sub, str, str::FromStr, time::Duration};
+use core::{cmp, fmt, str, str::FromStr, time::Duration};
 
 use crate::value::{ToValue, Value};
 
@@ -6,12 +6,16 @@ use crate::value::{ToValue, Value};
 pub struct Timestamp(Duration);
 
 impl Timestamp {
-    pub fn new(elapsed_since_unix_epoch: Duration) -> Self {
-        Timestamp(elapsed_since_unix_epoch)
+    pub fn new(unix_time: Duration) -> Self {
+        Timestamp(unix_time)
     }
 
-    pub fn to_unix(&self) -> Duration {
-        self.0
+    pub fn as_unix_time(&self) -> &Duration {
+        &self.0
+    }
+
+    pub fn duration_since(self, earlier: Self) -> Option<Duration> {
+        self.0.checked_sub(earlier.0)
     }
 
     #[cfg(feature = "std")]
@@ -43,22 +47,6 @@ impl FromStr for Timestamp {
 impl ToValue for Timestamp {
     fn to_value(&self) -> Value {
         Value::capture_display(self)
-    }
-}
-
-impl Sub for Timestamp {
-    type Output = Duration;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.0.sub(rhs.0)
-    }
-}
-
-impl<'a> Sub<&'a Timestamp> for Timestamp {
-    type Output = Duration;
-
-    fn sub(self, rhs: &'a Timestamp) -> Self::Output {
-        self.0.sub(rhs.0)
     }
 }
 

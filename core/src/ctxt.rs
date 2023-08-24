@@ -154,13 +154,9 @@ impl Ctxt for Empty {
 }
 
 mod internal {
-    use core::marker::PhantomData;
+    use core::{marker::PhantomData, ops::ControlFlow};
 
-    use crate::{
-        key::Key,
-        props::{ControlFlow, Props},
-        value::Value,
-    };
+    use crate::{key::Key, props::Props, value::Value};
 
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
@@ -175,10 +171,10 @@ mod internal {
     }
 
     impl<T: Props + ?Sized> Props for Slot<T> {
-        fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow>(
+        fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(
             &'a self,
             for_each: F,
-        ) -> ControlFlow {
+        ) -> ControlFlow<()> {
             self.get().for_each(for_each)
         }
     }
@@ -194,11 +190,11 @@ mod alloc_support {
     use super::*;
 
     mod internal {
-        use core::{marker::PhantomData, mem};
+        use core::{marker::PhantomData, mem, ops::ControlFlow};
 
         use crate::{
             key::Key,
-            props::{ControlFlow, ErasedProps, Props},
+            props::{ErasedProps, Props},
             value::Value,
         };
 
@@ -237,10 +233,10 @@ mod alloc_support {
         }
 
         impl Props for ErasedCurrentProps {
-            fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow>(
+            fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(
                 &'a self,
                 for_each: F,
-            ) -> ControlFlow {
+            ) -> ControlFlow<()> {
                 self.get().for_each(for_each)
             }
         }

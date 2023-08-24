@@ -14,7 +14,7 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, empty, event, extent, filter, id, key, level, props, target, template, timestamp,
+    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, props, template, timestamp,
     value, well_known,
 };
 
@@ -23,6 +23,7 @@ pub mod local_frame;
 pub use self::{
     clock::{Clock, Timer},
     ctxt::Ctxt,
+    emitter::Emitter,
     event::Event,
     extent::Extent,
     filter::Filter,
@@ -30,7 +31,6 @@ pub use self::{
     key::Key,
     level::Level,
     props::Props,
-    target::Target,
     template::Template,
     timestamp::Timestamp,
     value::Value,
@@ -47,7 +47,7 @@ pub use setup::*;
 
 #[track_caller]
 fn base_emit(
-    to: impl Target,
+    to: impl Emitter,
     when: impl Filter,
     ctxt: impl Ctxt,
     ts: impl ToExtent,
@@ -58,7 +58,7 @@ fn base_emit(
         let evt = Event::new(ts, tpl, props.chain(ctxt));
 
         if when.matches(&evt) {
-            to.event(&evt);
+            to.emit(&evt);
         }
     });
 }

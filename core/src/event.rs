@@ -1,9 +1,9 @@
-use core::fmt;
+use core::{fmt, ops::ControlFlow};
 
 use crate::{
     extent::{Extent, ToExtent},
     key::{Key, ToKey},
-    props::{ByRef, Chain, ControlFlow, ErasedProps, Props},
+    props::{ByRef, Chain, ErasedProps, Props},
     template::{Render, Template},
     value::{ToValue, Value},
     well_known::{MSG_KEY, TPL_KEY},
@@ -61,7 +61,10 @@ impl<'a, P: Props> Event<'a, P> {
         }
     }
 
-    pub fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(&'kv self, for_each: F) {
+    pub fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        for_each: F,
+    ) {
         let _ = Props::for_each(self, for_each);
     }
 
@@ -93,10 +96,10 @@ impl<'a, P> ToExtent for Event<'a, P> {
 }
 
 impl<'a, P: Props> Props for Event<'a, P> {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
-    ) -> ControlFlow {
+    ) -> ControlFlow<()> {
         self.extent.for_each(&mut for_each)?;
 
         for_each(TPL_KEY.to_key(), self.tpl.to_value())?;

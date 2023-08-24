@@ -3,9 +3,9 @@ use core::time::Duration;
 use emit_core::{
     ambient::Ambient,
     ctxt::Ctxt,
+    emitter::{self, Emitter},
     empty::Empty,
     filter::Filter,
-    target::{self, Target},
 };
 
 use crate::platform::{DefaultCtxt, Platform};
@@ -14,11 +14,11 @@ pub fn setup() -> Setup {
     Setup::default()
 }
 
-type DefaultTarget = Empty;
+type DefaultEmitter = Empty;
 type DefaultFilter = Empty;
 
-pub struct Setup<TTarget = DefaultTarget, TFilter = DefaultFilter, TCtxt = DefaultCtxt> {
-    target: TTarget,
+pub struct Setup<TEmitter = DefaultEmitter, TFilter = DefaultFilter, TCtxt = DefaultCtxt> {
+    emitter: TEmitter,
     filter: TFilter,
     ctxt: TCtxt,
     platform: Platform,
@@ -33,7 +33,7 @@ impl Default for Setup {
 impl Setup {
     pub fn new() -> Self {
         Setup {
-            target: Default::default(),
+            emitter: Default::default(),
             filter: Default::default(),
             ctxt: Default::default(),
             platform: Default::default(),
@@ -41,31 +41,31 @@ impl Setup {
     }
 }
 
-impl<TTarget: Target, TFilter: Filter, TCtxt: Ctxt> Setup<TTarget, TFilter, TCtxt> {
-    pub fn to<UTarget: Target>(self, target: UTarget) -> Setup<UTarget, TFilter, TCtxt> {
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, TCtxt> {
+    pub fn to<UEmitter: Emitter>(self, emitter: UEmitter) -> Setup<UEmitter, TFilter, TCtxt> {
         Setup {
-            target,
+            emitter,
             filter: self.filter,
             ctxt: self.ctxt,
             platform: self.platform,
         }
     }
 
-    pub fn and_to<UTarget: Target>(
+    pub fn and_to<UEmitter: Emitter>(
         self,
-        target: UTarget,
-    ) -> Setup<target::And<TTarget, UTarget>, TFilter, TCtxt> {
+        emitter: UEmitter,
+    ) -> Setup<emitter::And<TEmitter, UEmitter>, TFilter, TCtxt> {
         Setup {
-            target: self.target.and(target),
+            emitter: self.emitter.and(emitter),
             filter: self.filter,
             ctxt: self.ctxt,
             platform: self.platform,
         }
     }
 
-    pub fn with<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TTarget, TFilter, UCtxt> {
+    pub fn with<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TEmitter, TFilter, UCtxt> {
         Setup {
-            target: self.target,
+            emitter: self.emitter,
             filter: self.filter,
             ctxt,
             platform: self.platform,
@@ -74,18 +74,18 @@ impl<TTarget: Target, TFilter: Filter, TCtxt: Ctxt> Setup<TTarget, TFilter, TCtx
 }
 
 impl<
-        TTarget: Target + Send + Sync + 'static,
+        TEmitter: Emitter + Send + Sync + 'static,
         TFilter: Filter + Send + Sync + 'static,
         TCtxt: Ctxt + Send + Sync + 'static,
-    > Setup<TTarget, TFilter, TCtxt>
+    > Setup<TEmitter, TFilter, TCtxt>
 where
     TCtxt::LocalFrame: Send + 'static,
 {
     #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
-    pub fn init(self) -> Init<&'static TTarget> {
+    pub fn init(self) -> Init<&'static TEmitter> {
         let ambient = emit_core::ambient::init(
             Ambient::new()
-                .with_target(self.target)
+                .with_emitter(self.emitter)
                 .with_filter(self.filter)
                 .with_ctxt(self.ctxt)
                 .with_clock(self.platform.clock)
@@ -94,17 +94,17 @@ where
         .expect("already initialized");
 
         Init {
-            target: *ambient.target(),
+            emitter: *ambient.emitter(),
         }
     }
 }
 
-pub struct Init<TTarget: Target = DefaultTarget> {
-    target: TTarget,
+pub struct Init<TEmitter: Emitter = DefaultEmitter> {
+    emitter: TEmitter,
 }
 
-impl<TTarget: Target> Init<TTarget> {
+impl<TEmitter: Emitter> Init<TEmitter> {
     pub fn blocking_flush(&self, timeout: Duration) {
-        self.target.blocking_flush(timeout);
+        self.emitter.blocking_flush(timeout);
     }
 }

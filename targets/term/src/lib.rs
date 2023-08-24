@@ -14,8 +14,8 @@ thread_local! {
     static STDOUT: RefCell<Option<Buffer>> = RefCell::new(None);
 }
 
-impl emit::target::Target for Stdout {
-    fn event<P: emit::Props>(&self, evt: &emit::Event<P>) {
+impl emit::emitter::Emitter for Stdout {
+    fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
         STDOUT.with(|buf| {
             match buf.try_borrow_mut() {
                 // If there are no overlapping references then use the cached buffer

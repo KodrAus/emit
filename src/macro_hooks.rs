@@ -4,12 +4,12 @@ use emit_core::{
     ambient,
     clock::Clock,
     ctxt::Ctxt,
+    emitter::Emitter,
     filter::Filter,
     id::{SpanId, TraceId},
     key::ToKey,
     level::Level,
     props::Props,
-    target::Target,
     template::Template,
     value::{ToValue, Value},
 };
@@ -408,7 +408,7 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 
 #[track_caller]
 pub fn __private_emit(
-    to: impl Target,
+    to: impl Emitter,
     when: impl Filter,
     extent: impl ToExtent,
     tpl: Template,

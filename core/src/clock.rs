@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 use crate::{
     empty::Empty,
     extent::{Extent, ToExtent},
@@ -98,6 +100,10 @@ impl<C: Clock> Timer<C> {
             (Some(start), Some(end)) => Extent::new(start..end),
             _ => Extent::empty(),
         }
+    }
+
+    pub fn elapsed(&self) -> Option<Duration> {
+        self.extent().len()
     }
 }
 

@@ -1,12 +1,16 @@
 use crate::{
     empty::Empty,
     key::{Key, ToKey},
-    props::{ControlFlow, Props},
+    props::Props,
     timestamp::Timestamp,
     value::{ToValue, Value},
     well_known::{TIMESTAMP_KEY, TIMESTAMP_START_KEY},
 };
-use core::{fmt, ops::Range};
+use core::{
+    fmt,
+    ops::{ControlFlow, Range},
+    time::Duration,
+};
 
 #[derive(Debug, Clone)]
 pub struct Extent(Option<Range<Timestamp>>);
@@ -24,12 +28,28 @@ impl Extent {
         Extent(None)
     }
 
-    pub fn range(&self) -> Option<&Range<Timestamp>> {
+    pub fn as_range(&self) -> Option<&Range<Timestamp>> {
         self.0.as_ref()
     }
 
-    pub fn to_point(&self) -> Option<&Timestamp> {
-        self.0.as_ref().map(|ts| &ts.end)
+    pub fn as_point(&self) -> Option<&Timestamp> {
+        Some(&self.0.as_ref()?.end)
+    }
+
+    pub fn as_span(&self) -> Option<&Range<Timestamp>> {
+        let ts = self.0.as_ref()?;
+
+        if ts.start != ts.end {
+            Some(ts)
+        } else {
+            None
+        }
+    }
+
+    pub fn len(&self) -> Option<Duration> {
+        let ts = self.0.as_ref()?;
+
+        ts.end.duration_since(ts.start)
     }
 
     pub fn is_point(&self) -> bool {
@@ -92,10 +112,10 @@ impl fmt::Display for Extent {
 }
 
 impl Props for Extent {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow>(
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
-    ) -> ControlFlow {
+    ) -> ControlFlow<()> {
         if let Some(ref ts) = self.0 {
             if ts.start != ts.end {
                 for_each(TIMESTAMP_START_KEY.to_key(), ts.start.to_value())?;
