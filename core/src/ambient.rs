@@ -1,12 +1,6 @@
 use crate::{
-    ctxt::Ctxt,
-    empty::Empty,
-    event::Event,
-    filter::Filter,
-    id::IdGen,
-    props::Props,
-    target::Target,
-    time::{Clock, Timestamp},
+    clock::Clock, ctxt::Ctxt, empty::Empty, event::Event, filter::Filter, id::IdGen, props::Props,
+    target::Target, timestamp::Timestamp,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -190,8 +184,8 @@ mod std_support {
     use std::sync::OnceLock;
 
     use crate::{
-        ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdGen, target::ErasedTarget,
-        time::ErasedClock,
+        clock::ErasedClock, ctxt::ErasedCtxt, filter::ErasedFilter, id::ErasedIdGen,
+        target::ErasedTarget,
     };
 
     use super::*;

@@ -2,7 +2,7 @@ use crate::{
     id::{SpanId, TraceId},
     level::Level,
     props::Props,
-    time::Timestamp,
+    timestamp::Timestamp,
     value::Value,
 };
 

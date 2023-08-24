@@ -3,24 +3,28 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use core::{future::Future, ops::Range};
+use core::future::Future;
+
+use emit_core::extent::ToExtent;
 
 use crate::local_frame::{LocalFrame, LocalFrameFuture};
 
 #[doc(inline)]
 pub use emit_macros::*;
 
-use emit_core::extent::{Extent, ToExtent};
 #[doc(inline)]
 pub use emit_core::{
-    ctxt, empty, event, filter, id, key, level, props, target, template, time, value, well_known,
+    clock, ctxt, empty, event, extent, filter, id, key, level, props, target, template, timestamp,
+    value, well_known,
 };
 
 pub mod local_frame;
 
 pub use self::{
+    clock::{Clock, Timer},
     ctxt::Ctxt,
     event::Event,
+    extent::Extent,
     filter::Filter,
     id::{IdGen, SpanId, TraceId},
     key::Key,
@@ -28,7 +32,7 @@ pub use self::{
     props::Props,
     target::Target,
     template::Template,
-    time::{Clock, Timer, Timestamp},
+    timestamp::Timestamp,
     value::Value,
     well_known::WellKnown,
 };
@@ -38,6 +42,8 @@ mod platform;
 
 #[cfg(feature = "std")]
 mod setup;
+#[cfg(feature = "std")]
+pub use setup::*;
 
 #[track_caller]
 fn base_emit(
@@ -132,11 +138,6 @@ pub fn current_trace_id() -> Option<TraceId> {
     });
 
     trace_id
-}
-
-#[cfg(feature = "std")]
-pub fn setup() -> setup::Setup {
-    setup::Setup::default()
 }
 
 #[doc(hidden)]

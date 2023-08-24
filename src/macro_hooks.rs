@@ -2,6 +2,7 @@ use core::{any::Any, fmt, future::Future, ops::ControlFlow, panic::Location};
 
 use emit_core::{
     ambient,
+    clock::Clock,
     ctxt::Ctxt,
     filter::Filter,
     id::{SpanId, TraceId},
@@ -10,7 +11,6 @@ use emit_core::{
     props::Props,
     target::Target,
     template::Template,
-    time::Clock,
     value::{ToValue, Value},
 };
 

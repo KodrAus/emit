@@ -1,10 +1,10 @@
-use crate::{id::IdGen, time::Clock, Timestamp};
+use crate::{clock::Clock, id::IdGen, Timestamp};
 
 #[cfg(not(feature = "std"))]
 use emit_core::empty::Empty;
 
 #[cfg(feature = "std")]
-use emit_core::{id::ErasedIdGen, time::ErasedClock};
+use emit_core::{clock::ErasedClock, id::ErasedIdGen};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;

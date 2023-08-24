@@ -2,7 +2,7 @@ use crate::{
     empty::Empty,
     key::{Key, ToKey},
     props::{ControlFlow, Props},
-    time::{Clock, Timer, Timestamp},
+    timestamp::Timestamp,
     value::{ToValue, Value},
     well_known::{TIMESTAMP_KEY, TIMESTAMP_START_KEY},
 };
@@ -147,11 +147,5 @@ impl ToExtent for Timestamp {
 impl ToExtent for Range<Timestamp> {
     fn to_extent(&self) -> Extent {
         Extent::new(self.clone())
-    }
-}
-
-impl<C: Clock> ToExtent for Timer<C> {
-    fn to_extent(&self) -> Extent {
-        self.extent()
     }
 }

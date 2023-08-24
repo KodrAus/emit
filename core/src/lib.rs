@@ -6,6 +6,7 @@ extern crate alloc;
 extern crate core;
 
 pub mod ambient;
+pub mod clock;
 pub mod ctxt;
 pub mod empty;
 pub mod event;
@@ -17,7 +18,7 @@ pub mod level;
 pub mod props;
 pub mod target;
 pub mod template;
-pub mod time;
+pub mod timestamp;
 pub mod value;
 pub mod well_known;
 
