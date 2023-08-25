@@ -16,7 +16,7 @@ async fn main() {
     let emitter = emit::setup()
         .to(emit_term::stdout())
         .and_to(
-            emit_otlp::logs::http("http://localhost:5341/ingest/otlp/v1/logs")
+            emit_otlp::traces::http("http://localhost:5341/ingest/otlp/v1/traces")
                 .resource(emit::props! {
                     #[emit::key("service.name")]
                     service_name: "smoke-test-rs",
@@ -50,7 +50,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
         if a % 2 == 0 {
             Ok(())
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "`a` is even"))
+            Err(io::Error::new(io::ErrorKind::Other, "`a` is odd"))
         }
     }
     .await;

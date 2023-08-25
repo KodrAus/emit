@@ -8,32 +8,32 @@ use crate::{
     value::to_value,
 };
 use emit_batcher::BatchError;
-use emit_core::well_known::WellKnown;
+use emit_core::well_known;
 use std::{collections::HashSet, ops::ControlFlow, time::Duration};
 
-pub fn http(dst: impl Into<String>) -> OtlpLogsTargetBuilder {
-    OtlpLogsTargetBuilder {
+pub fn http(dst: impl Into<String>) -> OtlpLogsEmitterBuilder {
+    OtlpLogsEmitterBuilder {
         inner: OtlpClientBuilder::http(dst),
     }
 }
 
-pub struct OtlpLogsTargetBuilder {
+pub struct OtlpLogsEmitterBuilder {
     inner: OtlpClientBuilder,
 }
 
-pub struct OtlpLogsTarget {
+pub struct OtlpLogsEmitter {
     inner: OtlpClient<LogRecord>,
 }
 
-impl OtlpLogsTargetBuilder {
+impl OtlpLogsEmitterBuilder {
     pub fn resource(self, resource: impl emit_core::props::Props) -> Self {
-        OtlpLogsTargetBuilder {
+        OtlpLogsEmitterBuilder {
             inner: self.inner.resource(resource),
         }
     }
 
-    pub fn spawn(self) -> OtlpLogsTarget {
-        OtlpLogsTarget {
+    pub fn spawn(self) -> OtlpLogsEmitter {
+        OtlpLogsEmitter {
             inner: self.inner.spawn(|client, batch| {
                 client.emit(batch, |resource, scope, batch| {
                     use prost::Message;
@@ -60,7 +60,7 @@ impl OtlpLogsTargetBuilder {
     }
 }
 
-impl emit_core::emitter::Emitter for OtlpLogsTarget {
+impl emit_core::emitter::Emitter for OtlpLogsEmitter {
     fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         let time_unix_nano = evt
             .extent()
@@ -70,7 +70,46 @@ impl emit_core::emitter::Emitter for OtlpLogsTarget {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let level = evt.props().lvl().unwrap_or(emit_core::level::Level::Info);
+        let body = Some(AnyValue {
+            value: Some(Value::StringValue(evt.msg().to_string())),
+        });
+
+        let mut level = emit_core::level::Level::default();
+        let mut attributes = Vec::new();
+        let mut trace_id = Vec::new();
+        let mut span_id = Vec::new();
+
+        let mut seen = HashSet::new();
+        evt.props().for_each(|k, v| {
+            match k.as_str() {
+                well_known::LVL_KEY => {
+                    level = v.to_level().unwrap_or_default();
+                }
+                well_known::SPAN_ID_KEY => {
+                    span_id = v
+                        .to_span_id()
+                        .map(|span_id| span_id.to_hex().to_vec())
+                        .unwrap_or_default();
+                }
+                well_known::TRACE_ID_KEY => {
+                    trace_id = v
+                        .to_trace_id()
+                        .map(|trace_id| trace_id.to_hex().to_vec())
+                        .unwrap_or_default();
+                }
+                _ => {
+                    let key = k.to_string();
+
+                    if seen.insert(k) {
+                        let value = to_value(v);
+
+                        attributes.push(KeyValue { key, value });
+                    }
+                }
+            }
+
+            ControlFlow::Continue(())
+        });
 
         let severity_number = match level {
             emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
@@ -80,32 +119,6 @@ impl emit_core::emitter::Emitter for OtlpLogsTarget {
         };
 
         let severity_text = level.to_string();
-
-        let body = Some(AnyValue {
-            value: Some(Value::StringValue(evt.msg().to_string())),
-        });
-
-        let mut attributes = Vec::new();
-        let mut trace_id = Vec::new();
-        let mut span_id = Vec::new();
-
-        if let (Some(trace), Some(span)) = (evt.props().trace_id(), evt.props().span_id()) {
-            trace_id = trace.to_hex().to_vec();
-            span_id = span.to_hex().to_vec();
-        }
-
-        let mut seen = HashSet::new();
-        evt.props().for_each(|k, v| {
-            let key = k.to_string();
-
-            if seen.insert(k) {
-                let value = to_value(v);
-
-                attributes.push(KeyValue { key, value });
-            }
-
-            ControlFlow::Continue(())
-        });
 
         self.inner.emit(LogRecord {
             time_unix_nano,
