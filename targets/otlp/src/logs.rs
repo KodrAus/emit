@@ -1,19 +1,13 @@
 use crate::{
     client::{OtlpClient, OtlpClientBuilder},
-    proto::{
-        collector::logs::v1::ExportLogsServiceRequest,
-        common::v1::{any_value::Value, AnyValue, KeyValue},
-        logs::v1::{LogRecord, ResourceLogs, ScopeLogs, SeverityNumber},
-    },
-    value::to_value,
+    data,
 };
-use emit_batcher::BatchError;
-use emit_core::well_known;
-use std::{collections::HashSet, ops::ControlFlow, time::Duration};
+use std::time::Duration;
+use sval_protobuf::buf::ProtoBuf;
 
-pub fn http(dst: impl Into<String>) -> OtlpLogsEmitterBuilder {
+pub fn http_proto(dst: impl Into<String>) -> OtlpLogsEmitterBuilder {
     OtlpLogsEmitterBuilder {
-        inner: OtlpClientBuilder::http(dst),
+        inner: OtlpClientBuilder::http_proto(dst),
     }
 }
 
@@ -22,7 +16,7 @@ pub struct OtlpLogsEmitterBuilder {
 }
 
 pub struct OtlpLogsEmitter {
-    inner: OtlpClient<LogRecord>,
+    inner: OtlpClient<ProtoBuf>,
 }
 
 impl OtlpLogsEmitterBuilder {
@@ -36,24 +30,21 @@ impl OtlpLogsEmitterBuilder {
         OtlpLogsEmitter {
             inner: self.inner.spawn(|client, batch| {
                 client.emit(batch, |resource, scope, batch| {
-                    use prost::Message;
-
-                    let request = ExportLogsServiceRequest {
-                        resource_logs: vec![ResourceLogs {
-                            resource,
-                            scope_logs: vec![ScopeLogs {
-                                scope,
-                                log_records: batch.to_vec(),
-                                schema_url: String::new(),
+                    Ok(
+                        sval_protobuf::stream_to_protobuf(data::ExportLogsServiceRequest {
+                            resource_logs: &[data::ResourceLogs {
+                                resource,
+                                scope_logs: &[data::ScopeLogs {
+                                    scope,
+                                    log_records: batch,
+                                    schema_url: "",
+                                }],
+                                schema_url: "",
                             }],
-                            schema_url: String::new(),
-                        }],
-                    };
-
-                    let mut buf = Vec::new();
-                    request.encode(&mut buf).map_err(BatchError::no_retry)?;
-
-                    Ok(buf)
+                        })
+                        .to_vec()
+                        .into_owned(),
+                    )
                 })
             }),
         }
@@ -70,68 +61,15 @@ impl emit_core::emitter::Emitter for OtlpLogsEmitter {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let body = Some(AnyValue {
-            value: Some(Value::StringValue(evt.msg().to_string())),
-        });
-
-        let mut level = emit_core::level::Level::default();
-        let mut attributes = Vec::new();
-        let mut trace_id = Vec::new();
-        let mut span_id = Vec::new();
-
-        let mut seen = HashSet::new();
-        evt.props().for_each(|k, v| {
-            match k.as_str() {
-                well_known::LVL_KEY => {
-                    level = v.to_level().unwrap_or_default();
-                }
-                well_known::SPAN_ID_KEY => {
-                    span_id = v
-                        .to_span_id()
-                        .map(|span_id| span_id.to_hex().to_vec())
-                        .unwrap_or_default();
-                }
-                well_known::TRACE_ID_KEY => {
-                    trace_id = v
-                        .to_trace_id()
-                        .map(|trace_id| trace_id.to_hex().to_vec())
-                        .unwrap_or_default();
-                }
-                _ => {
-                    let key = k.to_string();
-
-                    if seen.insert(k) {
-                        let value = to_value(v);
-
-                        attributes.push(KeyValue { key, value });
-                    }
-                }
-            }
-
-            ControlFlow::Continue(())
-        });
-
-        let severity_number = match level {
-            emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
-            emit_core::level::Level::Info => SeverityNumber::Info as i32,
-            emit_core::level::Level::Warn => SeverityNumber::Warn as i32,
-            emit_core::level::Level::Error => SeverityNumber::Error as i32,
-        };
-
-        let severity_text = level.to_string();
-
-        self.inner.emit(LogRecord {
-            time_unix_nano,
-            observed_time_unix_nano,
-            severity_number,
-            severity_text,
-            body,
-            attributes,
-            dropped_attributes_count: 0,
-            flags: Default::default(),
-            trace_id,
-            span_id,
-        })
+        self.inner
+            .emit(sval_protobuf::stream_to_protobuf(data::LogRecord {
+                time_unix_nano,
+                observed_time_unix_nano,
+                body: Some(data::DisplayValue::String(sval::Display::new(evt.msg()))),
+                attributes: data::PropsAttributes(evt.props()),
+                dropped_attributes_count: 0,
+                flags: Default::default(),
+            }))
     }
 
     fn blocking_flush(&self, timeout: Duration) {

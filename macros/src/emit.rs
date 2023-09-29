@@ -3,7 +3,7 @@ use syn::{parse::Parse, FieldValue, Ident};
 
 use crate::{
     args::{self, Arg},
-    props, template,
+    template,
 };
 
 pub struct ExpandTokens {

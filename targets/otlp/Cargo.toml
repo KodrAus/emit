@@ -3,16 +3,30 @@ name = "emit-otlp"
 version = "0.0.0"
 edition = "2021"
 
+[features]
+grpc = ["dep:prost"]
+
 [dependencies.emit_core]
 path = "../../core"
-features = ["serde"]
+features = ["std", "sval"]
 
 [dependencies.emit-batcher]
 path = "../../batcher"
 features = ["tokio"]
 
-[dependencies.serde]
-version = "1"
+[dependencies.sval]
+version = "2.9"
+features = ["std"]
+
+[dependencies.sval_ref]
+version = "2.9"
+
+[dependencies.sval_derive]
+version = "2.9"
+features = ["std", "flatten"]
+
+[dependencies.sval_protobuf]
+git = "https://github.com/KodrAus/sval_protobuf"
 
 [dependencies.tokio]
 version = "1"
@@ -23,3 +37,4 @@ version = "0.11"
 
 [dependencies.prost]
 version = "0.11"
+optional = true

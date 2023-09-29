@@ -6,7 +6,7 @@ use syn::{
 
 use crate::{
     args::{self, Arg},
-    hook, props,
+    hook,
 };
 
 pub fn key_with_hook(attrs: &[Attribute], key_expr: &ExprLit) -> TokenStream {
@@ -30,8 +30,6 @@ pub enum Name {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let span = input.span();
-
         // Accept a standalone string as a shorthand for the key name
         let name = if input.peek(LitStr) {
             let value: LitStr = input.parse()?;

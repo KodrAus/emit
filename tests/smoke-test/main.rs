@@ -16,7 +16,7 @@ async fn main() {
     let emitter = emit::setup()
         .to(emit_term::stdout())
         .and_to(
-            emit_otlp::traces::http("http://localhost:5341/ingest/otlp/v1/traces")
+            emit_otlp::logs::http_proto("http://localhost:5341/ingest/otlp/v1/logs")
                 .resource(emit::props! {
                     #[emit::key("service.name")]
                     service_name: "smoke-test-rs",

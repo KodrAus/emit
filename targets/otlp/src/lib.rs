@@ -1,6 +1,7 @@
-mod client;
+#[cfg(feature = "prost")]
 mod proto;
-mod value;
+
+mod client;
+mod data;
 
 pub mod logs;
-pub mod traces;

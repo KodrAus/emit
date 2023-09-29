@@ -1,25 +1,22 @@
-use crate::{
-    proto::{
-        common::v1::{InstrumentationScope, KeyValue},
-        resource::v1::Resource,
-    },
-    value,
-};
 use emit_batcher::BatchError;
 use std::{future::Future, ops::ControlFlow, sync::Arc, time::Duration};
+
+use crate::data::PreEncoded;
 
 pub(super) struct OtlpClient<T> {
     sender: emit_batcher::Sender<T>,
 }
 
 pub(super) struct OtlpClientBuilder {
-    resource: Option<Resource>,
-    scope: Option<InstrumentationScope>,
     dst: Destination,
 }
 
 enum Destination {
-    HttpProto(String),
+    HttpProto {
+        resource: Option<PreEncoded>,
+        scope: Option<PreEncoded>,
+        url: String,
+    },
 }
 
 impl<T> OtlpClient<T> {
@@ -33,15 +30,18 @@ impl<T> OtlpClient<T> {
 }
 
 impl OtlpClientBuilder {
-    pub fn http(dst: impl Into<String>) -> Self {
+    pub fn http_proto(dst: impl Into<String>) -> Self {
         OtlpClientBuilder {
-            resource: None,
-            scope: None,
-            dst: Destination::HttpProto(dst.into()),
+            dst: Destination::HttpProto {
+                url: dst.into(),
+                resource: None,
+                scope: None,
+            },
         }
     }
 
     pub fn resource(mut self, resource: impl emit_core::props::Props) -> Self {
+        /*
         let mut attributes = Vec::new();
 
         resource.for_each(|k, v| {
@@ -57,6 +57,7 @@ impl OtlpClientBuilder {
             attributes,
             dropped_attributes_count: 0,
         });
+        */
 
         self
     }
@@ -71,11 +72,15 @@ impl OtlpClientBuilder {
         let (sender, receiver) = emit_batcher::bounded(1024);
 
         let client = OtlpSender {
-            resource: self.resource,
-            scope: self.scope,
             client: Arc::new(match self.dst {
-                Destination::HttpProto(url) => RawClient::HttpProto {
+                Destination::HttpProto {
                     url,
+                    resource,
+                    scope,
+                } => RawClient::HttpProto {
+                    url,
+                    resource,
+                    scope,
                     client: reqwest::Client::new(),
                 },
             }),
@@ -89,14 +94,14 @@ impl OtlpClientBuilder {
 
 #[derive(Clone)]
 pub struct OtlpSender {
-    resource: Option<Resource>,
-    scope: Option<InstrumentationScope>,
     client: Arc<RawClient>,
 }
 
 enum RawClient {
     HttpProto {
         url: String,
+        resource: Option<PreEncoded>,
+        scope: Option<PreEncoded>,
         client: reqwest::Client,
     },
 }
@@ -105,19 +110,22 @@ impl OtlpSender {
     pub async fn emit<T>(
         self,
         batch: Vec<T>,
+        // TODO: Encode proto
         encode: impl FnOnce(
-            Option<Resource>,
-            Option<InstrumentationScope>,
+            Option<&PreEncoded>,
+            Option<&PreEncoded>,
             &[T],
         ) -> Result<Vec<u8>, BatchError<T>>,
     ) -> Result<(), BatchError<T>> {
-        let body = encode(self.resource, self.scope, &batch)?;
-
         match *self.client {
             RawClient::HttpProto {
                 ref url,
+                ref resource,
+                ref scope,
                 ref client,
             } => {
+                let body = encode(resource.as_ref(), scope.as_ref(), &batch)?;
+
                 client
                     .request(reqwest::Method::POST, url)
                     .header("content-type", "application/x-protobuf")

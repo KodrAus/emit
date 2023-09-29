@@ -4,7 +4,7 @@ use syn::{
     Stmt,
 };
 
-use crate::props::{self, Props};
+use crate::props::Props;
 
 pub struct ExpandTokens {
     pub sync_receiver: TokenStream,
