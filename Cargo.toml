@@ -14,6 +14,12 @@ exclude = [
     "tests/smoke-test"
 ]
 
+[patch.crates-io.sval]
+git = "https://github.com/sval-rs/sval"
+
+[patch.crates-io.sval_flatten]
+git = "https://github.com/sval-rs/sval"
+
 [package]
 name = "emit"
 version = "0.0.0"

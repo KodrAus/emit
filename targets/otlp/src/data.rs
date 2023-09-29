@@ -25,11 +25,52 @@ pub struct ResourceLogs<'a, R, SL> {
 }
 
 #[derive(Value)]
-pub struct Resource<'a> {
-    #[sval(index = 1)]
-    pub attributes: &'a [KeyValue<'a>],
+pub struct Resource<A> {
+    #[sval(flatten)]
+    pub attributes: A,
     #[sval(index = 2)]
     pub dropped_attribute_count: u32,
+}
+
+#[derive(Value)]
+pub struct InlineResourceAttributes<'a> {
+    #[sval(index = 1)]
+    pub attributes: &'a [KeyValue<'a>],
+}
+
+pub struct PropsResourceAttributes<P>(pub P);
+
+impl<P: emit_core::props::Props> sval::Value for PropsResourceAttributes<P> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream.record_tuple_begin(None, None, None, None)?;
+
+        stream.record_tuple_value_begin(None, &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT), &sval::Index::new(1))?;
+        stream.seq_begin(None)?;
+
+        let mut seen = HashSet::new();
+        self.0.for_each(|k, v| {
+            if seen.insert(k.to_owned()) {
+                stream
+                    .seq_value_begin()
+                    .map(|_| ControlFlow::Continue(()))
+                    .unwrap_or(ControlFlow::Break(()))?;
+                sval_ref::stream_ref(&mut *stream, EmitValue(v))
+                    .map(|_| ControlFlow::Continue(()))
+                    .unwrap_or(ControlFlow::Break(()))?;
+                stream
+                    .seq_value_end()
+                    .map(|_| ControlFlow::Continue(()))
+                    .unwrap_or(ControlFlow::Break(()))?;
+            }
+
+            ControlFlow::Continue(())
+        });
+
+        stream.seq_end()?;
+        stream.record_tuple_value_end(None, &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT), &sval::Index::new(1))?;
+
+        stream.record_tuple_end(None, None, None)
+    }
 }
 
 #[derive(Value)]
@@ -43,15 +84,21 @@ pub struct ScopeLogs<'a, IS, LR> {
 }
 
 #[derive(Value)]
-pub struct InstrumentationScope<'a> {
+pub struct InstrumentationScope<'a, A> {
     #[sval(index = 1)]
     pub name: &'a str,
     #[sval(index = 2)]
     pub version: &'a str,
-    #[sval(index = 3)]
-    pub attributes: &'a [KeyValue<'a>],
+    #[sval(flatten)]
+    pub attributes: A,
     #[sval(index = 4)]
     pub dropped_attribute_count: u32,
+}
+
+#[derive(Value)]
+pub struct InlineInstrumentationScopeAttributes<'a> {
+    #[sval(index = 1)]
+    pub attributes: &'a [KeyValue<'a>],
 }
 
 #[derive(Value)]
@@ -92,19 +139,19 @@ const ANY_VALUE_BYTES_INDEX: sval::Index = sval::Index::new(7);
 // TODO: Use the consts here
 #[derive(Value)]
 pub enum AnyValue<'a> {
-    #[sval(index = 1)]
+    #[sval(label = "stringValue", index = 1)]
     String(&'a str),
-    #[sval(index = 2)]
+    #[sval(label = "boolValue", index = 2)]
     Bool(bool),
-    #[sval(index = 3)]
+    #[sval(label = "intValue", index = 3)]
     Int(i64),
-    #[sval(index = 4)]
+    #[sval(label = "doubleValue", index = 4)]
     Double(f64),
-    #[sval(index = 5)]
+    #[sval(label = "arrayValue", index = 5)]
     Array(ArrayValue<'a>),
-    #[sval(index = 6)]
+    #[sval(label = "kvlistValue", index = 6)]
     Kvlist(KvList<'a>),
-    #[sval(index = 7)]
+    #[sval(label = "bytesValue", index = 7)]
     Bytes(&'a sval::BinarySlice),
 }
 
@@ -145,7 +192,7 @@ pub struct LogRecord<B, A> {
 }
 
 #[derive(Value)]
-pub struct InlineAttributes<'a> {
+pub struct InlineLogRecordAttributes<'a> {
     #[sval(index = 2)]
     pub severity_number: SeverityNumber,
     #[sval(index = 3)]
@@ -158,15 +205,18 @@ pub struct InlineAttributes<'a> {
     pub span_id: &'a sval::BinaryArray<8>,
 }
 
-pub struct PropsAttributes<P>(pub P);
+pub struct PropsLogRecordAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for PropsAttributes<P> {
+impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         let mut trace_id = [0; 32];
         let mut span_id = [0; 16];
         let mut level = emit_core::level::Level::default();
 
-        stream.tuple_begin(None, None, None, None)?;
+        stream.record_tuple_begin(None, None, None, None)?;
+
+        stream.record_tuple_value_begin(None, &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT), &sval::Index::new(6))?;
+        stream.seq_begin(None)?;
 
         let mut seen = HashSet::new();
         self.0.for_each(|k, v| {
@@ -189,14 +239,14 @@ impl<P: emit_core::props::Props> sval::Value for PropsAttributes<P> {
                 _ => {
                     if seen.insert(k.to_owned()) {
                         stream
-                            .tuple_value_begin(None, &sval::Index::new(6))
+                            .seq_value_begin()
                             .map(|_| ControlFlow::Continue(()))
                             .unwrap_or(ControlFlow::Break(()))?;
                         sval_ref::stream_ref(&mut *stream, EmitValue(v))
                             .map(|_| ControlFlow::Continue(()))
                             .unwrap_or(ControlFlow::Break(()))?;
                         stream
-                            .tuple_value_end(None, &sval::Index::new(6))
+                            .seq_value_end()
                             .map(|_| ControlFlow::Continue(()))
                             .unwrap_or(ControlFlow::Break(()))?;
                     }
@@ -206,6 +256,9 @@ impl<P: emit_core::props::Props> sval::Value for PropsAttributes<P> {
             ControlFlow::Continue(())
         });
 
+        stream.seq_end()?;
+        stream.record_tuple_value_end(None, &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT), &sval::Index::new(6))?;
+
         let severity_number = match level {
             emit_core::level::Level::Debug => 1i32,
             emit_core::level::Level::Info => 2i32,
@@ -213,37 +266,37 @@ impl<P: emit_core::props::Props> sval::Value for PropsAttributes<P> {
             emit_core::level::Level::Error => 4i32,
         };
 
-        stream.tuple_value_begin(None, &sval::Index::new(2))?;
+        stream.record_tuple_value_begin(None, &sval::Label::new("severityNumber").with_tag(&sval::tags::VALUE_IDENT), &sval::Index::new(2))?;
         stream.i32(severity_number)?;
-        stream.tuple_value_end(None, &sval::Index::new(2))?;
+        stream.record_tuple_value_end(None, &sval::Label::new("severityNumber").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(2))?;
 
-        stream.tuple_value_begin(None, &sval::Index::new(3))?;
+        stream.record_tuple_value_begin(None, &sval::Label::new("severityText").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(3))?;
         sval::stream_display(&mut *stream, level)?;
-        stream.tuple_value_end(None, &sval::Index::new(3))?;
+        stream.record_tuple_value_end(None, &sval::Label::new("severityText").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(3))?;
 
         if trace_id != [0; 32] {
-            stream.tuple_value_begin(None, &sval::Index::new(9))?;
+            stream.record_tuple_value_begin(None, &sval::Label::new("traceId").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(9))?;
             stream.binary_begin(Some(32))?;
             stream.binary_fragment_computed(&trace_id)?;
             stream.binary_end()?;
-            stream.tuple_value_end(None, &sval::Index::new(9))?;
+            stream.record_tuple_value_end(None, &sval::Label::new("traceId").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(9))?;
         }
 
         if span_id != [0; 16] {
-            stream.tuple_value_begin(None, &sval::Index::new(10))?;
+            stream.record_tuple_value_begin(None, &sval::Label::new("spanId").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(10))?;
             stream.binary_begin(Some(16))?;
             stream.binary_fragment_computed(&span_id)?;
             stream.binary_end()?;
-            stream.tuple_value_end(None, &sval::Index::new(10))?;
+            stream.record_tuple_value_end(None, &sval::Label::new("spanId").with_tag(&sval::tags::VALUE_IDENT),&sval::Index::new(10))?;
         }
 
-        stream.tuple_end(None, None, None)
+        stream.record_tuple_end(None, None, None)
     }
 }
 
 #[derive(Value)]
 pub enum DisplayValue<D> {
-    #[sval(index = 1)]
+    #[sval(label = "stringValue", index = 1)]
     String(D),
 }
 
@@ -324,7 +377,7 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
 
             fn binary_begin(&mut self, num_bytes: Option<usize>) -> sval::Result {
                 self.any_value_begin(&ANY_VALUE_BYTES_LABEL, &ANY_VALUE_BYTES_INDEX)?;
-                self.stream.text_begin(num_bytes)
+                self.stream.binary_begin(num_bytes)
             }
 
             fn binary_fragment(&mut self, fragment: &'sval [u8]) -> sval::Result {
@@ -336,7 +389,7 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
             }
 
             fn binary_end(&mut self) -> sval::Result {
-                self.stream.text_end()?;
+                self.stream.binary_end()?;
                 self.any_value_end(&ANY_VALUE_BYTES_LABEL, &ANY_VALUE_BYTES_INDEX)
             }
 

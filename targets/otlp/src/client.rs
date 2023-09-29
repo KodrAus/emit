@@ -1,7 +1,8 @@
 use emit_batcher::BatchError;
-use std::{future::Future, ops::ControlFlow, sync::Arc, time::Duration};
+use sval_protobuf::buf::ProtoBuf;
+use std::{future::Future, sync::Arc, time::Duration};
 
-use crate::data::PreEncoded;
+use crate::data::{PreEncoded, self};
 
 pub(super) struct OtlpClient<T> {
     sender: emit_batcher::Sender<T>,
@@ -13,8 +14,8 @@ pub(super) struct OtlpClientBuilder {
 
 enum Destination {
     HttpProto {
-        resource: Option<PreEncoded>,
-        scope: Option<PreEncoded>,
+        resource: Option<ProtoBuf>,
+        scope: Option<ProtoBuf>,
         url: String,
     },
 }
@@ -40,24 +41,15 @@ impl OtlpClientBuilder {
         }
     }
 
-    pub fn resource(mut self, resource: impl emit_core::props::Props) -> Self {
-        /*
-        let mut attributes = Vec::new();
-
-        resource.for_each(|k, v| {
-            let key = k.to_string();
-            let value = value::to_value(v);
-
-            attributes.push(KeyValue { key, value });
-
-            ControlFlow::Continue(())
-        });
-
-        self.resource = Some(Resource {
-            attributes,
-            dropped_attributes_count: 0,
-        });
-        */
+    pub fn resource(mut self, attributes: impl emit_core::props::Props) -> Self {
+        match self.dst {
+            Destination::HttpProto { ref mut resource, .. } => {
+                *resource = Some(sval_protobuf::stream_to_protobuf(data::Resource {
+                    attributes: data::PropsResourceAttributes(attributes),
+                    dropped_attribute_count: 0,
+                }));
+            }
+        }
 
         self
     }
@@ -79,8 +71,8 @@ impl OtlpClientBuilder {
                     scope,
                 } => RawClient::HttpProto {
                     url,
-                    resource,
-                    scope,
+                    resource: resource.map(PreEncoded::Proto),
+                    scope: scope.map(PreEncoded::Proto),
                     client: reqwest::Client::new(),
                 },
             }),
