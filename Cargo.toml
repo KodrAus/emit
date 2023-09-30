@@ -4,7 +4,6 @@ members = [
     "targets/term",
     "targets/otlp",
     "targets/otlp/gen",
-    "targets/opentelemetry",
     "macros",
     "benchmark",
     "tests/ui",
@@ -13,12 +12,6 @@ members = [
 exclude = [
     "tests/smoke-test"
 ]
-
-[patch.crates-io.sval]
-git = "https://github.com/sval-rs/sval"
-
-[patch.crates-io.sval_flatten]
-git = "https://github.com/sval-rs/sval"
 
 [package]
 name = "emit"

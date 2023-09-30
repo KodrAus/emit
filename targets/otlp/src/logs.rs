@@ -29,8 +29,8 @@ impl OtlpLogsEmitterBuilder {
     pub fn spawn(self) -> OtlpLogsEmitter {
         OtlpLogsEmitter {
             inner: self.inner.spawn(|client, batch| {
-                client.emit(batch, |resource, scope, batch| {
-                    Ok(
+                client.emit(batch, |ref resource, ref scope, batch| {
+                    let protobuf =
                         sval_protobuf::stream_to_protobuf(data::ExportLogsServiceRequest {
                             resource_logs: &[data::ResourceLogs {
                                 resource,
@@ -41,10 +41,9 @@ impl OtlpLogsEmitterBuilder {
                                 }],
                                 schema_url: "",
                             }],
-                        })
-                        .to_vec()
-                        .into_owned(),
-                    )
+                        });
+
+                    Ok(protobuf.to_vec().into_owned())
                 })
             }),
         }
@@ -61,63 +60,21 @@ impl emit_core::emitter::Emitter for OtlpLogsEmitter {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        println!("{}", sval_json::stream_to_string(data::LogRecord {
+        let protobuf = sval_protobuf::stream_to_protobuf(data::LogRecord {
             time_unix_nano,
             observed_time_unix_nano,
-            body: Some(data::DisplayValue::String(sval::Display::new(evt.msg()))),
-            attributes: data::PropsLogRecordAttributes(evt.props()),
+            body: &Some(data::AnyValue::<_, (), (), ()>::String(
+                &sval::Display::new(evt.msg()),
+            )),
+            attributes: &data::EmitLogRecordAttributes(evt.props()),
             dropped_attributes_count: 0,
             flags: Default::default(),
-        }).unwrap());
+        });
 
-        println!("{}", protoscope(&sval_protobuf::stream_to_protobuf(data::LogRecord {
-            time_unix_nano,
-            observed_time_unix_nano,
-            body: Some(data::DisplayValue::String(sval::Display::new(evt.msg()))),
-            attributes: data::PropsLogRecordAttributes(evt.props()),
-            dropped_attributes_count: 0,
-            flags: Default::default(),
-        }).to_vec()));
-
-        self.inner
-            .emit(sval_protobuf::stream_to_protobuf(data::LogRecord {
-                time_unix_nano,
-                observed_time_unix_nano,
-                body: Some(data::DisplayValue::String(sval::Display::new(evt.msg()))),
-                attributes: data::PropsLogRecordAttributes(evt.props()),
-                dropped_attributes_count: 0,
-                flags: Default::default(),
-            }))
+        self.inner.emit(protobuf)
     }
 
     fn blocking_flush(&self, timeout: Duration) {
         self.inner.blocking_flush(timeout)
     }
-}
-
-fn protoscope(encoded: &[u8]) -> String {
-    use std::{
-        io::{Read, Write},
-        process::{Command, Stdio},
-    };
-
-    let mut protoscope = Command::new("protoscope")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to call protoscope");
-
-    let mut stdin = protoscope.stdin.take().expect("missing stdin");
-    stdin.write_all(encoded).expect("failed to write");
-    drop(stdin);
-
-    let mut buf = String::new();
-    protoscope
-        .stdout
-        .take()
-        .expect("missing stdout")
-        .read_to_string(&mut buf)
-        .expect("failed to read");
-
-    buf
 }

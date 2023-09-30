@@ -1,8 +1,8 @@
 use emit_batcher::BatchError;
-use sval_protobuf::buf::ProtoBuf;
 use std::{future::Future, sync::Arc, time::Duration};
+use sval_protobuf::buf::ProtoBuf;
 
-use crate::data::{PreEncoded, self};
+use crate::data::{self, PreEncoded};
 
 pub(super) struct OtlpClient<T> {
     sender: emit_batcher::Sender<T>,
@@ -43,11 +43,15 @@ impl OtlpClientBuilder {
 
     pub fn resource(mut self, attributes: impl emit_core::props::Props) -> Self {
         match self.dst {
-            Destination::HttpProto { ref mut resource, .. } => {
-                *resource = Some(sval_protobuf::stream_to_protobuf(data::Resource {
-                    attributes: data::PropsResourceAttributes(attributes),
+            Destination::HttpProto {
+                ref mut resource, ..
+            } => {
+                let protobuf = sval_protobuf::stream_to_protobuf(data::Resource {
+                    attributes: &data::EmitResourceAttributes(attributes),
                     dropped_attribute_count: 0,
-                }));
+                });
+
+                *resource = Some(protobuf);
             }
         }
 
@@ -99,7 +103,7 @@ enum RawClient {
 }
 
 impl OtlpSender {
-    pub async fn emit<T>(
+    pub(crate) async fn emit<T>(
         self,
         batch: Vec<T>,
         // TODO: Encode proto

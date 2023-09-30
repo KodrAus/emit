@@ -1,4 +1,4 @@
-#[cfg(feature = "prost")]
+#[cfg(feature = "grpc")]
 mod proto;
 
 mod client;

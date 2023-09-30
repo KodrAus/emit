@@ -196,6 +196,33 @@ impl ToKey for str {
     }
 }
 
+#[cfg(feature = "sval")]
+impl<'k> sval::Value for Key<'k> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        use sval_ref::ValueRef as _;
+
+        self.stream_ref(stream)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'k> sval_ref::ValueRef<'k> for Key<'k> {
+    fn stream_ref<S: sval::Stream<'k> + ?Sized>(&self, stream: &mut S) -> sval::Result {
+        if let Some(k) = self.as_static_str() {
+            stream.value(k)
+        } else {
+            stream.value_computed(self.as_str())
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'k> serde::Serialize for Key<'k> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_str().serialize(serializer)
+    }
+}
+
 #[cfg(feature = "alloc")]
 mod alloc_support {
     use super::*;
