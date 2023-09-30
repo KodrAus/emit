@@ -128,7 +128,7 @@ pub fn with(
 ) -> proc_macro::TokenStream {
     with::expand_tokens(with::ExpandTokens {
         sync_receiver: quote!(__private::__private_with),
-        async_receiver: quote!(__private::__private_with_future),
+        async_receiver: quote!(__private::__private_with),
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })

@@ -14,8 +14,7 @@ struct Work {
 #[tokio::main]
 async fn main() {
     let emitter = emit::setup()
-        .to(emit_term::stdout())
-        .and_to(
+        .to(
             emit_otlp::logs::http_proto("http://localhost:5341/ingest/otlp/v1/logs")
                 .resource(emit::props! {
                     #[emit::key("service.name")]
@@ -25,8 +24,19 @@ async fn main() {
         )
         .init();
 
-    let _ = in_ctxt(78).await;
-    let _ = in_ctxt(71).await;
+    let mut handles = Vec::new();
+
+    for i in 0..10 {
+        handles.push(tokio::spawn(async move {
+            for n in i * 5_000..i * 5_000 + 5_000 {
+                let _ = in_ctxt(n).await;
+            }
+        }));
+    }
+
+    for handle in handles {
+        let _ = handle.await;
+    }
 
     emitter.blocking_flush(Duration::from_secs(5));
 }
@@ -44,8 +54,6 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
         };
 
         emit::info!("working on {#[emit::as_serde] work}");
-
-        tokio::time::sleep(Duration::from_secs(1)).await;
 
         if a % 2 == 0 {
             Ok(())

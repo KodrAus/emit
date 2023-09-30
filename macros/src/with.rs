@@ -78,7 +78,8 @@ fn inject_async(props: &Props, receiver_tokens: TokenStream, body: TokenStream) 
     let props_tokens = props.props_tokens();
 
     quote!({
-        emit::#receiver_tokens(#props_tokens, async #body).await
+        let __ctxt = emit::#receiver_tokens(#props_tokens);
+        __ctxt.into_future(async #body).await
     })
 }
 

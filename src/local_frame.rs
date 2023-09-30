@@ -29,6 +29,14 @@ impl<C: Ctxt> LocalFrame<C> {
             _marker: PhantomData,
         }
     }
+
+    #[track_caller]
+    pub fn into_future<F>(self, future: F) -> LocalFrameFuture<C, F> {
+        LocalFrameFuture {
+            frame: self,
+            future,
+        }
+    }
 }
 
 pub struct EnterGuard<'a, C: Ctxt> {
@@ -52,16 +60,6 @@ impl<C: Ctxt> Drop for LocalFrame<C> {
 pub struct LocalFrameFuture<C: Ctxt, F> {
     frame: LocalFrame<C>,
     future: F,
-}
-
-impl<C: Ctxt, F> LocalFrameFuture<C, F> {
-    #[track_caller]
-    pub fn new(scope: C, props: impl Props, future: F) -> Self {
-        LocalFrameFuture {
-            frame: LocalFrame::new(scope, props),
-            future,
-        }
-    }
 }
 
 impl<C: Ctxt, F: Future> Future for LocalFrameFuture<C, F> {

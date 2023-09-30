@@ -1,9 +1,8 @@
-use core::{any::Any, fmt, future::Future, ops::ControlFlow, panic::Location};
+use core::{any::Any, fmt, ops::ControlFlow, panic::Location};
 
 use emit_core::{
     ambient,
     clock::Clock,
-    ctxt::Ctxt,
     emitter::Emitter,
     filter::Filter,
     id::{SpanId, TraceId},
@@ -19,8 +18,8 @@ use emit_core::extent::ToExtent;
 use std::error::Error;
 
 use crate::{
-    base_emit, base_with, base_with_future,
-    local_frame::{LocalFrame, LocalFrameFuture},
+    base_emit, base_with,
+    local_frame::LocalFrame,
     template::{Formatter, Part},
     Key,
 };
@@ -427,20 +426,10 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_with(props: impl Props) -> LocalFrame<impl Ctxt + Send + Sync + 'static> {
+pub fn __private_with(props: impl Props) -> LocalFrame<emit_core::ambient::Get> {
     let ambient = ambient::get();
 
     base_with(ambient, props)
-}
-
-#[track_caller]
-pub fn __private_with_future<F: Future>(
-    props: impl Props,
-    future: F,
-) -> LocalFrameFuture<impl Ctxt + Send + Sync + 'static, F> {
-    let ambient = ambient::get();
-
-    base_with_future(ambient, props, future)
 }
 
 #[track_caller]

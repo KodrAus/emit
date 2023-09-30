@@ -3,11 +3,9 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use core::future::Future;
-
 use emit_core::extent::ToExtent;
 
-use crate::local_frame::{LocalFrame, LocalFrameFuture};
+use crate::local_frame::LocalFrame;
 
 #[doc(inline)]
 pub use emit_macros::*;
@@ -66,15 +64,6 @@ fn base_emit(
 #[track_caller]
 fn base_with<C: Ctxt>(ctxt: C, props: impl Props) -> LocalFrame<C> {
     LocalFrame::new(ctxt, props)
-}
-
-#[track_caller]
-fn base_with_future<C: Ctxt, F: Future>(
-    ctxt: C,
-    props: impl Props,
-    future: F,
-) -> LocalFrameFuture<C, F> {
-    LocalFrameFuture::new(ctxt, props, future)
 }
 
 #[track_caller]
