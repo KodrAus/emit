@@ -11,7 +11,60 @@ use std::{
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub fn bounded<T>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
+pub trait Channel {
+    type Item;
+
+    fn new() -> Self;
+
+    fn with_capacity(capacity: usize) -> Self
+    where
+        Self: Sized,
+    {
+        let _ = capacity;
+
+        Self::new()
+    }
+
+    fn push(&mut self, item: Self::Item);
+
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn clear(&mut self);
+}
+
+impl<T> Channel for Vec<T> {
+    type Item = T;
+
+    fn new() -> Self {
+        Vec::new()
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        Vec::with_capacity(capacity)
+    }
+
+    fn push(&mut self, item: Self::Item) {
+        self.push(item);
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.clear()
+    }
+}
+
+pub fn bounded<T: Channel>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
         state: Mutex::new(State {
             next_batch: Batch::new(),
@@ -46,15 +99,15 @@ impl<T> Drop for Sender<T> {
     }
 }
 
-impl<T> Sender<T> {
-    pub fn send(&self, msg: T) {
+impl<T: Channel> Sender<T> {
+    pub fn send(&self, msg: T::Item) {
         let mut state = self.shared.state.lock().unwrap();
 
         // If the channel is full then drop it; this prevents OOMing
         // when the destination is unavailable. We don't notify the batch
         // in this case because the clearing is opaque to outside observers
-        if state.next_batch.contents.len() >= self.max_capacity {
-            state.next_batch.contents.clear();
+        if state.next_batch.channel.len() >= self.max_capacity {
+            state.next_batch.channel.clear();
         }
 
         // If the channel is closed then return without adding the message
@@ -62,7 +115,7 @@ impl<T> Sender<T> {
             return;
         }
 
-        state.next_batch.contents.push(msg);
+        state.next_batch.channel.push(msg);
     }
 
     pub fn on_next_flush(&self, watcher: impl FnOnce() + Send + 'static) {
@@ -76,7 +129,7 @@ impl<T> Sender<T> {
         //   - the state is closed
         // Then:
         // - Call the watcher without scheduling it; there's nothing to wait for
-        if !state.is_in_batch && (state.next_batch.contents.is_empty() || !state.is_open) {
+        if !state.is_in_batch && (state.next_batch.channel.is_empty() || !state.is_open) {
             // Drop the lock before signalling the watcher
             drop(state);
 
@@ -104,25 +157,25 @@ impl<T> Drop for Receiver<T> {
 }
 
 pub struct BatchError<T> {
-    retryable: Vec<T>,
+    retryable: T,
 }
 
-impl<T> BatchError<T> {
-    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: Vec<T>) -> Self {
+impl<T: Channel> BatchError<T> {
+    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: T) -> Self {
         BatchError { retryable }
     }
 
     pub fn no_retry(_: impl std::error::Error + Send + Sync + 'static) -> Self {
         BatchError {
-            retryable: Vec::new(),
+            retryable: T::new(),
         }
     }
 }
 
-impl<T> Receiver<T> {
+impl<T: Channel> Receiver<T> {
     pub fn blocking_exec(
         self,
-        mut on_batch: impl FnMut(Vec<T>) -> Result<(), BatchError<T>>,
+        mut on_batch: impl FnMut(T) -> Result<(), BatchError<T>>,
     ) -> Result<(), Error> {
         static WAKER: OnceLock<Arc<NeverWake>> = OnceLock::new();
 
@@ -162,7 +215,7 @@ impl<T> Receiver<T> {
     >(
         mut self,
         mut wait: impl FnMut(Duration) -> FWait,
-        mut on_batch: impl FnMut(Vec<T>) -> FBatch,
+        mut on_batch: impl FnMut(T) -> FBatch,
     ) -> Result<(), Error> {
         // This variable holds the "next" batch
         // Under the lock all we do is push onto a pre-allocated vec
@@ -179,7 +232,7 @@ impl<T> Receiver<T> {
 
                 // If there are events then mark that we're in a batch and replace it with an empty one
                 // The sender will start filling this new batch
-                if state.next_batch.contents.len() > 0 {
+                if state.next_batch.channel.len() > 0 {
                     state.is_in_batch = true;
 
                     (
@@ -196,7 +249,7 @@ impl<T> Receiver<T> {
 
                     (
                         Batch {
-                            contents: Vec::new(),
+                            channel: T::new(),
                             watchers,
                         },
                         open,
@@ -205,21 +258,21 @@ impl<T> Receiver<T> {
             };
 
             // Run outside of the lock
-            if current_batch.contents.len() > 0 {
+            if current_batch.channel.len() > 0 {
                 self.retry.reset();
                 self.retry_delay.reset();
                 self.idle_delay.reset();
 
                 // Re-allocate our next buffer outside of the lock
                 next_batch = Batch {
-                    contents: Vec::with_capacity(self.capacity.next(current_batch.contents.len())),
+                    channel: T::with_capacity(self.capacity.next(current_batch.channel.len())),
                     watchers: Watchers::new(),
                 };
 
                 // Emit the batch, taking care not to panic
                 loop {
                     if let Ok(on_batch) =
-                        panic::catch_unwind(AssertUnwindSafe(|| on_batch(current_batch.contents)))
+                        panic::catch_unwind(AssertUnwindSafe(|| on_batch(current_batch.channel)))
                     {
                         // If the current batch failed then it may be retried
                         // This depends on `on_batch`, who may or may not return a batch to retry
@@ -231,7 +284,7 @@ impl<T> Receiver<T> {
                                 wait(self.retry_delay.next()).await;
 
                                 current_batch = Batch {
-                                    contents: retryable,
+                                    channel: retryable,
                                     watchers: current_batch.watchers,
                                 };
 
@@ -335,20 +388,20 @@ struct State<T> {
 }
 
 struct Batch<T> {
-    contents: Vec<T>,
+    channel: T,
     watchers: Watchers,
 }
 
-impl<T> Batch<T> {
+impl<T: Channel> Batch<T> {
     fn new() -> Self {
         Batch {
-            contents: Vec::new(),
+            channel: T::new(),
             watchers: Watchers::new(),
         }
     }
 }
 
-impl<T> Default for Batch<T> {
+impl<T: Channel> Default for Batch<T> {
     fn default() -> Self {
         Batch::new()
     }

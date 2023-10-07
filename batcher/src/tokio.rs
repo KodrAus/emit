@@ -4,12 +4,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{BatchError, Receiver, Sender};
+use crate::{BatchError, Channel, Receiver, Sender};
 
-pub fn spawn<T: Send + 'static, F: Future<Output = Result<(), BatchError<T>>> + Send + 'static>(
+pub fn spawn<
+    T: Channel + Send + 'static,
+    F: Future<Output = Result<(), BatchError<T>>> + Send + 'static,
+>(
     receiver: Receiver<T>,
-    on_batch: impl FnMut(Vec<T>) -> F + Send + 'static,
-) {
+    on_batch: impl FnMut(T) -> F + Send + 'static,
+) where
+    T::Item: Send + 'static,
+{
     let receive = async move {
         receiver
             .exec(|delay| tokio::time::sleep(delay), on_batch)
@@ -36,7 +41,7 @@ pub fn spawn<T: Send + 'static, F: Future<Output = Result<(), BatchError<T>>> + 
     }
 }
 
-pub fn blocking_flush<T>(sender: &Sender<T>, timeout: Duration) {
+pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) {
     tokio::task::block_in_place(|| {
         let (notifier, mut notified) = tokio::sync::oneshot::channel();
 

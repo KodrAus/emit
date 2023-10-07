@@ -9,7 +9,7 @@ use self::http::HttpConnection;
 mod http;
 
 pub(super) struct OtlpClient<T> {
-    sender: emit_batcher::Sender<T>,
+    sender: emit_batcher::Sender<Vec<T>>,
 }
 
 pub(super) struct OtlpClientBuilder {
@@ -64,7 +64,7 @@ impl OtlpClientBuilder {
 
     pub fn spawn<
         T: Send + 'static,
-        F: Future<Output = Result<(), BatchError<T>>> + Send + 'static,
+        F: Future<Output = Result<(), BatchError<Vec<T>>>> + Send + 'static,
     >(
         self,
         mut on_batch: impl FnMut(OtlpSender, Vec<T>) -> F + Send + 'static,
@@ -112,8 +112,8 @@ impl OtlpSender {
             Option<&PreEncoded>,
             Option<&PreEncoded>,
             &[T],
-        ) -> Result<PreEncoded, BatchError<T>>,
-    ) -> Result<(), BatchError<T>> {
+        ) -> Result<PreEncoded, BatchError<Vec<T>>>,
+    ) -> Result<(), BatchError<Vec<T>>> {
         match *self.client {
             RawClient::HttpProto {
                 ref http,
