@@ -22,20 +22,11 @@ async fn main() {
                 })
                 .spawn(),
         )
+        .and_to(emit_term::stdout())
         .init();
 
-    let mut handles = Vec::new();
-
-    for i in 0..10 {
-        handles.push(tokio::spawn(async move {
-            for n in i * 5_000..i * 5_000 + 5_000 {
-                let _ = in_ctxt(n).await;
-            }
-        }));
-    }
-
-    for handle in handles {
-        let _ = handle.await;
+    for i in 0..100 {
+        let _ = in_ctxt(i).await;
     }
 
     emitter.blocking_flush(Duration::from_secs(5));
@@ -54,6 +45,8 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
         };
 
         emit::info!("working on {#[emit::as_serde] work}");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         if a % 2 == 0 {
             Ok(())

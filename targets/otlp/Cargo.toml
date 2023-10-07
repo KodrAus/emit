@@ -4,7 +4,9 @@ version = "0.0.0"
 edition = "2021"
 
 [features]
-grpc = ["dep:prost"]
+default = ["http"]
+http = ["dep:hyper", "dep:hyper-util"]
+grpc = ["dep:prost", "dep:serde", "emit_core/serde"]
 
 [dependencies.emit_core]
 path = "../../core"
@@ -15,26 +17,40 @@ path = "../../batcher"
 features = ["tokio"]
 
 [dependencies.sval]
-version = "2.9"
+version = "2.10"
 features = ["std"]
 
 [dependencies.sval_ref]
-version = "2.9"
+version = "2.10"
 
 [dependencies.sval_derive]
-version = "2.9"
+version = "2.10"
 features = ["std", "flatten"]
 
 [dependencies.sval_protobuf]
 git = "https://github.com/KodrAus/sval_protobuf"
+features = ["bytes"]
 
 [dependencies.tokio]
 version = "1"
 features = ["rt-multi-thread", "sync"]
 
-[dependencies.reqwest]
-version = "0.11"
+[dependencies.hyper]
+optional = true
+version = "1.0.0-rc.4"
+features = ["client", "http1"]
+
+[dependencies.hyper-util]
+optional = true
+git = "https://github.com/hyperium/hyper-util"
+
+[dependencies.bytes]
+version = "1"
 
 [dependencies.prost]
 version = "0.11"
+optional = true
+
+[dependencies.serde]
+version = "1"
 optional = true

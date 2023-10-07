@@ -4,6 +4,10 @@ use sval_protobuf::buf::ProtoBuf;
 
 use crate::data::{self, PreEncoded};
 
+use self::http::HttpConnection;
+
+mod http;
+
 pub(super) struct OtlpClient<T> {
     sender: emit_batcher::Sender<T>,
 }
@@ -65,7 +69,7 @@ impl OtlpClientBuilder {
         self,
         mut on_batch: impl FnMut(OtlpSender, Vec<T>) -> F + Send + 'static,
     ) -> OtlpClient<T> {
-        let (sender, receiver) = emit_batcher::bounded(1024);
+        let (sender, receiver) = emit_batcher::bounded(10_000);
 
         let client = OtlpSender {
             client: Arc::new(match self.dst {
@@ -74,10 +78,9 @@ impl OtlpClientBuilder {
                     resource,
                     scope,
                 } => RawClient::HttpProto {
-                    url,
+                    http: HttpConnection::new(&url).expect("failed to open connection"),
                     resource: resource.map(PreEncoded::Proto),
                     scope: scope.map(PreEncoded::Proto),
-                    client: reqwest::Client::new(),
                 },
             }),
         };
@@ -95,10 +98,9 @@ pub struct OtlpSender {
 
 enum RawClient {
     HttpProto {
-        url: String,
+        http: HttpConnection,
         resource: Option<PreEncoded>,
         scope: Option<PreEncoded>,
-        client: reqwest::Client,
     },
 }
 
@@ -106,29 +108,21 @@ impl OtlpSender {
     pub(crate) async fn emit<T>(
         self,
         batch: Vec<T>,
-        // TODO: Encode proto
         encode: impl FnOnce(
             Option<&PreEncoded>,
             Option<&PreEncoded>,
             &[T],
-        ) -> Result<Vec<u8>, BatchError<T>>,
+        ) -> Result<PreEncoded, BatchError<T>>,
     ) -> Result<(), BatchError<T>> {
         match *self.client {
             RawClient::HttpProto {
-                ref url,
+                ref http,
                 ref resource,
                 ref scope,
-                ref client,
             } => {
-                let body = encode(resource.as_ref(), scope.as_ref(), &batch)?;
-
-                client
-                    .request(reqwest::Method::POST, url)
-                    .header("content-type", "application/x-protobuf")
-                    .body(body)
-                    .send()
+                http.send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                     .await
-                    .map_err(|e| BatchError::retry(e, batch))?;
+                    .map_err(|e| BatchError::no_retry(e))?;
             }
         }
 

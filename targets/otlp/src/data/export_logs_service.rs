@@ -4,26 +4,26 @@ use super::{InstrumentationScope, LogRecord, Resource};
 
 #[derive(Value)]
 pub struct ExportLogsServiceRequest<'a, RL: ?Sized = [ResourceLogs<'a>]> {
-    #[sval(index = 1)]
+    #[sval(label = "resourceLogs", index = 1)]
     pub resource_logs: &'a RL,
 }
 
 #[derive(Value)]
 pub struct ResourceLogs<'a, R: ?Sized = Resource<'a>, SL: ?Sized = [ScopeLogs<'a>]> {
-    #[sval(index = 1)]
+    #[sval(label = "resource", index = 1)]
     pub resource: &'a R,
-    #[sval(index = 2)]
+    #[sval(label = "scopeLogs", index = 2)]
     pub scope_logs: &'a SL,
-    #[sval(index = 3)]
+    #[sval(label = "schemaUrl", index = 3)]
     pub schema_url: &'a str,
 }
 
 #[derive(Value)]
 pub struct ScopeLogs<'a, IS: ?Sized = InstrumentationScope<'a>, LR: ?Sized = &'a [LogRecord<'a>]> {
-    #[sval(index = 1)]
+    #[sval(label = "scope", index = 1)]
     pub scope: &'a IS,
-    #[sval(index = 2)]
+    #[sval(label = "logRecords", index = 2)]
     pub log_records: &'a LR,
-    #[sval(index = 3)]
+    #[sval(label = "schemaUrl", index = 3)]
     pub schema_url: &'a str,
 }

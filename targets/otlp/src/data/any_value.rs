@@ -23,7 +23,6 @@ const ANY_VALUE_ARRAY_INDEX: sval::Index = sval::Index::new(5);
 const ANY_VALUE_KVLIST_INDEX: sval::Index = sval::Index::new(6);
 const ANY_VALUE_BYTES_INDEX: sval::Index = sval::Index::new(7);
 
-// TODO: Use the consts here
 #[derive(Value)]
 pub enum AnyValue<
     'a,
@@ -32,31 +31,41 @@ pub enum AnyValue<
     KV: ?Sized = KvList<'a>,
     BV: ?Sized = sval::BinarySlice,
 > {
-    #[sval(label = "stringValue", index = 1)]
+    #[sval(label = ANY_VALUE_STRING_LABEL, index = ANY_VALUE_STRING_INDEX)]
     String(&'a SV),
-    #[sval(label = "boolValue", index = 2)]
+    #[sval(label = ANY_VALUE_BOOL_LABEL, index = ANY_VALUE_BOOL_INDEX)]
     Bool(bool),
-    #[sval(label = "intValue", index = 3)]
+    #[sval(label = ANY_VALUE_INT_LABEL, index = ANY_VALUE_INT_INDEX)]
     Int(i64),
-    #[sval(label = "doubleValue", index = 4)]
+    #[sval(label = ANY_VALUE_DOUBLE_LABEL, index = ANY_VALUE_DOUBLE_INDEX)]
     Double(f64),
-    #[sval(label = "arrayValue", index = 5)]
+    #[sval(label = ANY_VALUE_ARRAY_LABEL, index = ANY_VALUE_ARRAY_INDEX)]
     Array(&'a AV),
-    #[sval(label = "kvlistValue", index = 6)]
+    #[sval(label = ANY_VALUE_KVLIST_LABEL, index = ANY_VALUE_KVLIST_INDEX)]
     Kvlist(&'a KV),
-    #[sval(label = "bytesValue", index = 7)]
+    #[sval(label = ANY_VALUE_BYTES_LABEL, index = ANY_VALUE_BYTES_INDEX)]
     Bytes(&'a BV),
 }
 
+const ARRAY_VALUES_LABEL: sval::Label =
+    sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT);
+
+const ARRAY_VALUES_INDEX: sval::Index = sval::Index::new(1);
+
 #[derive(Value)]
 pub struct ArrayValue<'a> {
-    #[sval(index = 1)]
+    #[sval(label = ARRAY_VALUES_LABEL, index = ARRAY_VALUES_INDEX)]
     pub values: &'a [AnyValue<'a>],
 }
 
+const KVLIST_VALUES_LABEL: sval::Label =
+    sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT);
+
+const KVLIST_VALUES_INDEX: sval::Index = sval::Index::new(1);
+
 #[derive(Value)]
 pub struct KvList<'a> {
-    #[sval(index = 1)]
+    #[sval(label = KVLIST_VALUES_LABEL, index = KVLIST_VALUES_INDEX)]
     pub values: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
 }
 
@@ -67,25 +76,12 @@ const KEY_VALUE_VALUE_LABEL: sval::Label =
 const KEY_VALUE_KEY_INDEX: sval::Index = sval::Index::new(1);
 const KEY_VALUE_VALUE_INDEX: sval::Index = sval::Index::new(2);
 
+#[derive(Value)]
 pub struct KeyValue<K, V> {
+    #[sval(label = KEY_VALUE_KEY_LABEL, index = KEY_VALUE_KEY_INDEX)]
     pub key: K,
+    #[sval(label = KEY_VALUE_VALUE_LABEL, index = KEY_VALUE_VALUE_INDEX)]
     pub value: V,
-}
-
-impl<K: sval::Value, V: sval::Value> sval::Value for KeyValue<K, V> {
-    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
-        stream.record_tuple_begin(None, None, None, Some(2))?;
-
-        stream.record_tuple_value_begin(None, &KEY_VALUE_KEY_LABEL, &KEY_VALUE_KEY_INDEX)?;
-        stream.value(&self.key)?;
-        stream.record_tuple_value_end(None, &KEY_VALUE_KEY_LABEL, &KEY_VALUE_KEY_INDEX)?;
-
-        stream.record_tuple_value_begin(None, &KEY_VALUE_VALUE_LABEL, &KEY_VALUE_VALUE_INDEX)?;
-        stream.value(&self.value)?;
-        stream.record_tuple_value_end(None, &KEY_VALUE_VALUE_LABEL, &KEY_VALUE_VALUE_INDEX)?;
-
-        stream.record_tuple_end(None, None, None)
-    }
 }
 
 impl<'a, K: sval_ref::ValueRef<'a>, V: sval_ref::ValueRef<'a>> sval_ref::ValueRef<'a>
@@ -231,8 +227,8 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
                 self.stream.record_tuple_begin(None, None, None, Some(1))?;
                 self.stream.record_tuple_value_begin(
                     None,
-                    &sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
+                    &ARRAY_VALUES_LABEL,
+                    &ARRAY_VALUES_INDEX,
                 )?;
                 self.stream.seq_begin(num_entries)
             }
@@ -249,8 +245,8 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
                 self.stream.seq_end()?;
                 self.stream.record_tuple_value_end(
                     None,
-                    &sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
+                    &ARRAY_VALUES_LABEL,
+                    &ARRAY_VALUES_INDEX,
                 )?;
                 self.stream.record_tuple_end(None, None, None)?;
                 self.any_value_end(&ANY_VALUE_ARRAY_LABEL, &ANY_VALUE_ARRAY_INDEX)
@@ -265,8 +261,8 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
                 self.stream.record_tuple_begin(None, None, None, Some(1))?;
                 self.stream.record_tuple_value_begin(
                     None,
-                    &sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
+                    &ARRAY_VALUES_LABEL,
+                    &ARRAY_VALUES_INDEX,
                 )?;
                 self.stream.seq_begin(num_entries)
             }
@@ -278,34 +274,31 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
                 self.stream.record_tuple_begin(None, None, None, Some(2))?;
                 self.stream.record_tuple_value_begin(
                     None,
-                    &sval::Label::new("key").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
+                    &KEY_VALUE_KEY_LABEL,
+                    &KEY_VALUE_KEY_INDEX,
                 )
             }
 
             fn map_key_end(&mut self) -> sval::Result {
                 self.in_map_key = false;
 
-                self.stream.record_tuple_value_end(
-                    None,
-                    &sval::Label::new("key").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
-                )
+                self.stream
+                    .record_tuple_value_end(None, &KEY_VALUE_KEY_LABEL, &KEY_VALUE_KEY_INDEX)
             }
 
             fn map_value_begin(&mut self) -> sval::Result {
                 self.stream.record_tuple_value_begin(
                     None,
-                    &sval::Label::new("value").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(2),
+                    &KEY_VALUE_VALUE_LABEL,
+                    &KEY_VALUE_VALUE_INDEX,
                 )
             }
 
             fn map_value_end(&mut self) -> sval::Result {
                 self.stream.record_tuple_value_end(
                     None,
-                    &sval::Label::new("value").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(2),
+                    &KEY_VALUE_VALUE_LABEL,
+                    &KEY_VALUE_VALUE_INDEX,
                 )?;
                 self.stream.record_tuple_end(None, None, None)?;
                 self.stream.seq_value_end()
@@ -315,8 +308,8 @@ impl<'a> sval_ref::ValueRef<'a> for EmitValue<'a> {
                 self.stream.seq_end()?;
                 self.stream.record_tuple_value_end(
                     None,
-                    &sval::Label::new("values").with_tag(&sval::tags::VALUE_IDENT),
-                    &sval::Index::new(1),
+                    &KVLIST_VALUES_LABEL,
+                    &KVLIST_VALUES_INDEX,
                 )?;
                 self.stream.record_tuple_end(None, None, None)?;
                 self.any_value_end(&ANY_VALUE_KVLIST_LABEL, &ANY_VALUE_KVLIST_INDEX)

@@ -1,6 +1,6 @@
 use crate::{
     client::{OtlpClient, OtlpClientBuilder},
-    data,
+    data::{self, PreEncoded},
 };
 use std::time::Duration;
 use sval_protobuf::buf::ProtoBuf;
@@ -30,8 +30,8 @@ impl OtlpLogsEmitterBuilder {
         OtlpLogsEmitter {
             inner: self.inner.spawn(|client, batch| {
                 client.emit(batch, |ref resource, ref scope, batch| {
-                    let protobuf =
-                        sval_protobuf::stream_to_protobuf(data::ExportLogsServiceRequest {
+                    Ok(PreEncoded::Proto(sval_protobuf::stream_to_protobuf(
+                        data::ExportLogsServiceRequest {
                             resource_logs: &[data::ResourceLogs {
                                 resource,
                                 scope_logs: &[data::ScopeLogs {
@@ -41,9 +41,8 @@ impl OtlpLogsEmitterBuilder {
                                 }],
                                 schema_url: "",
                             }],
-                        });
-
-                    Ok(protobuf.to_vec().into_owned())
+                        },
+                    )))
                 })
             }),
         }

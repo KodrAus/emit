@@ -1,7 +1,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = prost_build::Config::new();
 
-    config.out_dir("../src/proto");
+    config.out_dir("../src/data/generated");
 
     config.compile_protos(
         &[

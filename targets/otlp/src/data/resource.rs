@@ -12,6 +12,11 @@ pub struct Resource<'a, A: ?Sized = InlineResourceAttributes<'a>> {
     pub dropped_attribute_count: u32,
 }
 
+const RESOURCE_ATTRIBUTES_LABEL: sval::Label =
+    sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT);
+
+const RESOURCE_ATTRIBUTES_INDEX: sval::Index = sval::Index::new(1);
+
 #[derive(Value)]
 pub struct InlineResourceAttributes<'a> {
     #[sval(index = 1)]
@@ -26,8 +31,8 @@ impl<P: emit_core::props::Props> sval::Value for EmitResourceAttributes<P> {
 
         stream.record_tuple_value_begin(
             None,
-            &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT),
-            &sval::Index::new(1),
+            &RESOURCE_ATTRIBUTES_LABEL,
+            &RESOURCE_ATTRIBUTES_INDEX,
         )?;
         stream.seq_begin(None)?;
 
@@ -61,8 +66,8 @@ impl<P: emit_core::props::Props> sval::Value for EmitResourceAttributes<P> {
         stream.seq_end()?;
         stream.record_tuple_value_end(
             None,
-            &sval::Label::new("attributes").with_tag(&sval::tags::VALUE_IDENT),
-            &sval::Index::new(1),
+            &RESOURCE_ATTRIBUTES_LABEL,
+            &RESOURCE_ATTRIBUTES_INDEX,
         )?;
 
         stream.record_tuple_end(None, None, None)
