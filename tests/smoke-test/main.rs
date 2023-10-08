@@ -20,7 +20,8 @@ async fn main() {
                     #[emit::key("service.name")]
                     service_name: "smoke-test-rs",
                 })
-                .spawn(),
+                .spawn()
+                .unwrap(),
         )
         .and_to(emit_term::stdout())
         .init();

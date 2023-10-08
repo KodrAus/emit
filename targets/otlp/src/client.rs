@@ -2,7 +2,10 @@ use emit_batcher::BatchError;
 use std::{future::Future, sync::Arc, time::Duration};
 use sval_protobuf::buf::ProtoBuf;
 
-use crate::data::{self, PreEncoded};
+use crate::{
+    data::{self, PreEncoded},
+    Error,
+};
 
 use self::http::HttpConnection;
 
@@ -62,13 +65,35 @@ impl OtlpClientBuilder {
         self
     }
 
+    pub fn scope(
+        mut self,
+        name: &str,
+        version: &str,
+        attributes: impl emit_core::props::Props,
+    ) -> Self {
+        match self.dst {
+            Destination::HttpProto { ref mut scope, .. } => {
+                let protobuf = sval_protobuf::stream_to_protobuf(data::InstrumentationScope {
+                    name,
+                    version,
+                    attributes: &data::EmitInstrumentationScopeAttributes(attributes),
+                    dropped_attribute_count: 0,
+                });
+
+                *scope = Some(protobuf);
+            }
+        }
+
+        self
+    }
+
     pub fn spawn<
         T: Send + 'static,
         F: Future<Output = Result<(), BatchError<Vec<T>>>> + Send + 'static,
     >(
         self,
         mut on_batch: impl FnMut(OtlpSender, Vec<T>) -> F + Send + 'static,
-    ) -> OtlpClient<T> {
+    ) -> Result<OtlpClient<T>, Error> {
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
         let client = OtlpSender {
@@ -78,7 +103,7 @@ impl OtlpClientBuilder {
                     resource,
                     scope,
                 } => RawClient::HttpProto {
-                    http: HttpConnection::new(&url).expect("failed to open connection"),
+                    http: HttpConnection::new(&url)?,
                     resource: resource.map(PreEncoded::Proto),
                     scope: scope.map(PreEncoded::Proto),
                 },
@@ -87,7 +112,7 @@ impl OtlpClientBuilder {
 
         emit_batcher::tokio::spawn(receiver, move |batch| on_batch(client.clone(), batch));
 
-        OtlpClient { sender }
+        Ok(OtlpClient { sender })
     }
 }
 

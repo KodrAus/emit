@@ -5,6 +5,7 @@ use sval_derive::Value;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
 
 mod any_value;
+mod attributes;
 mod export_logs_service;
 mod instrumentation_scope;
 mod log_record;

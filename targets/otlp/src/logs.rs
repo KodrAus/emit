@@ -1,6 +1,7 @@
 use crate::{
     client::{OtlpClient, OtlpClientBuilder},
     data::{self, PreEncoded},
+    Error,
 };
 use std::time::Duration;
 use sval_protobuf::buf::ProtoBuf;
@@ -26,8 +27,19 @@ impl OtlpLogsEmitterBuilder {
         }
     }
 
-    pub fn spawn(self) -> OtlpLogsEmitter {
-        OtlpLogsEmitter {
+    pub fn scope(
+        self,
+        name: &str,
+        version: &str,
+        attributes: impl emit_core::props::Props,
+    ) -> Self {
+        OtlpLogsEmitterBuilder {
+            inner: self.inner.scope(name, version, attributes),
+        }
+    }
+
+    pub fn spawn(self) -> Result<OtlpLogsEmitter, Error> {
+        Ok(OtlpLogsEmitter {
             inner: self.inner.spawn(|client, batch| {
                 client.emit(batch, |ref resource, ref scope, batch| {
                     Ok(PreEncoded::Proto(sval_protobuf::stream_to_protobuf(
@@ -44,8 +56,8 @@ impl OtlpLogsEmitterBuilder {
                         },
                     )))
                 })
-            }),
-        }
+            })?,
+        })
     }
 }
 
@@ -63,7 +75,7 @@ impl emit_core::emitter::Emitter for OtlpLogsEmitter {
             time_unix_nano,
             observed_time_unix_nano,
             body: &Some(data::AnyValue::<_, (), (), ()>::String(
-                &sval::Display::new(evt.msg()),
+                &sval::Display::new(evt.tpl()),
             )),
             attributes: &data::EmitLogRecordAttributes(evt.props()),
             dropped_attributes_count: 0,

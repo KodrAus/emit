@@ -1,8 +1,6 @@
-use std::{collections::HashSet, ops::ControlFlow};
-
 use sval_derive::Value;
 
-use super::{AnyValue, EmitValue, KeyValue};
+use super::{attributes::stream_attributes, AnyValue, KeyValue};
 
 #[derive(Value)]
 #[repr(i32)]
@@ -87,55 +85,27 @@ impl<P: emit_core::props::Props> sval::Value for EmitLogRecordAttributes<P> {
             &LOG_RECORD_ATTRIBUTES_LABEL,
             &LOG_RECORD_ATTRIBUTES_INDEX,
         )?;
-        stream.seq_begin(None)?;
-
-        let mut seen = HashSet::new();
-        self.0.for_each(|k, v| {
-            match k.as_str() {
-                emit_core::well_known::LVL_KEY => {
-                    level = v.to_level().unwrap_or_default();
-                }
-                emit_core::well_known::SPAN_ID_KEY => {
-                    span_id = v
-                        .to_span_id()
-                        .map(|span_id| span_id.to_hex())
-                        .unwrap_or_default();
-                }
-                emit_core::well_known::TRACE_ID_KEY => {
-                    trace_id = v
-                        .to_trace_id()
-                        .map(|trace_id| trace_id.to_hex())
-                        .unwrap_or_default();
-                }
-                _ => {
-                    if seen.insert(k.to_owned()) {
-                        stream
-                            .seq_value_begin()
-                            .map(|_| ControlFlow::Continue(()))
-                            .unwrap_or(ControlFlow::Break(()))?;
-
-                        sval_ref::stream_ref(
-                            &mut *stream,
-                            KeyValue {
-                                key: k,
-                                value: EmitValue(v),
-                            },
-                        )
-                        .map(|_| ControlFlow::Continue(()))
-                        .unwrap_or(ControlFlow::Break(()))?;
-
-                        stream
-                            .seq_value_end()
-                            .map(|_| ControlFlow::Continue(()))
-                            .unwrap_or(ControlFlow::Break(()))?;
-                    }
-                }
+        stream_attributes(&mut *stream, &self.0, |k, v| match k.as_str() {
+            emit_core::well_known::LVL_KEY => {
+                level = v.to_level().unwrap_or_default();
+                true
             }
-
-            ControlFlow::Continue(())
-        });
-
-        stream.seq_end()?;
+            emit_core::well_known::SPAN_ID_KEY => {
+                span_id = v
+                    .to_span_id()
+                    .map(|span_id| span_id.to_hex())
+                    .unwrap_or_default();
+                true
+            }
+            emit_core::well_known::TRACE_ID_KEY => {
+                trace_id = v
+                    .to_trace_id()
+                    .map(|trace_id| trace_id.to_hex())
+                    .unwrap_or_default();
+                true
+            }
+            _ => false,
+        })?;
         stream.record_tuple_value_end(
             None,
             &LOG_RECORD_ATTRIBUTES_LABEL,

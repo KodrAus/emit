@@ -225,6 +225,8 @@ impl<'k> serde::Serialize for Key<'k> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
+    use alloc::borrow::Cow;
+
     use super::*;
 
     impl Key<'static> {
@@ -241,6 +243,13 @@ mod alloc_support {
     }
 
     impl<'k> Key<'k> {
+        pub fn to_cow(&self) -> Cow<'static, str> {
+            match self.value_static {
+                Some(key) => Cow::Borrowed(key),
+                None => Cow::Owned(self.as_str().to_owned()),
+            }
+        }
+
         pub fn to_owned(&self) -> Key<'static> {
             match self.value_static {
                 Some(key) => Key::new(key),

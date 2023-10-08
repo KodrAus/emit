@@ -1,8 +1,6 @@
-use std::{collections::HashSet, ops::ControlFlow};
-
 use sval_derive::Value;
 
-use super::{AnyValue, EmitValue, KeyValue};
+use super::{attributes::stream_attributes, AnyValue, KeyValue};
 
 #[derive(Value)]
 pub struct Resource<'a, A: ?Sized = InlineResourceAttributes<'a>> {
@@ -34,36 +32,7 @@ impl<P: emit_core::props::Props> sval::Value for EmitResourceAttributes<P> {
             &RESOURCE_ATTRIBUTES_LABEL,
             &RESOURCE_ATTRIBUTES_INDEX,
         )?;
-        stream.seq_begin(None)?;
-
-        let mut seen = HashSet::new();
-        self.0.for_each(|k, v| {
-            if seen.insert(k.to_owned()) {
-                stream
-                    .seq_value_begin()
-                    .map(|_| ControlFlow::Continue(()))
-                    .unwrap_or(ControlFlow::Break(()))?;
-
-                sval_ref::stream_ref(
-                    &mut *stream,
-                    KeyValue {
-                        key: k,
-                        value: EmitValue(v),
-                    },
-                )
-                .map(|_| ControlFlow::Continue(()))
-                .unwrap_or(ControlFlow::Break(()))?;
-
-                stream
-                    .seq_value_end()
-                    .map(|_| ControlFlow::Continue(()))
-                    .unwrap_or(ControlFlow::Break(()))?;
-            }
-
-            ControlFlow::Continue(())
-        });
-
-        stream.seq_end()?;
+        stream_attributes(&mut *stream, &self.0, |_, _| false)?;
         stream.record_tuple_value_end(
             None,
             &RESOURCE_ATTRIBUTES_LABEL,
