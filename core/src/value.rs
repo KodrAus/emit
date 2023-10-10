@@ -1,4 +1,4 @@
-use core::{fmt, str::FromStr};
+use core::{fmt, ops, str::FromStr};
 
 #[derive(Clone)]
 pub struct Value<'v>(value_bag::ValueBag<'v>);
@@ -87,6 +87,17 @@ impl<'v> fmt::Display for Value<'v> {
     }
 }
 
+impl<'a, 'b> ops::Add<Value<'b>> for Value<'a> {
+    type Output = Option<Value<'a>>;
+
+    fn add(self, rhs: Value<'b>) -> Self::Output {
+        let lhs = self.0.to_i64()?;
+        let rhs = rhs.0.to_i64()?;
+
+        Some(Value(value_bag::ValueBag::from(lhs.checked_add(rhs)?)))
+    }
+}
+
 #[cfg(feature = "sval")]
 impl<'v> sval::Value for Value<'v> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
@@ -105,18 +116,6 @@ impl<'v> sval_ref::ValueRef<'v> for Value<'v> {
 impl<'v> serde::Serialize for Value<'v> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
-    }
-}
-
-impl<'v> From<value_bag::ValueBag<'v>> for Value<'v> {
-    fn from(value: value_bag::ValueBag<'v>) -> Self {
-        Value(value)
-    }
-}
-
-impl<'v> From<&'v str> for Value<'v> {
-    fn from(value: &'v str) -> Self {
-        Value(value_bag::ValueBag::from(value))
     }
 }
 
@@ -139,6 +138,48 @@ impl<'v> ToValue for Value<'v> {
 impl<'v> ToValue for value_bag::ValueBag<'v> {
     fn to_value(&self) -> Value {
         Value(self.by_ref())
+    }
+}
+
+impl<'v> From<value_bag::ValueBag<'v>> for Value<'v> {
+    fn from(value: value_bag::ValueBag<'v>) -> Self {
+        Value(value)
+    }
+}
+
+impl ToValue for str {
+    fn to_value(&self) -> Value {
+        Value::from(self)
+    }
+}
+
+impl<'v> From<&'v str> for Value<'v> {
+    fn from(value: &'v str) -> Self {
+        Value(value.into())
+    }
+}
+
+impl ToValue for i32 {
+    fn to_value(&self) -> Value {
+        Value::from(*self)
+    }
+}
+
+impl<'v> From<i32> for Value<'v> {
+    fn from(value: i32) -> Self {
+        Value(value.into())
+    }
+}
+
+impl ToValue for usize {
+    fn to_value(&self) -> Value {
+        Value::from(*self)
+    }
+}
+
+impl<'v> From<usize> for Value<'v> {
+    fn from(value: usize) -> Self {
+        Value(value.into())
     }
 }
 

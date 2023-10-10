@@ -12,8 +12,8 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, props, template, timestamp,
-    value, well_known,
+    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, metrics, props, template,
+    timestamp, value, well_known,
 };
 
 pub mod local_frame;
@@ -28,6 +28,7 @@ pub use self::{
     id::{IdGen, SpanId, TraceId},
     key::Key,
     level::Level,
+    metrics::Metric,
     props::Props,
     template::Template,
     timestamp::Timestamp,
@@ -86,6 +87,11 @@ pub fn emit(evt: &Event<impl Props>) {
 pub type With = LocalFrame<emit_core::ambient::Get>;
 
 pub type StartTimer = Timer<emit_core::ambient::Get>;
+
+#[track_caller]
+pub fn now() -> Option<Timestamp> {
+    emit_core::ambient::get().now()
+}
 
 #[track_caller]
 pub fn with(props: impl Props) -> With {

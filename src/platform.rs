@@ -27,6 +27,8 @@ type DefaultIdGen = Empty;
 
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
+#[cfg(not(feature = "std"))]
+pub(crate) type DefaultCtxt = Empty;
 
 pub(crate) struct Platform {
     #[cfg(not(feature = "std"))]

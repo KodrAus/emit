@@ -16,6 +16,7 @@ pub mod filter;
 pub mod id;
 pub mod key;
 pub mod level;
+pub mod metrics;
 pub mod props;
 pub mod template;
 pub mod timestamp;

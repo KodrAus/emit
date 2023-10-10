@@ -69,6 +69,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TIdGen> Ambient<TEmitter, TFilter, TCtxt,
             emitter: self.emitter,
             filter: self.filter,
             ctxt,
+
             clock: self.clock,
             id_gen: self.id_gen,
         }
@@ -83,6 +84,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TIdGen> Ambient<TEmitter, TFilter, TCtxt,
             emitter: self.emitter,
             filter: self.filter,
             ctxt: self.ctxt,
+
             clock,
             id_gen: self.id_gen,
         }
@@ -97,6 +99,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TIdGen> Ambient<TEmitter, TFilter, TCtxt,
             emitter: self.emitter,
             filter: self.filter,
             ctxt: self.ctxt,
+
             clock: self.clock,
             id_gen,
         }

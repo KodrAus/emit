@@ -52,6 +52,8 @@ fn parse(
     input = &input[1..];
     expected_uppercase = &expected_uppercase[1..];
 
+    // Doesn't require a full match of the expected content
+    // For example, `INF` will match `INFORMATION`
     while let Some(b) = input.get(0) {
         let Some(e) = expected_uppercase.get(0) else {
             return Err(ParseLevelError {});

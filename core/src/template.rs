@@ -223,7 +223,7 @@ impl<'a, P: Props> fmt::Debug for Render<'a, P> {
 pub struct Part<'a>(PartKind<'a>);
 
 impl Part<'static> {
-    pub fn text(text: &'static str) -> Self {
+    pub const fn text(text: &'static str) -> Self {
         Part(PartKind::Text {
             value: text as *const str,
             value_static: Some(text),
@@ -233,7 +233,7 @@ impl Part<'static> {
         })
     }
 
-    pub fn hole(label: &'static str) -> Self {
+    pub const fn hole(label: &'static str) -> Self {
         Part(PartKind::Hole {
             label: label as *const str,
             label_static: Some(label),
@@ -246,7 +246,7 @@ impl Part<'static> {
 }
 
 impl<'a> Part<'a> {
-    pub fn text_ref(text: &'a str) -> Self {
+    pub const fn text_ref(text: &'a str) -> Self {
         Part(PartKind::Text {
             value: text as *const str,
             value_static: None,
@@ -256,7 +256,7 @@ impl<'a> Part<'a> {
         })
     }
 
-    pub fn hole_ref(label: &'a str) -> Self {
+    pub const fn hole_ref(label: &'a str) -> Self {
         Part(PartKind::Hole {
             label: label as *const str,
             label_static: None,
@@ -267,7 +267,7 @@ impl<'a> Part<'a> {
         })
     }
 
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self.0 {
             PartKind::Text { value, .. } => Some(unsafe { &*value }),
             _ => None,

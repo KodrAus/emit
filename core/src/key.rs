@@ -65,7 +65,7 @@ impl<'k> Clone for Key<'k> {
 }
 
 impl Key<'static> {
-    pub fn new(k: &'static str) -> Self {
+    pub const fn new(k: &'static str) -> Self {
         Key {
             value: k as *const str,
             value_static: Some(k),
@@ -77,7 +77,7 @@ impl Key<'static> {
 }
 
 impl<'k> Key<'k> {
-    pub fn new_ref(k: &'k str) -> Key<'k> {
+    pub const fn new_ref(k: &'k str) -> Key<'k> {
         Key {
             value: k as *const str,
             value_static: None,
@@ -174,6 +174,12 @@ impl<'a> From<&'a str> for Key<'a> {
     }
 }
 
+impl<'k> ToValue for Key<'k> {
+    fn to_value(&self) -> Value {
+        Value::from(self.as_str())
+    }
+}
+
 pub trait ToKey {
     fn to_key(&self) -> Key;
 }
@@ -258,6 +264,8 @@ mod alloc_support {
         }
     }
 }
+
+use crate::value::{ToValue, Value};
 
 #[cfg(feature = "alloc")]
 pub use self::alloc_support::*;

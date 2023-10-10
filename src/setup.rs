@@ -59,6 +59,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
             emitter: self.emitter.and(emitter),
             filter: self.filter,
             ctxt: self.ctxt,
+
             platform: self.platform,
         }
     }
@@ -68,6 +69,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
             emitter: self.emitter,
             filter: self.filter,
             ctxt,
+
             platform: self.platform,
         }
     }
@@ -82,7 +84,7 @@ where
     TCtxt::LocalFrame: Send + 'static,
 {
     #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
-    pub fn init(self) -> Init<&'static TEmitter> {
+    pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {
         let ambient = emit_core::ambient::init(
             Ambient::new()
                 .with_emitter(self.emitter)
@@ -95,15 +97,17 @@ where
 
         Init {
             emitter: *ambient.emitter(),
+            ctxt: *ambient.ctxt(),
         }
     }
 }
 
-pub struct Init<TEmitter: Emitter = DefaultEmitter> {
+pub struct Init<TEmitter: Emitter = DefaultEmitter, TCtxt: Ctxt = DefaultCtxt> {
     emitter: TEmitter,
+    ctxt: TCtxt,
 }
 
-impl<TEmitter: Emitter> Init<TEmitter> {
+impl<TEmitter: Emitter, TCtxt: Ctxt> Init<TEmitter, TCtxt> {
     pub fn blocking_flush(&self, timeout: Duration) {
         self.emitter.blocking_flush(timeout);
     }
