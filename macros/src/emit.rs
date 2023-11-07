@@ -63,7 +63,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     // Add the location as a property
     let loc_ident = Ident::new(emit_core::well_known::LOCATION_KEY, Span::call_site());
     props.push(&syn::parse2::<FieldValue>(
-        quote!(#loc_ident: emit::__private::caller()),
+        quote!(#loc_ident: emit::__private::loc!()),
     )?)?;
 
     let props_match_input_tokens = props.match_input_tokens();

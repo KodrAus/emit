@@ -6,26 +6,28 @@ use std::{
     time::Duration,
 };
 
+use emit::Props;
+
 #[macro_use]
 extern crate serde_derive;
 
-static COUNT: (emit::Metric<'static>, AtomicUsize) = (
-    emit::Metric::counter(emit::Key::new("smoke_test::count")),
-    AtomicUsize::new(0),
-);
+static COUNT: emit::Metric<'static, AtomicUsize> =
+    emit::Metric::counter(emit::Key::new("smoke_test::count"), AtomicUsize::new(0));
 
-fn increment(metric: &(emit::Metric, AtomicUsize)) {
-    metric.1.fetch_add(1, Ordering::Relaxed);
+fn increment(metric: &emit::Metric<AtomicUsize>) {
+    metric.value().fetch_add(1, Ordering::Relaxed);
 }
 
-fn flush_metrics<'a>(metrics: impl IntoIterator<Item = &'a (emit::Metric<'a>, AtomicUsize)> + 'a) {
-    for (metric, value) in metrics {
-        let value = value.load(Ordering::Relaxed);
-
+fn flush_metrics<'a>(metrics: impl IntoIterator<Item = &'a emit::Metric<'a, AtomicUsize>> + 'a) {
+    for metric in metrics {
         emit::emit(&emit::Event::new(
             emit::now(),
-            emit::tpl!("{metric_name} read {metric_value}"),
-            metric.read(value.into()),
+            emit::tpl!("{metric_name} read {metric_value} with {ordering}"),
+            metric
+                .read(|value| value.load(Ordering::Relaxed))
+                .chain(emit::props! {
+                    ordering: "relaxed"
+                }),
         ));
     }
 }

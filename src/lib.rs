@@ -53,8 +53,14 @@ fn base_emit(
     tpl: Template,
     props: impl Props,
 ) {
+    let loc = __private::loc();
+
     ctxt.with_current(|ctxt| {
-        let evt = Event::new(ts, tpl, props.chain(ctxt));
+        let evt = Event::new(
+            ts,
+            tpl,
+            props.chain(ctxt).chain((well_known::LOCATION_KEY, loc)),
+        );
 
         if when.matches(&evt) {
             to.emit(&evt);

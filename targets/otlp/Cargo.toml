@@ -28,7 +28,7 @@ version = "2.10"
 features = ["std", "flatten"]
 
 [dependencies.sval_protobuf]
-git = "https://github.com/KodrAus/sval_protobuf"
+version = "0.1"
 features = ["bytes"]
 
 [dependencies.tokio]

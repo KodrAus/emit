@@ -432,10 +432,7 @@ pub fn __private_with(props: impl Props) -> LocalFrame<emit_core::ambient::Get> 
     base_with(ambient, props)
 }
 
-#[track_caller]
-pub fn caller() -> &'static Location<'static> {
-    Location::caller()
-}
+pub use core::module_path as loc;
 
 #[repr(transparent)]
 pub struct __PrivateMacroProps<'a>([(Key<'a>, Option<Value<'a>>)]);

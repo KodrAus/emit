@@ -8,73 +8,50 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Metric<'m> {
+pub struct Metric<'m, T> {
     name: Key<'m>,
     kind: MetricKind,
+    value: T,
 }
 
-impl<'m> Metric<'m> {
-    pub const fn new(name: Key<'m>, kind: MetricKind) -> Self {
-        Metric { name, kind }
+impl<'m, T> Metric<'m, T> {
+    pub const fn new(name: Key<'m>, kind: MetricKind, value: T) -> Self {
+        Metric { name, kind, value }
     }
 
-    pub const fn counter(name: Key<'m>) -> Self {
-        Metric::new(name, MetricKind::Counter)
+    pub const fn counter(name: Key<'m>, value: T) -> Self {
+        Metric::new(name, MetricKind::Counter, value)
     }
 
-    pub fn name(&self) -> &Key<'m> {
+    pub const fn name(&self) -> &Key<'m> {
         &self.name
     }
 
-    pub fn kind(&self) -> MetricKind {
+    pub const fn kind(&self) -> MetricKind {
         self.kind
     }
 
-    pub fn by_ref(&self) -> Metric {
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+
+    pub fn read<'a, U: ToValue>(&'a self, read: impl FnOnce(&'a T) -> U) -> Metric<'a, U> {
         Metric {
             name: self.name.by_ref(),
             kind: self.kind,
-        }
-    }
-
-    pub fn read<'a>(&'a self, v: Value<'a>) -> Reading<'a> {
-        Reading::new(self.by_ref(), v)
-    }
-}
-
-#[cfg(feature = "alloc")]
-mod alloc_support {
-    use super::*;
-
-    impl<'m> Metric<'m> {
-        pub fn to_owned(&self) -> Metric<'static> {
-            Metric {
-                name: self.name.to_owned(),
-                kind: self.kind,
-            }
+            value: read(&self.value),
         }
     }
 }
 
-pub struct Reading<'m> {
-    metric: Metric<'m>,
-    value: Value<'m>,
-}
-
-impl<'m> Reading<'m> {
-    pub fn new(metric: Metric<'m>, value: Value<'m>) -> Self {
-        Reading { metric, value }
-    }
-}
-
-impl<'m> Props for Reading<'m> {
+impl<'m, V: ToValue> Props for Metric<'m, V> {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for_each(METRIC_NAME_KEY.to_key(), self.metric.name.to_value())?;
-        for_each(METRIC_KIND_KEY.to_key(), self.metric.kind.to_value())?;
-        for_each(METRIC_VALUE_KEY.to_key(), self.value.by_ref())?;
+        for_each(METRIC_NAME_KEY.to_key(), self.name.to_value())?;
+        for_each(METRIC_KIND_KEY.to_key(), self.kind.to_value())?;
+        for_each(METRIC_VALUE_KEY.to_key(), self.value.to_value())?;
 
         ControlFlow::Continue(())
     }
