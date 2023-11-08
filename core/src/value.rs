@@ -55,6 +55,14 @@ impl<'v> Value<'v> {
         self.visit(&mut visitor);
         visitor.0
     }
+
+    pub fn to_borrowed_str(&self) -> Option<&'v str> {
+        self.0.to_borrowed_str()
+    }
+
+    pub fn to_usize(&self) -> Option<usize> {
+        self.0.to_u64()?.try_into().ok()
+    }
 }
 
 pub trait Visitor<'v> {
@@ -187,12 +195,18 @@ impl<'v> From<usize> for Value<'v> {
 mod alloc_support {
     use super::*;
 
+    use alloc::borrow::Cow;
+
     #[derive(Clone)]
     pub struct OwnedValue(value_bag::OwnedValueBag);
 
     impl<'v> Value<'v> {
         pub fn to_owned(&self) -> OwnedValue {
             OwnedValue(self.0.to_owned())
+        }
+
+        pub fn to_str(&self) -> Option<Cow<'v, str>> {
+            self.0.to_str()
         }
     }
 

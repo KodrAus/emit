@@ -1,7 +1,8 @@
 use crate::{
     id::{SpanId, TraceId},
+    key::Key,
     level::Level,
-    metrics::MetricKind,
+    metrics::{Metric, MetricKind},
     props::Props,
     value::Value,
 };
@@ -41,8 +42,16 @@ pub trait WellKnown: Props {
         self.get(ERR_KEY)
     }
 
-    fn metric_name(&self) -> Option<Value> {
-        self.get(METRIC_NAME_KEY)
+    fn metric(&self) -> Option<Metric<Value>> {
+        Some(Metric::new(
+            self.metric_name()?,
+            self.metric_kind()?,
+            self.metric_value()?,
+        ))
+    }
+
+    fn metric_name(&self) -> Option<Key> {
+        self.get(METRIC_NAME_KEY)?.to_key()
     }
 
     fn metric_kind(&self) -> Option<MetricKind> {

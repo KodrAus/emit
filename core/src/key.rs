@@ -180,6 +180,19 @@ impl<'k> ToValue for Key<'k> {
     }
 }
 
+impl<'v> Value<'v> {
+    pub fn to_key(&self) -> Option<Key<'v>> {
+        #[cfg(feature = "alloc")]
+        {
+            self.to_str().map(Key::new_cow_ref)
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
+            self.to_borrowed_str().map(Key::new_ref)
+        }
+    }
+}
+
 pub trait ToKey {
     fn to_key(&self) -> Key;
 }
@@ -249,6 +262,13 @@ mod alloc_support {
     }
 
     impl<'k> Key<'k> {
+        pub fn new_cow_ref(key: Cow<'k, str>) -> Self {
+            match key {
+                Cow::Borrowed(key) => Key::new_ref(key),
+                Cow::Owned(key) => Key::new_owned(key),
+            }
+        }
+
         pub fn to_cow(&self) -> Cow<'static, str> {
             match self.value_static {
                 Some(key) => Cow::Borrowed(key),

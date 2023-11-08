@@ -60,6 +60,7 @@ impl<'m, V: ToValue> Props for Metric<'m, V> {
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MetricKind {
+    Point,
     Counter,
 }
 
@@ -72,6 +73,7 @@ impl fmt::Debug for MetricKind {
 impl fmt::Display for MetricKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            MetricKind::Point => "point",
             MetricKind::Counter => "counter",
         })
     }
@@ -81,6 +83,10 @@ impl FromStr for MetricKind {
     type Err = ParseMetricKindError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("point") {
+            return Ok(MetricKind::Point);
+        }
+
         if s.eq_ignore_ascii_case("counter") {
             return Ok(MetricKind::Counter);
         }
@@ -103,5 +109,23 @@ impl<'v> Value<'v> {
         self.downcast_ref::<MetricKind>()
             .copied()
             .or_else(|| self.parse())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::well_known::WellKnown;
+
+    use super::*;
+
+    #[test]
+    fn metric_well_known() {
+        let metric = Metric::new(Key::new("metric"), MetricKind::Point, Value::from(1usize));
+
+        let well_known = WellKnown::metric(&metric).unwrap();
+
+        assert_eq!("metric", well_known.name());
+        assert_eq!(MetricKind::Point, well_known.kind());
+        assert_eq!(1, well_known.value().to_usize().unwrap());
     }
 }
