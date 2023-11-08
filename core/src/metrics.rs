@@ -19,10 +19,6 @@ impl<'m, T> Metric<'m, T> {
         Metric { name, kind, value }
     }
 
-    pub const fn counter(name: Key<'m>, value: T) -> Self {
-        Metric::new(name, MetricKind::Counter, value)
-    }
-
     pub const fn name(&self) -> &Key<'m> {
         &self.name
     }
@@ -35,11 +31,33 @@ impl<'m, T> Metric<'m, T> {
         &self.value
     }
 
-    pub fn read<'a, U: ToValue>(&'a self, read: impl FnOnce(&'a T) -> U) -> Metric<'a, U> {
+    pub fn value_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+
+    pub fn sample<'a, U: ToValue>(
+        &'a self,
+        sample: impl FnOnce(MetricKind, &'a T) -> (MetricKind, U),
+    ) -> Metric<'a, U> {
+        let (kind, value) = sample(self.kind, &self.value);
+
         Metric {
             name: self.name.by_ref(),
-            kind: self.kind,
-            value: read(&self.value),
+            kind,
+            value,
+        }
+    }
+
+    pub fn sample_mut<'a, U: ToValue>(
+        &'a mut self,
+        sample: impl FnOnce(MetricKind, &'a mut T) -> (MetricKind, U),
+    ) -> Metric<'a, U> {
+        let (kind, value) = sample(self.kind, &mut self.value);
+
+        Metric {
+            name: self.name.by_ref(),
+            kind,
+            value,
         }
     }
 }

@@ -11,23 +11,48 @@ use emit::Props;
 #[macro_use]
 extern crate serde_derive;
 
-static COUNT: emit::Metric<'static, AtomicUsize> =
-    emit::Metric::counter(emit::Key::new("smoke_test::count"), AtomicUsize::new(0));
-
-fn increment(metric: &emit::Metric<AtomicUsize>) {
-    metric.value().fetch_add(1, Ordering::Relaxed);
+struct DeltaCount {
+    last: std::sync::Mutex<(Option<emit::timestamp::Timestamp>, usize)>,
+    value: AtomicUsize,
 }
 
-fn flush_metrics<'a>(metrics: impl IntoIterator<Item = &'a emit::Metric<'a, AtomicUsize>> + 'a) {
+static COUNT: emit::Metric<'static, DeltaCount> = emit::Metric::new(
+    emit::Key::new("smoke_test::count"),
+    emit::metrics::MetricKind::Counter,
+    DeltaCount {
+        last: std::sync::Mutex::new((None, 0)),
+        value: AtomicUsize::new(0),
+    },
+);
+
+fn increment(metric: &emit::Metric<DeltaCount>) {
+    metric.value().value.fetch_add(1, Ordering::Relaxed);
+}
+
+fn flush_metrics<'a>(metrics: impl IntoIterator<Item = &'a emit::Metric<'a, DeltaCount>> + 'a) {
+    let now = emit::now();
+
     for metric in metrics {
+        let mut start = None;
+        let delta = metric.sample(|_, value| {
+            let mut previous = value.last.lock().unwrap();
+            let current = value.value.load(Ordering::Relaxed);
+
+            start = previous.0;
+            let delta = current.saturating_sub(previous.1);
+
+            previous.0 = now;
+            previous.1 = current;
+
+            (emit::metrics::MetricKind::Counter, delta)
+        });
+
         emit::emit(&emit::Event::new(
-            emit::now(),
+            start..now,
             emit::tpl!("{metric_name} read {metric_value} with {ordering}"),
-            metric
-                .read(|value| value.load(Ordering::Relaxed))
-                .chain(emit::props! {
-                    ordering: "relaxed"
-                }),
+            delta.chain(emit::props! {
+                ordering: "relaxed"
+            }),
         ));
     }
 }
@@ -53,7 +78,13 @@ async fn main() {
         .and_to(emit_term::stdout())
         .init();
 
-    for i in 0..10 {
+    for i in 0..9 {
+        let _ = in_ctxt(i).await;
+    }
+
+    flush_metrics([&COUNT]);
+
+    for i in 0..7 {
         let _ = in_ctxt(i).await;
     }
 

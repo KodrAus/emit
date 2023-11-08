@@ -141,3 +141,14 @@ impl ToExtent for Range<Timestamp> {
         Extent::new(self.clone())
     }
 }
+
+impl ToExtent for Range<Option<Timestamp>> {
+    fn to_extent(&self) -> Extent {
+        match (self.start, self.end) {
+            (Some(start), Some(end)) => (start..end).to_extent(),
+            (Some(start), None) => start.to_extent(),
+            (None, Some(end)) => end.to_extent(),
+            (None, None) => None::<Timestamp>.to_extent(),
+        }
+    }
+}
