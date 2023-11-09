@@ -21,7 +21,7 @@ async fn main() {
                 .spawn()
                 .unwrap(),
         )
-        .and_to(emit_term::stdout().plot_metrics(Duration::from_millis(100)))
+        .and_to(emit_term::stdout().plot_metrics())
         .init();
 
     sample_metrics();

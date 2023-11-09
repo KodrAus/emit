@@ -17,23 +17,47 @@ pub struct Stdout {
 }
 
 impl Stdout {
-    pub fn plot_metrics(mut self, time_grouping: Duration) -> Self {
-        self.metrics_collector = Some(MetricsCollector::new(time_grouping));
+    pub fn plot_metrics(mut self) -> Self {
+        self.metrics_collector = Some(MetricsCollector::new(Bucketing::ByCount(20)));
+        self
+    }
+
+    pub fn bucket_by_time(mut self, bucket_size: Duration) -> Self {
+        if let Some(ref mut metrics_collector) = self.metrics_collector {
+            metrics_collector.bucketing = Bucketing::ByTime(bucket_size);
+        }
+
+        self
+    }
+
+    pub fn bucket_by_width(mut self, nbuckets: usize) -> Self {
+        if let Some(ref mut metrics_collector) = self.metrics_collector {
+            metrics_collector.bucketing = Bucketing::ByCount(nbuckets);
+        }
+
         self
     }
 }
 
 struct MetricsCollector {
-    time_grouping: Duration,
+    bucketing: Bucketing,
     sums: Mutex<HashMap<Cow<'static, str>, SumHistogram>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Bucketing {
+    ByTime(Duration),
+    ByCount(usize),
+}
+
+#[derive(Debug, Clone)]
 struct SumHistogram {
     deltas: Vec<SumHistogramDelta>,
     cumulative: f64,
     omitted: usize,
 }
 
+#[derive(Debug, Clone)]
 struct SumHistogramDelta {
     timestamp: Timestamp,
     value: f64,
@@ -50,9 +74,9 @@ impl Default for SumHistogram {
 }
 
 impl MetricsCollector {
-    pub fn new(time_grouping: Duration) -> Self {
+    pub fn new(bucketing: Bucketing) -> Self {
         MetricsCollector {
-            time_grouping,
+            bucketing,
             sums: Mutex::new(HashMap::new()),
         }
     }
@@ -145,7 +169,7 @@ impl emit::emitter::Emitter for Stdout {
 
             if sums.len() > 0 {
                 with_shared_buf(&self.writer, |writer, buf| {
-                    print_sum_histograms(writer, buf, metrics_collector.time_grouping, sums)
+                    print_sum_histograms(writer, buf, metrics_collector.bucketing, sums)
                 });
             }
         }
@@ -198,7 +222,7 @@ fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64], min: f
 fn print_sum_histograms(
     out: &BufferWriter,
     buf: &mut Buffer,
-    time_grouping: Duration,
+    bucketing: Bucketing,
     metrics: impl IntoIterator<Item = (Cow<'static, str>, SumHistogram)>,
 ) {
     let mut buckets = Vec::new();
@@ -216,7 +240,7 @@ fn print_sum_histograms(
             buf,
             &Event::new(
                 extent.clone(),
-                emit::tpl!("{metric_kind} of {metric_name} is in the range {min}..={max}"),
+                emit::tpl!("{metric_kind} of {metric_name}"),
                 emit::props! {
                     metric_kind: MetricKind::Sum,
                     metric_name: metric,
@@ -225,7 +249,13 @@ fn print_sum_histograms(
         );
         buf.clear();
 
-        let bucket_size = time_grouping.as_nanos();
+        let bucket_size = match bucketing {
+            Bucketing::ByTime(size) => size.as_nanos(),
+            Bucketing::ByCount(nbuckets) => {
+                (extent.end.as_unix_time().as_nanos() - extent.start.as_unix_time().as_nanos())
+                    / (nbuckets as u128)
+            }
+        };
 
         let extent_start = extent.start.as_unix_time().as_nanos();
 
@@ -293,6 +323,18 @@ fn print_sum_histograms(
 
         if current_bucket_value != 0.0 {
             push_bucket(current_bucket_value);
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            if let Bucketing::ByCount(nbuckets) = bucketing {
+                debug_assert!(
+                    buckets.len() <= nbuckets,
+                    "{} > {}",
+                    buckets.len(),
+                    nbuckets
+                );
+            }
         }
 
         print_histogram(out, buf, &buckets, bucket_min, bucket_max);
