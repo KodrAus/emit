@@ -44,8 +44,8 @@ pub trait WellKnown: Props {
 
     fn metric(&self) -> Option<Metric<Value>> {
         Some(Metric::new(
+            self.metric_kind(),
             self.metric_name()?,
-            self.metric_kind()?,
             self.metric_value()?,
         ))
     }

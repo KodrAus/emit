@@ -16,8 +16,8 @@ pub trait Emitter {
         Self: Sized,
     {
         And {
-            lhs: self,
-            rhs: other,
+            left: self,
+            right: other,
         }
     }
 
@@ -91,21 +91,35 @@ pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
 }
 
 pub struct And<T, U> {
-    lhs: T,
-    rhs: U,
+    left: T,
+    right: U,
+}
+
+impl<T, U> And<T, U> {
+    pub fn left(&self) -> &T {
+        &self.left
+    }
+
+    pub fn right(&self) -> &U {
+        &self.right
+    }
 }
 
 impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
     fn emit<P: Props>(&self, evt: &Event<P>) {
-        self.lhs.emit(evt);
-        self.rhs.emit(evt);
+        self.left.emit(evt);
+        self.right.emit(evt);
     }
 
     fn blocking_flush(&self, timeout: Duration) {
+        // Approximate; give each target an equal
+        // time to flush. With a monotonic clock
+        // we could measure the time each takes
+        // to flush and track in our timeout
         let timeout = timeout / 2;
 
-        self.lhs.blocking_flush(timeout);
-        self.rhs.blocking_flush(timeout);
+        self.left.blocking_flush(timeout);
+        self.right.blocking_flush(timeout);
     }
 }
 

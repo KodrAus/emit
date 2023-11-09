@@ -134,6 +134,16 @@ pub struct Chain<T, U> {
     second: U,
 }
 
+impl<T, U> Chain<T, U> {
+    pub fn first(&self) -> &T {
+        &self.first
+    }
+
+    pub fn second(&self) -> &U {
+        &self.second
+    }
+}
+
 impl<A: Props, B: Props> Props for Chain<A, B> {
     fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,

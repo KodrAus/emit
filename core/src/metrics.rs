@@ -10,20 +10,36 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Metric<'m, T> {
     name: Key<'m>,
-    kind: MetricKind,
+    kind: Option<MetricKind>,
     value: T,
 }
 
 impl<'m, T> Metric<'m, T> {
-    pub const fn new(name: Key<'m>, kind: MetricKind, value: T) -> Self {
+    pub const fn new(kind: Option<MetricKind>, name: Key<'m>, value: T) -> Self {
         Metric { name, kind, value }
+    }
+
+    pub const fn sum(name: Key<'m>, value: T) -> Self {
+        Metric::new(Some(MetricKind::Sum), name, value)
+    }
+
+    pub const fn min(name: Key<'m>, value: T) -> Self {
+        Metric::new(Some(MetricKind::Min), name, value)
+    }
+
+    pub const fn max(name: Key<'m>, value: T) -> Self {
+        Metric::new(Some(MetricKind::Max), name, value)
+    }
+
+    pub const fn mean(name: Key<'m>, value: T) -> Self {
+        Metric::new(Some(MetricKind::Mean), name, value)
     }
 
     pub const fn name(&self) -> &Key<'m> {
         &self.name
     }
 
-    pub const fn kind(&self) -> MetricKind {
+    pub const fn kind(&self) -> Option<MetricKind> {
         self.kind
     }
 
@@ -34,32 +50,6 @@ impl<'m, T> Metric<'m, T> {
     pub fn value_mut(&mut self) -> &mut T {
         &mut self.value
     }
-
-    pub fn sample<'a, U: ToValue>(
-        &'a self,
-        sample: impl FnOnce(MetricKind, &'a T) -> (MetricKind, U),
-    ) -> Metric<'a, U> {
-        let (kind, value) = sample(self.kind, &self.value);
-
-        Metric {
-            name: self.name.by_ref(),
-            kind,
-            value,
-        }
-    }
-
-    pub fn sample_mut<'a, U: ToValue>(
-        &'a mut self,
-        sample: impl FnOnce(MetricKind, &'a mut T) -> (MetricKind, U),
-    ) -> Metric<'a, U> {
-        let (kind, value) = sample(self.kind, &mut self.value);
-
-        Metric {
-            name: self.name.by_ref(),
-            kind,
-            value,
-        }
-    }
 }
 
 impl<'m, V: ToValue> Props for Metric<'m, V> {
@@ -68,8 +58,11 @@ impl<'m, V: ToValue> Props for Metric<'m, V> {
         mut for_each: F,
     ) -> ControlFlow<()> {
         for_each(METRIC_NAME_KEY.to_key(), self.name.to_value())?;
-        for_each(METRIC_KIND_KEY.to_key(), self.kind.to_value())?;
         for_each(METRIC_VALUE_KEY.to_key(), self.value.to_value())?;
+
+        if let Some(ref kind) = self.kind {
+            for_each(METRIC_KIND_KEY.to_key(), kind.to_value())?;
+        }
 
         ControlFlow::Continue(())
     }
@@ -78,8 +71,10 @@ impl<'m, V: ToValue> Props for Metric<'m, V> {
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MetricKind {
-    Point,
-    Counter,
+    Sum,
+    Min,
+    Max,
+    Mean,
 }
 
 impl fmt::Debug for MetricKind {
@@ -91,8 +86,10 @@ impl fmt::Debug for MetricKind {
 impl fmt::Display for MetricKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            MetricKind::Point => "point",
-            MetricKind::Counter => "counter",
+            MetricKind::Sum => "sum",
+            MetricKind::Min => "min",
+            MetricKind::Max => "max",
+            MetricKind::Mean => "mean",
         })
     }
 }
@@ -101,12 +98,17 @@ impl FromStr for MetricKind {
     type Err = ParseMetricKindError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case("point") {
-            return Ok(MetricKind::Point);
+        if s.eq_ignore_ascii_case("sum") {
+            return Ok(MetricKind::Sum);
         }
-
-        if s.eq_ignore_ascii_case("counter") {
-            return Ok(MetricKind::Counter);
+        if s.eq_ignore_ascii_case("min") {
+            return Ok(MetricKind::Min);
+        }
+        if s.eq_ignore_ascii_case("max") {
+            return Ok(MetricKind::Max);
+        }
+        if s.eq_ignore_ascii_case("mean") {
+            return Ok(MetricKind::Mean);
         }
 
         Err(ParseMetricKindError {})
@@ -138,12 +140,16 @@ mod tests {
 
     #[test]
     fn metric_well_known() {
-        let metric = Metric::new(Key::new("metric"), MetricKind::Point, Value::from(1usize));
+        let metric = Metric::new(
+            Some(MetricKind::Sum),
+            Key::new("metric"),
+            Value::from(1usize),
+        );
 
         let well_known = WellKnown::metric(&metric).unwrap();
 
         assert_eq!("metric", well_known.name());
-        assert_eq!(MetricKind::Point, well_known.kind());
+        assert_eq!(Some(MetricKind::Sum), well_known.kind());
         assert_eq!(1, well_known.value().to_usize().unwrap());
     }
 }

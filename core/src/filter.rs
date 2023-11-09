@@ -12,8 +12,8 @@ pub trait Filter {
         Self: Sized,
     {
         And {
-            lhs: self,
-            rhs: other,
+            left: self,
+            right: other,
         }
     }
 
@@ -22,8 +22,8 @@ pub trait Filter {
         Self: Sized,
     {
         Or {
-            lhs: self,
-            rhs: other,
+            left: self,
+            right: other,
         }
     }
 
@@ -79,24 +79,44 @@ pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
 }
 
 pub struct And<T, U> {
-    lhs: T,
-    rhs: U,
+    left: T,
+    right: U,
+}
+
+impl<T, U> And<T, U> {
+    pub fn left(&self) -> &T {
+        &self.left
+    }
+
+    pub fn right(&self) -> &U {
+        &self.right
+    }
 }
 
 impl<T: Filter, U: Filter> Filter for And<T, U> {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.lhs.matches(evt) && self.rhs.matches(evt)
+        self.left.matches(evt) && self.right.matches(evt)
     }
 }
 
 pub struct Or<T, U> {
-    lhs: T,
-    rhs: U,
+    left: T,
+    right: U,
+}
+
+impl<T, U> Or<T, U> {
+    pub fn left(&self) -> &T {
+        &self.left
+    }
+
+    pub fn right(&self) -> &U {
+        &self.right
+    }
 }
 
 impl<T: Filter, U: Filter> Filter for Or<T, U> {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.lhs.matches(evt) || self.rhs.matches(evt)
+        self.left.matches(evt) || self.right.matches(evt)
     }
 }
 

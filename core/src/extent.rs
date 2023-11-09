@@ -22,6 +22,14 @@ impl Extent {
     }
 
     pub fn as_point(&self) -> Option<&Timestamp> {
+        if self.is_point() {
+            self.to_point()
+        } else {
+            None
+        }
+    }
+
+    pub fn to_point(&self) -> Option<&Timestamp> {
         Some(&self.0.as_ref()?.end)
     }
 

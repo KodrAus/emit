@@ -63,6 +63,10 @@ impl<'v> Value<'v> {
     pub fn to_usize(&self) -> Option<usize> {
         self.0.to_u64()?.try_into().ok()
     }
+
+    pub fn to_f64(&self) -> Option<f64> {
+        self.0.to_f64()
+    }
 }
 
 pub trait Visitor<'v> {

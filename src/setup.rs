@@ -108,6 +108,14 @@ pub struct Init<TEmitter: Emitter = DefaultEmitter, TCtxt: Ctxt = DefaultCtxt> {
 }
 
 impl<TEmitter: Emitter, TCtxt: Ctxt> Init<TEmitter, TCtxt> {
+    pub fn emitter(&self) -> &TEmitter {
+        &self.emitter
+    }
+
+    pub fn ctxt(&self) -> &TCtxt {
+        &self.ctxt
+    }
+
     pub fn blocking_flush(&self, timeout: Duration) {
         self.emitter.blocking_flush(timeout);
     }
