@@ -13,5 +13,9 @@ version = "2"
 [dependencies.sval_fmt]
 version = "2"
 
+[dependencies.time]
+version = "0.3"
+features = ["local-offset"]
+
 [dependencies.termcolor]
 version = "1"

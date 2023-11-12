@@ -1,4 +1,6 @@
-use core::{fmt, time::Duration};
+#![feature(proc_macro_hygiene, stmt_expr_attributes)]
+
+use core::{fmt, str, time::Duration};
 use std::{borrow::Cow, cell::RefCell, cmp, collections::HashMap, io::Write, mem, sync::Mutex};
 
 use emit::{metrics::MetricKind, well_known::WellKnown, Event, Props, Timestamp};
@@ -176,34 +178,124 @@ impl emit::emitter::Emitter for Stdout {
     }
 }
 
+fn trace_id_color(trace_id: &emit::TraceId) -> u8 {
+    let mut hash = 0;
+
+    for b in trace_id.to_u128().to_le_bytes() {
+        hash ^= b;
+    }
+
+    hash
+}
+
+fn span_id_color(span_id: &emit::SpanId) -> u8 {
+    let mut hash = 0;
+
+    for b in span_id.to_u64().to_le_bytes() {
+        hash ^= b;
+    }
+
+    hash
+}
+
+fn level_color(level: &emit::Level) -> Option<u8> {
+    match level {
+        emit::Level::Debug => Some(244),
+        emit::Level::Info => None,
+        emit::Level::Warn => Some(202),
+        emit::Level::Error => Some(124),
+    }
+}
+
+fn hex_slice<'a>(hex: &'a [u8]) -> impl fmt::Display + 'a {
+    struct HexSlice<'a>(&'a [u8]);
+
+    impl<'a> fmt::Display for HexSlice<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str(str::from_utf8(&self.0[..4]).unwrap())
+        }
+    }
+
+    HexSlice(hex)
+}
+
+struct LocalTime {
+    h: u8,
+    m: u8,
+    s: u8,
+    ms: u16,
+}
+
+fn local_ts(ts: &emit::Timestamp) -> Option<LocalTime> {
+    let local = time::OffsetDateTime::from_unix_timestamp_nanos(
+        ts.as_unix_time().as_nanos().try_into().ok()?,
+    )
+    .ok()?;
+    let local = local.checked_to_offset(time::UtcOffset::local_offset_at(local).ok()?)?;
+
+    let (h, m, s, ms) = local.time().as_hms_milli();
+
+    Some(LocalTime { h, m, s, ms })
+}
+
 fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
-    let mut header_empty = true;
+    if let Some(span_id) = evt.props().span_id() {
+        if let Some(trace_id) = evt.props().trace_id() {
+            let trace_id_color = trace_id_color(&trace_id);
 
-    if !evt.extent().is_empty() {
-        let _ = write!(buf, "[");
-        let _ = write!(buf, "{:.0}", evt.extent());
+            write_fg(buf, "▒", Color::Ansi256(trace_id_color));
+            write_plain(buf, " ");
+            write_plain(buf, hex_slice(&trace_id.to_hex()));
+            write_plain(buf, " ");
+        } else {
+            write_plain(buf, "░      ");
+        }
 
-        header_empty = false;
+        let span_id_color = span_id_color(&span_id);
+
+        write_fg(buf, "▓", Color::Ansi256(span_id_color));
+        write_plain(buf, " ");
+        write_plain(buf, hex_slice(&span_id.to_hex()));
+        write_plain(buf, " ");
     }
 
     if let Some(level) = evt.props().lvl() {
-        if !header_empty {
-            let _ = write!(buf, " {}", level);
+        if let Some(level_color) = level_color(&level) {
+            write_fg(buf, level, Color::Ansi256(level_color));
+            write_plain(buf, " ");
         } else {
-            let _ = write!(buf, "[{}", level);
+            write_plain(buf, format_args!("{} ", level));
+        }
+    }
+
+    if let Some(end) = evt.extent().to_point() {
+        if let Some(local) = local_ts(&evt.extent().to_point().unwrap()) {
+            write_plain(
+                buf,
+                format_args!(
+                    "{:>02}:{:>02}:{:>02}.{:>03}",
+                    local.h, local.m, local.s, local.ms
+                ),
+            );
+        } else {
+            write_plain(buf, format_args!("{:.0}", end));
         }
 
-        header_empty = false;
+        write_plain(buf, " ");
     }
 
-    if !header_empty {
-        let _ = write!(buf, "]: ");
+    if let Some(len) = evt.extent().len() {
+        if !len.is_zero() {
+            write_fg(buf, len.as_millis(), NUMBER);
+            write_fg(buf, "ms", IDENT);
+            write_plain(buf, " ");
+        }
     }
 
-    if let Ok(_) = evt.msg().write(Writer { buf }) {
-        let _ = buf.write(b"\n");
-        let _ = out.print(&buf);
-    }
+    let _ = evt.msg().write(Writer { buf });
+    write_plain(buf, "\n");
+
+    let _ = out.print(&buf);
 }
 
 fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64], min: f64, max: f64) {
@@ -235,26 +327,13 @@ fn print_sum_histograms(
         let extent =
             entry.deltas.first().unwrap().timestamp..entry.deltas.last().unwrap().timestamp;
 
-        print_event(
-            out,
-            buf,
-            &Event::new(
-                extent.clone(),
-                emit::tpl!("{metric_kind} of {metric_name}"),
-                emit::props! {
-                    metric_kind: MetricKind::Sum,
-                    metric_name: metric,
-                },
-            ),
-        );
-        buf.clear();
-
         let bucket_size = match bucketing {
             Bucketing::ByTime(size) => size.as_nanos(),
-            Bucketing::ByCount(nbuckets) => {
+            Bucketing::ByCount(nbuckets) => cmp::max(
+                1,
                 (extent.end.as_unix_time().as_nanos() - extent.start.as_unix_time().as_nanos())
-                    / (nbuckets as u128)
-            }
+                    / (nbuckets as u128),
+            ),
         };
 
         let extent_start = extent.start.as_unix_time().as_nanos();
@@ -337,6 +416,22 @@ fn print_sum_histograms(
             }
         }
 
+        print_event(
+            out,
+            buf,
+            &Event::new(
+                extent.clone(),
+                emit::tpl!("{metric_kind} of {metric_name} by {bucket_millis}ms is in the range {min}..={max}"),
+                emit::props! {
+                    metric_kind: MetricKind::Sum,
+                    metric_name: metric,
+                    min: bucket_min,
+                    max: bucket_max,
+                    bucket_millis: Duration::from_nanos(bucket_size as u64).as_millis(),
+                },
+            ),
+        );
+        buf.clear();
         print_histogram(out, buf, &buckets, bucket_min, bucket_max);
         buckets.clear();
         buf.clear();
@@ -416,10 +511,18 @@ const ATOM: Color = Color::Ansi256(168);
 const IDENT: Color = Color::Ansi256(170);
 const FIELD: Color = Color::Ansi256(174);
 
+fn write_fg(buf: &mut Buffer, v: impl fmt::Display, color: Color) {
+    let _ = buf.set_color(ColorSpec::new().set_fg(Some(color)));
+    let _ = write!(buf, "{}", v);
+    let _ = buf.reset();
+}
+
+fn write_plain(buf: &mut Buffer, v: impl fmt::Display) {
+    let _ = write!(buf, "{}", v);
+}
+
 impl<'a> Writer<'a> {
     fn write(&mut self, v: impl fmt::Display, color: Color) {
-        let _ = self.buf.set_color(ColorSpec::new().set_fg(Some(color)));
-        let _ = write!(&mut self.buf, "{}", v);
-        let _ = self.buf.reset();
+        write_fg(&mut *self.buf, v, color);
     }
 }

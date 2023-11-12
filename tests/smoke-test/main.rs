@@ -26,13 +26,20 @@ async fn main() {
 
     sample_metrics();
 
+    in_trace().await;
+
+    emitter.blocking_flush(Duration::from_secs(5));
+}
+
+#[emit::with(trace_id: emit::new_trace_id())]
+async fn in_trace() -> Result<(), io::Error> {
     for i in 0..100 {
         let _ = in_ctxt(i).await;
 
         sample_metrics();
     }
 
-    emitter.blocking_flush(Duration::from_secs(5));
+    Ok(())
 }
 
 #[emit::with(span_id: emit::new_span_id(), span_parent: emit::current_span_id(), a)]

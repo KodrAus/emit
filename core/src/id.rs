@@ -42,7 +42,7 @@ impl<'v> Value<'v> {
     pub fn to_trace_id(&self) -> Option<TraceId> {
         self.downcast_ref::<TraceId>()
             .copied()
-            .or_else(|| self.parse())
+            .or_else(|| TraceId::try_from_hex(self).ok())
     }
 }
 
@@ -101,6 +101,12 @@ impl TraceId {
             NonZeroU128::new(u128::from_be_bytes(dst)).ok_or_else(|| ParseIdError {})?,
         ))
     }
+
+    pub fn try_from_hex(hex: impl fmt::Display) -> Result<Self, ParseIdError> {
+        let mut buf = Buffer::<32>::new();
+
+        Self::try_from_hex_slice(buf.buffer(hex)?)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -136,7 +142,7 @@ impl<'v> Value<'v> {
     pub fn to_span_id(&self) -> Option<SpanId> {
         self.downcast_ref::<SpanId>()
             .copied()
-            .or_else(|| self.parse())
+            .or_else(|| SpanId::try_from_hex(self).ok())
     }
 }
 
@@ -195,6 +201,12 @@ impl SpanId {
             NonZeroU64::new(u64::from_be_bytes(dst)).ok_or_else(|| ParseIdError {})?,
         ))
     }
+
+    pub fn try_from_hex(hex: impl fmt::Display) -> Result<Self, ParseIdError> {
+        let mut buf = Buffer::<16>::new();
+
+        Self::try_from_hex_slice(buf.buffer(hex)?)
+    }
 }
 
 /*
@@ -244,6 +256,46 @@ const SHL4_TABLE: &[u8; 256] = &{
 
 #[derive(Debug)]
 pub struct ParseIdError {}
+
+struct Buffer<const N: usize> {
+    hex: [u8; N],
+    idx: usize,
+}
+
+impl<const N: usize> Buffer<N> {
+    fn new() -> Self {
+        Buffer {
+            hex: [0; N],
+            idx: 0,
+        }
+    }
+
+    fn buffer(&mut self, hex: impl fmt::Display) -> Result<&[u8], ParseIdError> {
+        use fmt::Write as _;
+
+        self.idx = 0;
+
+        write!(self, "{}", hex).map_err(|_| ParseIdError {})?;
+
+        Ok(&self.hex[..self.idx])
+    }
+}
+
+impl<const N: usize> fmt::Write for Buffer<N> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let s = s.as_bytes();
+        let next_idx = self.idx + s.len();
+
+        if next_idx <= self.hex.len() {
+            self.hex[self.idx..next_idx].copy_from_slice(s);
+            self.idx = next_idx;
+
+            Ok(())
+        } else {
+            Err(fmt::Error)
+        }
+    }
+}
 
 pub trait IdGen {
     fn new_trace_id(&self) -> Option<TraceId>;
