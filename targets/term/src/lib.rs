@@ -227,6 +227,11 @@ struct LocalTime {
 }
 
 fn local_ts(ts: &emit::Timestamp) -> Option<LocalTime> {
+    // TODO: `num_threads` needs support for OSX
+    unsafe {
+        time::util::local_offset::set_soundness(time::util::local_offset::Soundness::Unsound);
+    }
+
     let local = time::OffsetDateTime::from_unix_timestamp_nanos(
         ts.as_unix_time().as_nanos().try_into().ok()?,
     )
@@ -236,6 +241,47 @@ fn local_ts(ts: &emit::Timestamp) -> Option<LocalTime> {
     let (h, m, s, ms) = local.time().as_hms_milli();
 
     Some(LocalTime { h, m, s, ms })
+}
+
+struct FriendlyDuration {
+    pub value: u128,
+    pub unit: &'static str,
+}
+
+fn friendly_duration(duration: Duration) -> FriendlyDuration {
+    const NANOS_PER_MICRO: u128 = 1000;
+    const NANOS_PER_MILLI: u128 = NANOS_PER_MICRO * 1000;
+    const NANOS_PER_SEC: u128 = NANOS_PER_MILLI * 1000;
+    const NANOS_PER_MIN: u128 = NANOS_PER_SEC * 60;
+
+    let nanos = duration.as_nanos();
+
+    if nanos < NANOS_PER_MICRO * 2 {
+        FriendlyDuration {
+            value: nanos,
+            unit: "ns",
+        }
+    } else if nanos < NANOS_PER_MILLI * 2 {
+        FriendlyDuration {
+            value: nanos / NANOS_PER_MICRO,
+            unit: "μs",
+        }
+    } else if nanos < NANOS_PER_SEC * 2 {
+        FriendlyDuration {
+            value: nanos / NANOS_PER_MILLI,
+            unit: "ms",
+        }
+    } else if nanos < NANOS_PER_MIN * 2 {
+        FriendlyDuration {
+            value: nanos / NANOS_PER_SEC,
+            unit: "s",
+        }
+    } else {
+        FriendlyDuration {
+            value: nanos / NANOS_PER_MIN,
+            unit: "m",
+        }
+    }
 }
 
 fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
@@ -259,17 +305,8 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
         write_plain(buf, " ");
     }
 
-    if let Some(level) = evt.props().lvl() {
-        if let Some(level_color) = level_color(&level) {
-            write_fg(buf, level, Color::Ansi256(level_color));
-            write_plain(buf, " ");
-        } else {
-            write_plain(buf, format_args!("{} ", level));
-        }
-    }
-
     if let Some(end) = evt.extent().to_point() {
-        if let Some(local) = local_ts(&evt.extent().to_point().unwrap()) {
+        if let Some(local) = local_ts(end) {
             write_plain(
                 buf,
                 format_args!(
@@ -286,8 +323,17 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
 
     if let Some(len) = evt.extent().len() {
         if !len.is_zero() {
-            write_fg(buf, len.as_millis(), NUMBER);
-            write_fg(buf, "ms", IDENT);
+            let friendly = friendly_duration(len);
+
+            write_fg(buf, friendly.value, NUMBER);
+            write_fg(buf, friendly.unit, TEXT);
+            write_plain(buf, " ");
+        }
+    }
+
+    if let Some(level) = evt.props().lvl() {
+        if let Some(level_color) = level_color(&level) {
+            write_fg(buf, level, Color::Ansi256(level_color));
             write_plain(buf, " ");
         }
     }
@@ -404,30 +450,21 @@ fn print_sum_histograms(
             push_bucket(current_bucket_value);
         }
 
-        #[cfg(debug_assertions)]
-        {
-            if let Bucketing::ByCount(nbuckets) = bucketing {
-                debug_assert!(
-                    buckets.len() <= nbuckets,
-                    "{} > {}",
-                    buckets.len(),
-                    nbuckets
-                );
-            }
-        }
+        let bucket_size = friendly_duration(Duration::from_nanos(bucket_size as u64));
 
         print_event(
             out,
             buf,
             &Event::new(
                 extent.clone(),
-                emit::tpl!("{metric_kind} of {metric_name} by {bucket_millis}ms is in the range {min}..={max}"),
+                emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
                 emit::props! {
                     metric_kind: MetricKind::Sum,
                     metric_name: metric,
                     min: bucket_min,
                     max: bucket_max,
-                    bucket_millis: Duration::from_nanos(bucket_size as u64).as_millis(),
+                    bucket_size: bucket_size.value,
+                    bucket_size_unit: bucket_size.unit,
                 },
             ),
         );
