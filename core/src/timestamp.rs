@@ -5,6 +5,16 @@ use crate::value::{ToValue, Value};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(Duration);
 
+pub struct Parts {
+    pub years: u16,
+    pub months: u8,
+    pub days: u8,
+    pub hours: u8,
+    pub minutes: u8,
+    pub seconds: u8,
+    pub subsecond_nanos: u32,
+}
+
 impl Timestamp {
     pub fn new(unix_time: Duration) -> Self {
         Timestamp(unix_time)
@@ -21,6 +31,83 @@ impl Timestamp {
     #[cfg(feature = "std")]
     pub fn to_system_time(&self) -> std::time::SystemTime {
         std::time::SystemTime::UNIX_EPOCH + self.0
+    }
+
+    pub fn to_parts(&self) -> Parts {
+        /*
+        Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
+
+        Licensed under Apache 2.0
+        */
+
+        let dur = self.0;
+        let secs: u64 = dur.as_secs();
+        let subsecond_nanos = dur.subsec_nanos();
+
+        // 2000-03-01 (mod 400 year, immediately after feb29
+        const LEAPOCH: u64 = 946_684_800 + 86400 * (31 + 29);
+        const DAYS_PER_400Y: u32 = 365 * 400 + 97;
+        const DAYS_PER_100Y: u32 = 365 * 100 + 24;
+        const DAYS_PER_4Y: u32 = 365 * 4 + 1;
+        const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
+
+        // Note(dcb): this bit is rearranged slightly to avoid integer overflow.
+        let days: u64 = (secs / 86_400) - (LEAPOCH / 86_400);
+        let remsecs: u32 = (secs % 86_400) as u32;
+
+        let qc_cycles: u32 = (days / u64::from(DAYS_PER_400Y)) as u32;
+        let mut remdays: u32 = (days % u64::from(DAYS_PER_400Y)) as u32;
+
+        let mut c_cycles: u32 = remdays / DAYS_PER_100Y;
+        if c_cycles == 4 {
+            c_cycles -= 1;
+        }
+        remdays -= c_cycles * DAYS_PER_100Y;
+
+        let mut q_cycles: u32 = remdays / DAYS_PER_4Y;
+        if q_cycles == 25 {
+            q_cycles -= 1;
+        }
+        remdays -= q_cycles * DAYS_PER_4Y;
+
+        let mut remyears: u32 = remdays / 365;
+        if remyears == 4 {
+            remyears -= 1;
+        }
+        remdays -= remyears * 365;
+
+        let mut years: u64 = u64::from(remyears)
+            + 4 * u64::from(q_cycles)
+            + 100 * u64::from(c_cycles)
+            + 400 * u64::from(qc_cycles);
+
+        let mut months: u32 = 0;
+        while u32::from(DAYS_IN_MONTH[months as usize]) <= remdays {
+            remdays -= u32::from(DAYS_IN_MONTH[months as usize]);
+            months += 1
+        }
+
+        if months >= 10 {
+            months -= 12;
+            years += 1;
+        }
+
+        let years = (years + 2000) as u16;
+        let months = (months + 3) as u8;
+        let days = (remdays + 1) as u8;
+        let hours = (remsecs / 3600) as u8;
+        let minutes = (remsecs / 60 % 60) as u8;
+        let seconds = (remsecs % 60) as u8;
+
+        Parts {
+            years,
+            months,
+            days,
+            hours,
+            minutes,
+            seconds,
+            subsecond_nanos,
+        }
     }
 }
 
@@ -183,78 +270,15 @@ fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
 }
 
 fn fmt_rfc3339(ts: Timestamp, f: &mut fmt::Formatter) -> fmt::Result {
-    /*
-    Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
-
-    Licensed under Apache 2.0
-    */
-
-    let dur = ts.0;
-    let secs: i64 = dur.as_secs().try_into().map_err(|_| fmt::Error)?;
-    let nanos = dur.subsec_nanos();
-
-    // 2000-03-01 (mod 400 year, immediately after feb29
-    const LEAPOCH: i64 = 946_684_800 + 86400 * (31 + 29);
-    const DAYS_PER_400Y: i32 = 365 * 400 + 97;
-    const DAYS_PER_100Y: i32 = 365 * 100 + 24;
-    const DAYS_PER_4Y: i32 = 365 * 4 + 1;
-    const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
-
-    // Note(dcb): this bit is rearranged slightly to avoid integer overflow.
-    let mut days: i64 = (secs / 86_400) - (LEAPOCH / 86_400);
-    let mut remsecs: i32 = (secs % 86_400) as i32;
-    if remsecs < 0i32 {
-        remsecs += 86_400;
-        days -= 1
-    }
-
-    let mut qc_cycles: i32 = (days / i64::from(DAYS_PER_400Y)) as i32;
-    let mut remdays: i32 = (days % i64::from(DAYS_PER_400Y)) as i32;
-    if remdays < 0 {
-        remdays += DAYS_PER_400Y;
-        qc_cycles -= 1;
-    }
-
-    let mut c_cycles: i32 = remdays / DAYS_PER_100Y;
-    if c_cycles == 4 {
-        c_cycles -= 1;
-    }
-    remdays -= c_cycles * DAYS_PER_100Y;
-
-    let mut q_cycles: i32 = remdays / DAYS_PER_4Y;
-    if q_cycles == 25 {
-        q_cycles -= 1;
-    }
-    remdays -= q_cycles * DAYS_PER_4Y;
-
-    let mut remyears: i32 = remdays / 365;
-    if remyears == 4 {
-        remyears -= 1;
-    }
-    remdays -= remyears * 365;
-
-    let mut years: i64 = i64::from(remyears)
-        + 4 * i64::from(q_cycles)
-        + 100 * i64::from(c_cycles)
-        + 400 * i64::from(qc_cycles);
-
-    let mut months: i32 = 0;
-    while i32::from(DAYS_IN_MONTH[months as usize]) <= remdays {
-        remdays -= i32::from(DAYS_IN_MONTH[months as usize]);
-        months += 1
-    }
-
-    if months >= 10 {
-        months -= 12;
-        years += 1;
-    }
-
-    let years = years + 2000;
-    let months = months + 3;
-    let days = remdays + 1;
-    let hours = remsecs / 3600;
-    let minutes = remsecs / 60 % 60;
-    let seconds = remsecs % 60;
+    let Parts {
+        years,
+        months,
+        days,
+        hours,
+        minutes,
+        seconds,
+        subsecond_nanos,
+    } = ts.to_parts();
 
     const BUF_INIT: [u8; 30] = *b"0000-00-00T00:00:00.000000000Z";
 
@@ -282,7 +306,7 @@ fn fmt_rfc3339(ts: Timestamp, f: &mut fmt::Formatter) -> fmt::Result {
             let end = i + cmp::min(9, precision.unwrap_or(9));
 
             while i < end {
-                buf[i] = b'0' + (nanos / divisor % 10) as u8;
+                buf[i] = b'0' + (subsecond_nanos / divisor % 10) as u8;
 
                 i += 1;
                 divisor /= 10;

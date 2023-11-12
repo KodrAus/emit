@@ -226,12 +226,13 @@ struct LocalTime {
     ms: u16,
 }
 
-fn local_ts(ts: &emit::Timestamp) -> Option<LocalTime> {
-    // TODO: `num_threads` needs support for OSX
-    unsafe {
-        time::util::local_offset::set_soundness(time::util::local_offset::Soundness::Unsound);
-    }
-
+fn local_ts(ts: emit::Timestamp) -> Option<LocalTime> {
+    // See: https://github.com/rust-lang/rust/issues/27970
+    //
+    // On Linux and OSX, this will fail to get the local offset in
+    // any multi-threaded program. It needs to be fixed in the standard
+    // library and propagated through libraries like `time`. Until then,
+    // you probably won't get local timestamps outside of Windows.
     let local = time::OffsetDateTime::from_unix_timestamp_nanos(
         ts.as_unix_time().as_nanos().try_into().ok()?,
     )
@@ -241,6 +242,17 @@ fn local_ts(ts: &emit::Timestamp) -> Option<LocalTime> {
     let (h, m, s, ms) = local.time().as_hms_milli();
 
     Some(LocalTime { h, m, s, ms })
+}
+
+fn write_timestamp(buf: &mut Buffer, ts: emit::Timestamp) {
+    if let Some(LocalTime { h, m, s, ms }) = local_ts(ts) {
+        write_plain(
+            buf,
+            format_args!("{:>02}:{:>02}:{:>02}.{:>03}", h, m, s, ms),
+        );
+    } else {
+        write_plain(buf, format_args!("{:.0}", ts));
+    }
 }
 
 struct FriendlyDuration {
@@ -284,6 +296,13 @@ fn friendly_duration(duration: Duration) -> FriendlyDuration {
     }
 }
 
+fn write_duration(buf: &mut Buffer, duration: Duration) {
+    let FriendlyDuration { value, unit } = friendly_duration(duration);
+
+    write_fg(buf, value, NUMBER);
+    write_fg(buf, unit, TEXT);
+}
+
 fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
     if let Some(span_id) = evt.props().span_id() {
         if let Some(trace_id) = evt.props().trace_id() {
@@ -306,27 +325,13 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
     }
 
     if let Some(end) = evt.extent().to_point() {
-        if let Some(local) = local_ts(end) {
-            write_plain(
-                buf,
-                format_args!(
-                    "{:>02}:{:>02}:{:>02}.{:>03}",
-                    local.h, local.m, local.s, local.ms
-                ),
-            );
-        } else {
-            write_plain(buf, format_args!("{:.0}", end));
-        }
-
+        write_timestamp(buf, *end);
         write_plain(buf, " ");
     }
 
     if let Some(len) = evt.extent().len() {
         if !len.is_zero() {
-            let friendly = friendly_duration(len);
-
-            write_fg(buf, friendly.value, NUMBER);
-            write_fg(buf, friendly.unit, TEXT);
+            write_duration(buf, len);
             write_plain(buf, " ");
         }
     }
