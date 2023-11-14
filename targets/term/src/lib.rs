@@ -84,7 +84,10 @@ impl MetricsCollector {
     }
 
     pub fn record_metric(&self, evt: &Event<impl Props>) -> bool {
-        if let (Some(extent), Some(metric)) = (evt.extent().as_point(), evt.props().metric()) {
+        if let (Some(extent), Some(metric)) = (
+            evt.extent().and_then(|extent| extent.as_point()),
+            evt.props().metric(),
+        ) {
             if let Some(MetricKind::Sum) = metric.kind() {
                 if let Some(value) = metric.value().to_f64() {
                     return self.record_sum_point(metric.name().to_cow(), *extent, value);
@@ -324,12 +327,11 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
         write_plain(buf, " ");
     }
 
-    if let Some(end) = evt.extent().to_point() {
-        write_timestamp(buf, *end);
+    if let Some(extent) = evt.extent() {
+        write_timestamp(buf, *extent.to_point());
         write_plain(buf, " ");
-    }
 
-    if let Some(len) = evt.extent().len() {
+        let len = extent.len();
         if !len.is_zero() {
             write_duration(buf, len);
             write_plain(buf, " ");

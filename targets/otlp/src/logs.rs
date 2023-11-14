@@ -65,8 +65,7 @@ impl emit_core::emitter::Emitter for OtlpLogsEmitter {
     fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         let time_unix_nano = evt
             .extent()
-            .as_point()
-            .map(|ts| ts.as_unix_time().as_nanos() as u64)
+            .map(|extent| extent.to_point().as_unix_time().as_nanos() as u64)
             .unwrap_or_default();
 
         let observed_time_unix_nano = time_unix_nano;

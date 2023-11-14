@@ -2,156 +2,124 @@ use crate::{empty::Empty, timestamp::Timestamp};
 use core::{fmt, ops::Range, time::Duration};
 
 #[derive(Debug, Clone)]
-pub struct Extent(Option<Range<Timestamp>>);
+pub struct Extent {
+    range: Range<Timestamp>,
+    is_span: bool,
+}
 
 impl Extent {
-    pub fn new(ts: Range<Timestamp>) -> Self {
-        Extent(Some(ts))
-    }
-
     pub fn point(ts: Timestamp) -> Self {
-        Extent(Some(ts..ts))
+        Extent {
+            range: ts..ts,
+            is_span: false,
+        }
     }
 
-    pub fn empty() -> Self {
-        Extent(None)
+    pub fn span(ts: Range<Timestamp>) -> Option<Self> {
+        if ts.start > ts.end {
+            None
+        } else {
+            Some(Extent {
+                range: ts,
+                is_span: true,
+            })
+        }
     }
 
-    pub fn as_range(&self) -> Option<&Range<Timestamp>> {
-        self.0.as_ref()
+    pub fn as_range(&self) -> &Range<Timestamp> {
+        &self.range
     }
 
     pub fn as_point(&self) -> Option<&Timestamp> {
         if self.is_point() {
-            self.to_point()
+            Some(&self.range.end)
         } else {
             None
         }
     }
 
-    pub fn to_point(&self) -> Option<&Timestamp> {
-        Some(&self.0.as_ref()?.end)
+    pub fn to_point(&self) -> &Timestamp {
+        &self.range.end
     }
 
     pub fn as_span(&self) -> Option<&Range<Timestamp>> {
-        let ts = self.0.as_ref()?;
-
-        if ts.start != ts.end {
-            Some(ts)
+        if self.is_span() {
+            Some(&self.range)
         } else {
             None
         }
     }
 
-    pub fn len(&self) -> Option<Duration> {
-        let ts = self.0.as_ref()?;
-
-        ts.end.duration_since(ts.start)
+    pub fn len(&self) -> Duration {
+        self.range
+            .end
+            .duration_since(self.range.start)
+            .expect("end is always after start")
     }
 
     pub fn is_point(&self) -> bool {
-        self.0
-            .as_ref()
-            .map(|ts| ts.start == ts.end)
-            .unwrap_or(false)
+        !self.is_span()
     }
 
     pub fn is_span(&self) -> bool {
-        self.0
-            .as_ref()
-            .map(|ts| ts.start != ts.end)
-            .unwrap_or(false)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_none()
-    }
-
-    pub fn or_else<T: ToExtent>(&self, or_else: impl FnOnce() -> T) -> Self {
-        if self.0.is_none() {
-            or_else().to_extent()
-        } else {
-            self.clone()
-        }
-    }
-}
-
-impl From<Timestamp> for Extent {
-    fn from(value: Timestamp) -> Self {
-        Extent::point(value)
-    }
-}
-
-impl From<Range<Timestamp>> for Extent {
-    fn from(value: Range<Timestamp>) -> Self {
-        Extent::new(value)
-    }
-}
-
-impl From<Option<Range<Timestamp>>> for Extent {
-    fn from(value: Option<Range<Timestamp>>) -> Self {
-        Extent(value)
+        self.is_span
     }
 }
 
 impl fmt::Display for Extent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.0 {
-            Some(ref ts) if ts.start != ts.end => {
-                fmt::Display::fmt(&ts.start, f)?;
-                f.write_str("..")?;
-                fmt::Display::fmt(&ts.end, f)
-            }
-            Some(ref ts) => fmt::Display::fmt(&ts.end, f),
-            None => Ok(()),
+        if self.is_span() {
+            fmt::Display::fmt(&self.range.start, f)?;
+            f.write_str("..")?;
+            fmt::Display::fmt(&self.range.end, f)
+        } else {
+            fmt::Display::fmt(&self.range.end, f)
         }
     }
 }
 
 pub trait ToExtent {
-    fn to_extent(&self) -> Extent;
+    fn to_extent(&self) -> Option<Extent>;
 }
 
 impl<'a, T: ToExtent + ?Sized> ToExtent for &'a T {
-    fn to_extent(&self) -> Extent {
+    fn to_extent(&self) -> Option<Extent> {
         (**self).to_extent()
     }
 }
 
 impl ToExtent for Empty {
-    fn to_extent(&self) -> Extent {
-        Extent::empty()
+    fn to_extent(&self) -> Option<Extent> {
+        None
     }
 }
 
 impl<T: ToExtent> ToExtent for Option<T> {
-    fn to_extent(&self) -> Extent {
-        self.as_ref()
-            .map(|ts| ts.to_extent())
-            .unwrap_or_else(Extent::empty)
+    fn to_extent(&self) -> Option<Extent> {
+        self.as_ref().and_then(|ts| ts.to_extent())
     }
 }
 
 impl ToExtent for Extent {
-    fn to_extent(&self) -> Extent {
-        self.clone()
+    fn to_extent(&self) -> Option<Extent> {
+        Some(self.clone())
     }
 }
 
 impl ToExtent for Timestamp {
-    fn to_extent(&self) -> Extent {
-        Extent::point(*self)
+    fn to_extent(&self) -> Option<Extent> {
+        Some(Extent::point(*self))
     }
 }
 
 impl ToExtent for Range<Timestamp> {
-    fn to_extent(&self) -> Extent {
-        Extent::new(self.clone())
+    fn to_extent(&self) -> Option<Extent> {
+        Extent::span(self.clone())
     }
 }
 
 impl ToExtent for Range<Option<Timestamp>> {
-    fn to_extent(&self) -> Extent {
+    fn to_extent(&self) -> Option<Extent> {
         match (self.start, self.end) {
             (Some(start), Some(end)) => (start..end).to_extent(),
             (Some(start), None) => start.to_extent(),

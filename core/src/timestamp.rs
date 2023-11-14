@@ -2,6 +2,13 @@ use core::{cmp, fmt, str, str::FromStr, time::Duration};
 
 use crate::value::{ToValue, Value};
 
+// 2000-03-01 (mod 400 year, immediately after feb29
+const LEAPOCH_SECS: u64 = 946_684_800 + 86400 * (31 + 29);
+const DAYS_PER_400Y: u32 = 365 * 400 + 97;
+const DAYS_PER_100Y: u32 = 365 * 100 + 24;
+const DAYS_PER_4Y: u32 = 365 * 4 + 1;
+const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(Duration);
 
@@ -16,8 +23,12 @@ pub struct Parts {
 }
 
 impl Timestamp {
-    pub fn new(unix_time: Duration) -> Self {
-        Timestamp(unix_time)
+    pub fn new(unix_time: Duration) -> Option<Self> {
+        if unix_time.as_secs() < LEAPOCH_SECS {
+            None
+        } else {
+            Some(Timestamp(unix_time))
+        }
     }
 
     pub fn as_unix_time(&self) -> &Duration {
@@ -44,15 +55,7 @@ impl Timestamp {
         let secs: u64 = dur.as_secs();
         let subsecond_nanos = dur.subsec_nanos();
 
-        // 2000-03-01 (mod 400 year, immediately after feb29
-        const LEAPOCH: u64 = 946_684_800 + 86400 * (31 + 29);
-        const DAYS_PER_400Y: u32 = 365 * 400 + 97;
-        const DAYS_PER_100Y: u32 = 365 * 100 + 24;
-        const DAYS_PER_4Y: u32 = 365 * 4 + 1;
-        const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
-
-        // Note(dcb): this bit is rearranged slightly to avoid integer overflow.
-        let days: u64 = (secs / 86_400) - (LEAPOCH / 86_400);
+        let days: u64 = (secs / 86_400) - (LEAPOCH_SECS / 86_400);
         let remsecs: u32 = (secs % 86_400) as u32;
 
         let qc_cycles: u32 = (days / u64::from(DAYS_PER_400Y)) as u32;
@@ -261,12 +264,13 @@ fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
         seconds_within_year += 86400
     }
 
-    Ok(Timestamp::new(Duration::new(
+    Timestamp::new(Duration::new(
         (start_of_year + i128::from(seconds_within_year))
             .try_into()
             .map_err(|_| ParseTimestampError {})?,
         nanos,
-    )))
+    ))
+    .ok_or_else(|| ParseTimestampError {})
 }
 
 fn fmt_rfc3339(ts: Timestamp, f: &mut fmt::Formatter) -> fmt::Result {
@@ -328,7 +332,7 @@ mod tests {
 
     #[test]
     fn timestamp_roundtrip() {
-        let ts = Timestamp::new(Duration::new(1691961703, 17532));
+        let ts = Timestamp::new(Duration::new(1691961703, 17532)).unwrap();
 
         let fmt = ts.to_string();
 

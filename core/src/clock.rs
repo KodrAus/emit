@@ -93,22 +93,22 @@ impl<C: Clock> Timer<C> {
         }
     }
 
-    pub fn extent(&self) -> Extent {
+    pub fn extent(&self) -> Option<Extent> {
         let end = self.clock.now();
 
         match (self.start, end) {
-            (Some(start), Some(end)) => Extent::new(start..end),
-            _ => Extent::empty(),
+            (Some(start), Some(end)) => Extent::span(start..end),
+            _ => None,
         }
     }
 
     pub fn elapsed(&self) -> Option<Duration> {
-        self.extent().len()
+        self.extent().map(|extent| extent.len())
     }
 }
 
 impl<C: Clock> ToExtent for Timer<C> {
-    fn to_extent(&self) -> Extent {
+    fn to_extent(&self) -> Option<Extent> {
         self.extent()
     }
 }

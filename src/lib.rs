@@ -73,15 +73,9 @@ pub fn emit(evt: &Event<impl Props>) {
 
     let tpl = evt.tpl();
     let props = evt.props();
+    let extent = evt.extent().cloned().or_else(|| ambient.now().to_extent());
 
-    base_emit(
-        ambient,
-        ambient,
-        ambient,
-        evt.extent().or_else(|| ambient.now()),
-        tpl,
-        props,
-    );
+    base_emit(ambient, ambient, ambient, extent, tpl, props);
 }
 
 pub type With = LocalFrame<emit_core::ambient::Get>;

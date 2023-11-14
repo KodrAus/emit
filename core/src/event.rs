@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
-    extent: Extent,
+    extent: Option<Extent>,
     tpl: Template<'a>,
     props: P,
 }
@@ -22,8 +22,8 @@ impl<'a, P> Event<'a, P> {
         }
     }
 
-    pub fn extent(&self) -> &Extent {
-        &self.extent
+    pub fn extent(&self) -> Option<&Extent> {
+        self.extent.as_ref()
     }
 
     pub fn tpl(&self) -> Template {

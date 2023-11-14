@@ -1,4 +1,4 @@
-use core::{any::Any, fmt, ops::ControlFlow, panic::Location};
+use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
     ambient,
@@ -419,7 +419,7 @@ pub fn __private_emit(
         to.and(ambient),
         when.and(ambient),
         ambient,
-        extent.to_extent().or_else(|| ambient.now()),
+        extent.to_extent().or_else(|| ambient.now().to_extent()),
         tpl,
         props,
     );
