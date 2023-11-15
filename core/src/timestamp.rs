@@ -1,4 +1,10 @@
-use core::{cmp, fmt, str, str::FromStr, time::Duration};
+use core::{
+    cmp, fmt,
+    ops::{Add, AddAssign},
+    str,
+    str::FromStr,
+    time::Duration,
+};
 
 use crate::value::{ToValue, Value};
 
@@ -31,8 +37,8 @@ impl Timestamp {
         }
     }
 
-    pub fn as_unix_time(&self) -> &Duration {
-        &self.0
+    pub fn to_unix_time(&self) -> Duration {
+        self.0
     }
 
     pub fn duration_since(self, earlier: Self) -> Option<Duration> {
@@ -111,6 +117,23 @@ impl Timestamp {
             seconds,
             subsecond_nanos,
         }
+    }
+}
+
+impl Add<Duration> for Timestamp {
+    type Output = Timestamp;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        match Timestamp::new(self.to_unix_time() + rhs) {
+            Some(ts) => ts,
+            None => panic!("overflow adding to timestamp"),
+        }
+    }
+}
+
+impl AddAssign<Duration> for Timestamp {
+    fn add_assign(&mut self, rhs: Duration) {
+        *self = *self + rhs;
     }
 }
 

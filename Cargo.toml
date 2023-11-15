@@ -1,13 +1,14 @@
 [workspace]
 members = [
     "core",
+    "batcher",
+    "metrics",
     "targets/term",
     "targets/otlp",
     "targets/otlp/gen",
     "macros",
     "benchmark",
     "tests/ui",
-    "tests/smoke-test",
 ]
 exclude = [
     "tests/smoke-test"

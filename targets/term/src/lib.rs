@@ -1,9 +1,10 @@
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
 use core::{fmt, str, time::Duration};
-use std::{borrow::Cow, cell::RefCell, cmp, collections::HashMap, io::Write, mem, sync::Mutex};
+use std::{cell::RefCell, io::Write, sync::Mutex};
 
-use emit::{metrics::MetricKind, well_known::WellKnown, Event, Props, Timestamp};
+use emit::{metrics::MetricKind, well_known::WellKnown, Event};
+use emit_metrics::{Bucketing, Histogram, MetricsCollector};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -15,111 +16,22 @@ pub fn stdout() -> Stdout {
 
 pub struct Stdout {
     writer: BufferWriter,
-    metrics_collector: Option<MetricsCollector>,
+    metrics_collector: Option<Mutex<MetricsCollector>>,
 }
 
 impl Stdout {
-    pub fn plot_metrics(mut self) -> Self {
-        self.metrics_collector = Some(MetricsCollector::new(Bucketing::ByCount(20)));
+    pub fn plot_metrics_by_time(mut self, bucket_size: Duration) -> Self {
+        self.metrics_collector = Some(Mutex::new(MetricsCollector::new(Bucketing::ByTime(
+            bucket_size,
+        ))));
         self
     }
 
-    pub fn bucket_by_time(mut self, bucket_size: Duration) -> Self {
-        if let Some(ref mut metrics_collector) = self.metrics_collector {
-            metrics_collector.bucketing = Bucketing::ByTime(bucket_size);
-        }
-
+    pub fn plot_metrics_by_count(mut self, nbuckets: usize) -> Self {
+        self.metrics_collector = Some(Mutex::new(MetricsCollector::new(Bucketing::ByCount(
+            nbuckets,
+        ))));
         self
-    }
-
-    pub fn bucket_by_width(mut self, nbuckets: usize) -> Self {
-        if let Some(ref mut metrics_collector) = self.metrics_collector {
-            metrics_collector.bucketing = Bucketing::ByCount(nbuckets);
-        }
-
-        self
-    }
-}
-
-struct MetricsCollector {
-    bucketing: Bucketing,
-    sums: Mutex<HashMap<Cow<'static, str>, SumHistogram>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Bucketing {
-    ByTime(Duration),
-    ByCount(usize),
-}
-
-#[derive(Debug, Clone)]
-struct SumHistogram {
-    deltas: Vec<SumHistogramDelta>,
-    cumulative: f64,
-    omitted: usize,
-}
-
-#[derive(Debug, Clone)]
-struct SumHistogramDelta {
-    timestamp: Timestamp,
-    value: f64,
-}
-
-impl Default for SumHistogram {
-    fn default() -> Self {
-        SumHistogram {
-            deltas: Vec::new(),
-            omitted: 0,
-            cumulative: 0.0,
-        }
-    }
-}
-
-impl MetricsCollector {
-    pub fn new(bucketing: Bucketing) -> Self {
-        MetricsCollector {
-            bucketing,
-            sums: Mutex::new(HashMap::new()),
-        }
-    }
-
-    pub fn record_metric(&self, evt: &Event<impl Props>) -> bool {
-        if let (Some(extent), Some(metric)) = (
-            evt.extent().and_then(|extent| extent.as_point()),
-            evt.props().metric(),
-        ) {
-            if let Some(MetricKind::Sum) = metric.kind() {
-                if let Some(value) = metric.value().to_f64() {
-                    return self.record_sum_point(metric.name().to_cow(), *extent, value);
-                }
-            }
-        }
-
-        false
-    }
-
-    pub fn record_sum_point(
-        &self,
-        metric: impl Into<Cow<'static, str>>,
-        timestamp: Timestamp,
-        cumulative: f64,
-    ) -> bool {
-        let mut metrics = self.sums.lock().unwrap();
-        let entry = metrics.entry(metric.into()).or_default();
-
-        if let Some(from) = entry.deltas.last().map(|bucket| bucket.timestamp) {
-            if from >= timestamp {
-                entry.omitted += 1;
-                return false;
-            }
-        }
-
-        let value = cumulative - entry.cumulative;
-
-        entry.cumulative = cumulative;
-        entry.deltas.push(SumHistogramDelta { timestamp, value });
-
-        true
     }
 }
 
@@ -160,7 +72,7 @@ fn with_shared_buf(writer: &BufferWriter, with_buf: impl FnOnce(&BufferWriter, &
 impl emit::emitter::Emitter for Stdout {
     fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
         if let Some(ref metrics_collector) = self.metrics_collector {
-            if metrics_collector.record_metric(evt) {
+            if metrics_collector.lock().unwrap().record_metric(evt) {
                 return;
             }
         }
@@ -170,11 +82,15 @@ impl emit::emitter::Emitter for Stdout {
 
     fn blocking_flush(&self, _: Duration) {
         if let Some(ref metrics_collector) = self.metrics_collector {
-            let sums = { mem::take(&mut *metrics_collector.sums.lock().unwrap()) };
+            for (metric, histogram) in { metrics_collector.lock().unwrap().take_sums() } {
+                if histogram.is_empty() {
+                    continue;
+                }
 
-            if sums.len() > 0 {
+                let histogram = histogram.compute();
+
                 with_shared_buf(&self.writer, |writer, buf| {
-                    print_sum_histograms(writer, buf, metrics_collector.bucketing, sums)
+                    print_histogram(writer, buf, &*metric, MetricKind::Sum, &histogram);
                 });
             }
         }
@@ -237,7 +153,7 @@ fn local_ts(ts: emit::Timestamp) -> Option<LocalTime> {
     // library and propagated through libraries like `time`. Until then,
     // you probably won't get local timestamps outside of Windows.
     let local = time::OffsetDateTime::from_unix_timestamp_nanos(
-        ts.as_unix_time().as_nanos().try_into().ok()?,
+        ts.to_unix_time().as_nanos().try_into().ok()?,
     )
     .ok()?;
     let local = local.checked_to_offset(time::UtcOffset::local_offset_at(local).ok()?)?;
@@ -351,135 +267,46 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
     let _ = out.print(&buf);
 }
 
-fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64], min: f64, max: f64) {
+fn print_histogram(
+    out: &BufferWriter,
+    buf: &mut Buffer,
+    metric_name: &str,
+    metric_kind: MetricKind,
+    histogram: &Histogram,
+) {
     const BLOCKS: [&'static str; 7] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇"];
 
-    for bucket in buckets {
-        let v = *bucket;
-        let idx = (((v - min) / (max - min)) * ((BLOCKS.len() - 1) as f64)).ceil() as usize;
+    let x = histogram.timestamp_range();
+    let y = histogram.value_range();
+
+    let bucket_size = friendly_duration(histogram.bucket_size());
+
+    print_event(
+        out,
+        buf,
+        &Event::new(
+            x,
+            emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
+            emit::props! {
+                metric_kind,
+                metric_name,
+                min: y.start,
+                max: y.end,
+                bucket_size: bucket_size.value,
+                bucket_size_unit: bucket_size.unit,
+            },
+        ),
+    );
+    buf.clear();
+
+    for v in histogram.iter_values() {
+        let idx =
+            (((v - y.start) / (y.end - y.start)) * ((BLOCKS.len() - 1) as f64)).ceil() as usize;
         let _ = buf.write(BLOCKS[idx].as_bytes());
     }
 
     let _ = buf.write(b"\n");
     let _ = out.print(buf);
-}
-
-fn print_sum_histograms(
-    out: &BufferWriter,
-    buf: &mut Buffer,
-    bucketing: Bucketing,
-    metrics: impl IntoIterator<Item = (Cow<'static, str>, SumHistogram)>,
-) {
-    let mut buckets = Vec::new();
-
-    for (metric, entry) in metrics {
-        if entry.deltas.len() == 0 {
-            continue;
-        }
-
-        let extent =
-            entry.deltas.first().unwrap().timestamp..entry.deltas.last().unwrap().timestamp;
-
-        let bucket_size = match bucketing {
-            Bucketing::ByTime(size) => size.as_nanos(),
-            Bucketing::ByCount(nbuckets) => cmp::max(
-                1,
-                (extent.end.as_unix_time().as_nanos() - extent.start.as_unix_time().as_nanos())
-                    / (nbuckets as u128),
-            ),
-        };
-
-        let extent_start = extent.start.as_unix_time().as_nanos();
-
-        let bucket_start = {
-            let diff = extent_start % bucket_size;
-
-            if diff == 0 {
-                extent_start
-            } else {
-                extent_start - diff
-            }
-        };
-
-        let mut current_bucket_start = bucket_start;
-
-        let mut current_delta_start = extent_start;
-        let mut current_bucket_value = 0.0;
-
-        let mut bucket_min = f64::NAN;
-        let mut bucket_max = -f64::NAN;
-
-        let mut push_bucket = |value: f64| {
-            buckets.push(value);
-            bucket_min = cmp::min_by(value, bucket_min, f64::total_cmp);
-            bucket_max = cmp::max_by(value, bucket_max, f64::total_cmp);
-        };
-
-        // Skip the first bucket; we don't know its start time
-        let mut i = 1;
-        while i < entry.deltas.len() {
-            let current_bucket_end = current_bucket_start + bucket_size;
-
-            // Advance buckets to the start of the delta
-            if current_delta_start >= current_bucket_end {
-                push_bucket(current_bucket_value);
-
-                current_bucket_value = 0.0;
-                current_bucket_start = current_bucket_end;
-                continue;
-            }
-
-            let delta = &entry.deltas[i];
-
-            let current_delta_end = delta.timestamp.as_unix_time().as_nanos();
-
-            let intersection = (cmp::min(current_bucket_end, current_delta_end) as f64
-                - cmp::max(current_bucket_start, current_delta_start) as f64)
-                / (current_delta_end as f64 - current_delta_start as f64);
-
-            current_bucket_value += delta.value * intersection;
-
-            // Advance buckets through the delta
-            if current_delta_end > current_bucket_end {
-                push_bucket(current_bucket_value);
-
-                current_bucket_value = 0.0;
-                current_bucket_start = current_bucket_end;
-                continue;
-            }
-
-            // Advance deltas through the bucket
-            current_delta_start = current_delta_end;
-            i += 1;
-        }
-
-        if current_bucket_value != 0.0 {
-            push_bucket(current_bucket_value);
-        }
-
-        let bucket_size = friendly_duration(Duration::from_nanos(bucket_size as u64));
-
-        print_event(
-            out,
-            buf,
-            &Event::new(
-                extent.clone(),
-                emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
-                emit::props! {
-                    metric_kind: MetricKind::Sum,
-                    metric_name: metric,
-                    min: bucket_min,
-                    max: bucket_max,
-                    bucket_size: bucket_size.value,
-                    bucket_size_unit: bucket_size.unit,
-                },
-            ),
-        );
-        buf.clear();
-        print_histogram(out, buf, &buckets, bucket_min, bucket_max);
-        buckets.clear();
-        buf.clear();
-    }
 }
 
 struct Writer<'a> {

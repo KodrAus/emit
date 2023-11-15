@@ -21,12 +21,12 @@ async fn main() {
                 .spawn()
                 .unwrap(),
         )
-        .and_to(emit_term::stdout().plot_metrics())
+        .and_to(emit_term::stdout().plot_metrics_by_count(30))
         .init();
 
     sample_metrics();
 
-    in_trace().await;
+    let _ = in_trace().await;
 
     emitter.blocking_flush(Duration::from_secs(5));
 }
