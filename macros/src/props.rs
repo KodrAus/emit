@@ -8,8 +8,8 @@ use crate::{
     util::{AttributeCfg, FieldValueKey},
 };
 
-#[derive(Default)]
 pub struct Props {
+    interpolated: bool,
     match_value_tokens: Vec<TokenStream>,
     match_binding_tokens: Vec<TokenStream>,
     key_values: BTreeMap<String, KeyValue>,
@@ -20,7 +20,7 @@ impl Parse for Props {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let fv = input.parse_terminated(FieldValue::parse, Token![,])?;
 
-        let mut props = Props::new();
+        let mut props = Props::new(false);
 
         for fv in fv {
             props.push(&fv)?;
@@ -47,8 +47,14 @@ impl KeyValue {
 }
 
 impl Props {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(interpolated: bool) -> Self {
+        Props {
+            interpolated,
+            match_value_tokens: Vec::new(),
+            match_binding_tokens: Vec::new(),
+            key_values: BTreeMap::new(),
+            key_value_index: 0,
+        }
     }
 
     pub fn match_input_tokens(&self) -> impl Iterator<Item = &TokenStream> {
@@ -110,7 +116,7 @@ impl Props {
         let match_bound_ident = self.next_match_binding_ident(fv.span());
 
         let key_value_tokens = {
-            let key_value_tokens = capture::key_value_with_hook(&attrs, &fv);
+            let key_value_tokens = capture::key_value_with_hook(&attrs, &fv, self.interpolated);
 
             match cfg_attr {
                 Some(ref cfg_attr) => quote_spanned!(fv.span()=>

@@ -25,7 +25,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
         .map(|fv| Ok((fv.key_name(), fv)))
         .collect::<Result<_, syn::Error>>()?;
 
-    let mut props = Props::new();
+    let mut props = Props::new(true);
 
     // Push the field-values that appear in the template
     for fv in template.literal_field_values() {
@@ -108,7 +108,7 @@ impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
 
         let field = self.props.get(&label).expect("missing prop");
 
-        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole);
+        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole, true);
 
         match field.cfg_attr {
             Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),

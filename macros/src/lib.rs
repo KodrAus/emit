@@ -156,6 +156,7 @@ pub fn as_debug(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     capture_as(
+        "as_debug",
         TokenStream::from(args),
         TokenStream::from(item),
         quote!(__private_capture_as_debug),
@@ -172,6 +173,7 @@ pub fn as_display(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     capture_as(
+        "as_display",
         TokenStream::from(args),
         TokenStream::from(item),
         quote!(__private_capture_as_display),
@@ -190,6 +192,7 @@ pub fn as_sval(
     #[cfg(feature = "sval")]
     {
         capture_as(
+            "as_sval",
             TokenStream::from(args),
             TokenStream::from(item),
             quote!(__private_capture_as_sval),
@@ -218,6 +221,7 @@ pub fn as_serde(
     #[cfg(feature = "serde")]
     {
         capture_as(
+            "as_serde",
             TokenStream::from(args),
             TokenStream::from(item),
             quote!(__private_capture_as_serde),
@@ -246,6 +250,7 @@ pub fn as_error(
     #[cfg(feature = "std")]
     {
         capture_as(
+            "as_error",
             TokenStream::from(args),
             TokenStream::from(item),
             quote!(__private_capture_as_error),
@@ -277,12 +282,14 @@ fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
 }
 
 fn capture_as(
+    name: &'static str,
     args: TokenStream,
     expr: TokenStream,
     as_fn: TokenStream,
     as_anon_fn: TokenStream,
 ) -> proc_macro::TokenStream {
     capture::rename_hook_tokens(capture::RenameHookTokens {
+        name,
         args: TokenStream::from(args),
         expr: TokenStream::from(expr),
         to: |args: &capture::Args| {

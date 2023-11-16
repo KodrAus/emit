@@ -82,7 +82,7 @@ impl emit::emitter::Emitter for Stdout {
 
     fn blocking_flush(&self, _: Duration) {
         if let Some(ref metrics_collector) = self.metrics_collector {
-            for (metric, histogram) in { metrics_collector.lock().unwrap().take_sums() } {
+            for (metric, histogram) in metrics_collector.lock().unwrap().take_sums() {
                 if histogram.is_empty() {
                     continue;
                 }

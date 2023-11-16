@@ -260,6 +260,21 @@ impl<T> __PrivateOptionalMapHook<T> for Option<T> {
     }
 }
 
+pub trait __PrivateInterpolatedHook {
+    fn __private_interpolated(self) -> Self;
+    fn __private_uninterpolated(self) -> Self;
+}
+
+impl<T> __PrivateInterpolatedHook for T {
+    fn __private_interpolated(self) -> Self {
+        self
+    }
+
+    fn __private_uninterpolated(self) -> Self {
+        self
+    }
+}
+
 /**
 An API to the specialized `Capture` trait for consuming in a macro.
 

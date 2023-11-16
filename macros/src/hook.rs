@@ -5,6 +5,7 @@ use quote::ToTokens;
 use syn::{
     parse::Parse,
     punctuated::Punctuated,
+    spanned::Spanned,
     token::Comma,
     visit_mut::{self, VisitMut},
     Expr, ExprMethodCall, Ident,
@@ -17,25 +18,38 @@ pub struct RenameHookTokens<P, T> {
     pub expr: TokenStream,
     pub predicate: P,
     pub to: T,
+    pub name: &'static str,
+    pub target: &'static str,
 }
 
 pub fn rename_hook_tokens<A: Parse>(
     opts: RenameHookTokens<
         impl Fn(&str) -> bool,
-        impl Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> (TokenStream, TokenStream),
+        impl Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> Option<(TokenStream, TokenStream)>,
     >,
 ) -> Result<TokenStream, syn::Error> {
     let mut hook = syn::parse2::<Hook>(opts.expr)?;
-
-    RenameVisitor {
+    let mut visitor = RenameVisitor {
         scratch: String::new(),
         predicate: opts.predicate,
         to: opts.to,
         args: syn::parse2::<A>(opts.args)?,
-    }
-    .visit_expr_mut(&mut hook.expr);
+        applied: false,
+    };
 
-    Ok(hook.to_token_stream())
+    visitor.visit_expr_mut(&mut hook.expr);
+
+    if !visitor.applied {
+        Err(syn::Error::new(
+            hook.expr.span(),
+            format_args!(
+                "`{}` isn't valid here; it can only be applied to {}",
+                opts.name, opts.target
+            ),
+        ))
+    } else {
+        Ok(hook.to_token_stream())
+    }
 }
 
 struct RenameVisitor<P, A, T> {
@@ -43,12 +57,13 @@ struct RenameVisitor<P, A, T> {
     predicate: P,
     args: A,
     to: T,
+    applied: bool,
 }
 
 impl<P, A, T> VisitMut for RenameVisitor<P, A, T>
 where
     P: Fn(&str) -> bool,
-    T: Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> (TokenStream, TokenStream),
+    T: Fn(&A, &Ident, &Punctuated<Expr, Comma>) -> Option<(TokenStream, TokenStream)>,
 {
     fn visit_expr_method_call_mut(&mut self, i: &mut ExprMethodCall) {
         let ExprMethodCall { method, args, .. } = i;
@@ -57,10 +72,12 @@ where
         write!(&mut self.scratch, "{}", method).expect("infallible write to string");
 
         if (self.predicate)(&self.scratch) {
-            let (to_ident_tokens, to_arg_tokens) = (self.to)(&self.args, &method, &args);
+            self.applied = true;
 
-            *method = syn::parse2(to_ident_tokens).expect("invalid ident");
-            *args = parse_comma_separated2(to_arg_tokens).expect("invalid args");
+            if let Some((to_ident_tokens, to_arg_tokens)) = (self.to)(&self.args, &method, &args) {
+                *method = syn::parse2(to_ident_tokens).expect("invalid ident");
+                *args = parse_comma_separated2(to_arg_tokens).expect("invalid args");
+            }
         }
 
         visit_mut::visit_expr_method_call_mut(self, i)

@@ -101,7 +101,7 @@ mod tests {
                     let mut __link = emit::ctxt::Link::new(
                         emit::ambient_with(),
                         emit::props::SortedSlice::new_ref(&[{
-                            use emit::__private::__PrivateCaptureHook;
+                            use emit::__private::__PrivateCaptureHook as _;
                             (emit::Key::new("a"), (a).__private_capture_as_default())
                         }]),
                     );
@@ -133,7 +133,7 @@ mod tests {
                     emit::ctxt::LinkFuture::new(
                         emit::ambient_with(),
                         emit::props::SortedSlice::new_ref(&[{
-                            use emit::__private::__PrivateCaptureHook;
+                            use emit::__private::__PrivateCaptureHook as _;
                             (emit::Key::new("a"), (a).__private_capture_as_default())
                         }]),
                         async {

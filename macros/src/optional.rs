@@ -17,13 +17,15 @@ pub struct RenameHookTokens {
 
 pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
+        name: "optional",
+        target: "values in `emit` macros",
         args: opts.args,
         expr: opts.expr,
         predicate: |ident: &str| ident.starts_with("__private_optional"),
         to: move |_: &Args, ident: &Ident, args: &Punctuated<Expr, Comma>| {
             let ident = Ident::new(&ident.to_string().replace("some", "option"), ident.span());
 
-            (quote!(#ident), quote!(#args))
+            Some((quote!(#ident), quote!(#args)))
         },
     })
 }

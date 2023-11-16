@@ -9,12 +9,22 @@ use crate::{
     hook,
 };
 
-pub fn template_hole_with_hook(attrs: &[Attribute], hole: &ExprLit) -> TokenStream {
+pub fn template_hole_with_hook(
+    attrs: &[Attribute],
+    hole: &ExprLit,
+    interpolated: bool,
+) -> TokenStream {
+    let interpolated_expr = if interpolated {
+        quote!(.__private_interpolated())
+    } else {
+        quote!(.__private_uninterpolated())
+    };
+
     quote_spanned!(hole.span()=>
         #(#attrs)*
         {
-            use emit::__private::__PrivateFmtHook;
-            emit::template::Part::hole(#hole).__private_fmt_as_default()
+            use emit::__private::{__PrivateFmtHook as _, __PrivateInterpolatedHook as _};
+            emit::template::Part::hole(#hole).__private_fmt_as_default()#interpolated_expr
         }
     )
 }
@@ -65,19 +75,26 @@ pub struct RenameHookTokens {
 
 pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
+        name: "fmt",
+        target: "values in templates or event macros",
         args: opts.args,
         expr: opts.expr,
-        predicate: |ident: &str| ident.starts_with("__private_fmt"),
-        to: move |args: &Args, _: &Ident, _: &Punctuated<Expr, Comma>| {
+        predicate: |ident: &str| {
+            ident.starts_with("__private_fmt") || ident.starts_with("__private_interpolated")
+        },
+        to: move |args: &Args, ident: &Ident, _: &Punctuated<Expr, Comma>| {
+            if ident.to_string().starts_with("__private_interpolated") {
+                return None;
+            }
+
             let fmt = args.to_format_args();
 
             let to_ident = quote!(__private_fmt_as);
             let to_arg = quote!(emit::template::Formatter::new(|v, f| {
-                use emit::__private::core::fmt;
                 emit::__private::core::write!(f, #fmt, v)
             }));
 
-            (to_ident, to_arg)
+            Some((to_ident, to_arg))
         },
     })
 }

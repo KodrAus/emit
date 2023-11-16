@@ -13,7 +13,7 @@ pub fn key_with_hook(attrs: &[Attribute], key_expr: &ExprLit) -> TokenStream {
     quote_spanned!(key_expr.span()=>
         #(#attrs)*
         {
-            use emit::__private::__PrivateKeyHook;
+            use emit::__private::__PrivateKeyHook as _;
             emit::Key::new(#key_expr).__private_key_as_default()
         }
     )
@@ -70,6 +70,8 @@ pub struct RenameHookTokens {
 
 pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Error> {
     hook::rename_hook_tokens(hook::RenameHookTokens {
+        name: "key",
+        target: "values in templates or event macros",
         args: opts.args,
         expr: opts.expr,
         predicate: |ident: &str| ident.starts_with("__private_key"),
@@ -79,7 +81,7 @@ pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Er
                 Name::Any(ref name) => (quote!(__private_key_as), name.clone()),
             };
 
-            (to_ident, to_arg)
+            Some((to_ident, to_arg))
         },
     })
 }
