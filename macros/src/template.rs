@@ -6,7 +6,10 @@ use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Expr, ExprPath
 
 use crate::{fmt, props::Props, util::FieldValueKey};
 
-pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn::Error> {
+pub fn parse2<A: Parse>(
+    input: TokenStream,
+    captured: bool,
+) -> Result<(A, Template, Props), syn::Error> {
     let template =
         fv_template::Template::parse2(input).map_err(|e| syn::Error::new(e.span(), e))?;
 
@@ -25,7 +28,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
         .map(|fv| Ok((fv.key_name(), fv)))
         .collect::<Result<_, syn::Error>>()?;
 
-    let mut props = Props::new(true);
+    let mut props = Props::new();
 
     // Push the field-values that appear in the template
     for fv in template.literal_field_values() {
@@ -35,7 +38,7 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
         // then it will be used as the source for the value and attributes
         // In this case, it's expected that the field-value in the template is
         // just a single identifier
-        let fv = match extra_field_values.remove(&k) {
+        match extra_field_values.remove(&k) {
             Some(extra_fv) => {
                 if let Expr::Path(ExprPath { ref path, .. }) = fv.expr {
                     // Make sure the field-value in the template is just a plain identifier
@@ -55,18 +58,18 @@ pub fn parse2<A: Parse>(input: TokenStream) -> Result<(A, Template, Props), syn:
                     ));
                 }
 
-                extra_fv
+                props.push(extra_fv, true, captured)?;
             }
-            None => fv,
-        };
-
-        props.push(fv)?;
+            None => {
+                props.push(fv, true, captured)?;
+            }
+        }
     }
 
     // Push any remaining extra field-values
     // This won't include any field values that also appear in the template
     for (_, fv) in extra_field_values {
-        props.push(fv)?;
+        props.push(fv, false, captured)?;
     }
 
     // A runtime representation of the template
@@ -108,7 +111,9 @@ impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
 
         let field = self.props.get(&label).expect("missing prop");
 
-        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole, true);
+        debug_assert!(field.interpolated);
+
+        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole, true, field.captured);
 
         match field.cfg_attr {
             Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),

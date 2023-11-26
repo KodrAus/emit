@@ -34,6 +34,7 @@ pub fn key_value_with_hook(
     attrs: &[Attribute],
     fv: &FieldValue,
     interpolated: bool,
+    captured: bool,
 ) -> TokenStream {
     let fn_name = match &*fv.key_name() {
         emit_core::well_known::LVL_KEY => quote_spanned!(fv.span()=> __private_capture_as_level),
@@ -60,10 +61,16 @@ pub fn key_value_with_hook(
         quote!(.__private_uninterpolated())
     };
 
+    let captured_expr = if captured {
+        quote!(.__private_captured())
+    } else {
+        quote!(.__private_uncaptured())
+    };
+
     let key_tokens = key::key_with_hook(&[], &key_expr);
     let value_tokens = quote_spanned!(fv.span()=> {
         use emit::__private::{__PrivateCaptureHook as _, __PrivateOptionalCaptureHook as _, __PrivateOptionalMapHook as _, __PrivateInterpolatedHook as _};
-        (#expr).__private_optional_capture_some().__private_optional_map_some(|v| v.#fn_name())#interpolated_expr
+        (#expr).__private_optional_capture_some().__private_optional_map_some(|v| v.#fn_name()) #interpolated_expr #captured_expr
     });
 
     quote_spanned!(fv.span()=>
@@ -90,10 +97,10 @@ pub fn rename_hook_tokens(
         args: opts.args,
         expr: opts.expr,
         predicate: |ident: &str| {
-            ident.starts_with("__private_capture") || ident.starts_with("__private_interpolated")
+            ident.starts_with("__private_capture") || ident.starts_with("__private_captured")
         },
         to: move |args: &Args, ident: &Ident, _: &Punctuated<Expr, Comma>| {
-            if ident.to_string().starts_with("__private_interpolated") {
+            if ident.to_string().starts_with("__private_captured") {
                 return None;
             }
 

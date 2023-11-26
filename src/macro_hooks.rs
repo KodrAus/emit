@@ -263,6 +263,9 @@ impl<T> __PrivateOptionalMapHook<T> for Option<T> {
 pub trait __PrivateInterpolatedHook {
     fn __private_interpolated(self) -> Self;
     fn __private_uninterpolated(self) -> Self;
+
+    fn __private_captured(self) -> Self;
+    fn __private_uncaptured(self) -> Self;
 }
 
 impl<T> __PrivateInterpolatedHook for T {
@@ -271,6 +274,14 @@ impl<T> __PrivateInterpolatedHook for T {
     }
 
     fn __private_uninterpolated(self) -> Self {
+        self
+    }
+
+    fn __private_captured(self) -> Self {
+        self
+    }
+
+    fn __private_uncaptured(self) -> Self {
         self
     }
 }

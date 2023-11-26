@@ -31,14 +31,14 @@ impl Parse for TemplateArgs {
 }
 
 pub fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
-    let (_, template, props) = template::parse2::<TemplateArgs>(opts.input)?;
+    let (_, template, props) = template::parse2::<TemplateArgs>(opts.input, false)?;
 
     // Ensure that a standalone template only specifies identifiers
     for key_value in props.iter() {
-        if key_value.has_expr {
+        if !key_value.interpolated {
             return Err(syn::Error::new(
                 key_value.span(),
-                "key-values in raw templates cannot capture values",
+                "key-values in raw templates must be in the template itself",
             ));
         }
     }

@@ -9,7 +9,6 @@ use crate::{
 };
 
 pub struct Props {
-    interpolated: bool,
     match_value_tokens: Vec<TokenStream>,
     match_binding_tokens: Vec<TokenStream>,
     key_values: BTreeMap<String, KeyValue>,
@@ -20,10 +19,10 @@ impl Parse for Props {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let fv = input.parse_terminated(FieldValue::parse, Token![,])?;
 
-        let mut props = Props::new(false);
+        let mut props = Props::new();
 
         for fv in fv {
-            props.push(&fv)?;
+            props.push(&fv, false, true)?;
         }
 
         Ok(props)
@@ -34,10 +33,11 @@ pub struct KeyValue {
     match_bound_tokens: TokenStream,
     direct_bound_tokens: TokenStream,
     span: Span,
+    pub interpolated: bool,
+    pub captured: bool,
     pub label: String,
     pub cfg_attr: Option<Attribute>,
     pub attrs: Vec<Attribute>,
-    pub has_expr: bool,
 }
 
 impl KeyValue {
@@ -47,9 +47,8 @@ impl KeyValue {
 }
 
 impl Props {
-    pub fn new(interpolated: bool) -> Self {
+    pub fn new() -> Self {
         Props {
-            interpolated,
             match_value_tokens: Vec::new(),
             match_binding_tokens: Vec::new(),
             key_values: BTreeMap::new(),
@@ -94,7 +93,12 @@ impl Props {
         self.key_values.values()
     }
 
-    pub fn push(&mut self, fv: &FieldValue) -> Result<(), syn::Error> {
+    pub fn push(
+        &mut self,
+        fv: &FieldValue,
+        interpolated: bool,
+        captured: bool,
+    ) -> Result<(), syn::Error> {
         let mut attrs = vec![];
         let mut cfg_attr = None;
 
@@ -116,7 +120,8 @@ impl Props {
         let match_bound_ident = self.next_match_binding_ident(fv.span());
 
         let key_value_tokens = {
-            let key_value_tokens = capture::key_value_with_hook(&attrs, &fv, self.interpolated);
+            let key_value_tokens =
+                capture::key_value_with_hook(&attrs, &fv, interpolated, captured);
 
             match cfg_attr {
                 Some(ref cfg_attr) => quote_spanned!(fv.span()=>
@@ -147,6 +152,13 @@ impl Props {
 
         let label = fv.key_name();
 
+        if fv.colon_token.is_some() && !captured {
+            return Err(syn::Error::new(
+                fv.span(),
+                "uncaptured key values must be plain identifiers",
+            ));
+        }
+
         // Make sure keys aren't duplicated
         let previous = self.key_values.insert(
             label.clone(),
@@ -155,9 +167,10 @@ impl Props {
                 direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
                 span: fv.span(),
                 label,
-                has_expr: fv.colon_token.is_some(),
                 cfg_attr,
                 attrs,
+                captured,
+                interpolated,
             },
         );
 
