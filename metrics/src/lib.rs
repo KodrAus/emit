@@ -255,6 +255,7 @@ impl SumHistogram {
             push_bucket(current_bucket_value);
         }
 
+        let histogram_size = duration_from_nanos(bucket_size * buckets.len() as u128);
         let bucket_size = duration_from_nanos(bucket_size);
 
         Histogram {
@@ -262,7 +263,7 @@ impl SumHistogram {
             timestamp_range: {
                 let start = Timestamp::new(duration_from_nanos(bucket_start)).unwrap();
 
-                start..start + bucket_size
+                start..start + histogram_size
             },
             bucket_size,
             buckets,
