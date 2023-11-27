@@ -87,7 +87,7 @@ impl<'k> Key<'k> {
         }
     }
 
-    pub fn by_ref<'b>(&'b self) -> Key<'b> {
+    pub const fn by_ref<'b>(&'b self) -> Key<'b> {
         Key {
             value: self.value,
             value_static: self.value_static,
@@ -97,11 +97,11 @@ impl<'k> Key<'k> {
         }
     }
 
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         unsafe { &(*self.value) }
     }
 
-    pub fn as_static_str(&self) -> Option<&'static str> {
+    pub const fn as_static_str(&self) -> Option<&'static str> {
         self.value_static
     }
 }

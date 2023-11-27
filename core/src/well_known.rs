@@ -2,7 +2,7 @@ use crate::{
     id::{SpanId, TraceId},
     key::Key,
     level::Level,
-    metrics::{Metric, MetricKind},
+    metrics::Metric,
     props::Props,
     value::Value,
 };
@@ -16,6 +16,10 @@ pub const SPAN_PARENT_KEY: &'static str = "span_parent";
 pub const METRIC_NAME_KEY: &'static str = "metric_name";
 pub const METRIC_KIND_KEY: &'static str = "metric_kind";
 pub const METRIC_VALUE_KEY: &'static str = "metric_value";
+
+pub const METRIC_KIND_SUM: &'static str = "sum";
+pub const METRIC_KIND_MIN: &'static str = "min";
+pub const METRIC_KIND_MAX: &'static str = "max";
 
 pub trait WellKnown: Props {
     fn lvl(&self) -> Option<Level> {
@@ -44,7 +48,7 @@ pub trait WellKnown: Props {
 
     fn metric(&self) -> Option<Metric<Value>> {
         Some(Metric::new(
-            self.metric_kind(),
+            self.metric_kind()?,
             self.metric_name()?,
             self.metric_value()?,
         ))
@@ -54,8 +58,8 @@ pub trait WellKnown: Props {
         self.get(METRIC_NAME_KEY)?.to_key()
     }
 
-    fn metric_kind(&self) -> Option<MetricKind> {
-        self.get(METRIC_KIND_KEY)?.to_metric_kind()
+    fn metric_kind(&self) -> Option<Key> {
+        self.get(METRIC_KIND_KEY)?.to_key()
     }
 
     fn metric_value(&self) -> Option<Value> {

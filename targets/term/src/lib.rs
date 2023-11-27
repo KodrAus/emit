@@ -3,7 +3,10 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, io::Write, sync::Mutex};
 
-use emit::{metrics::MetricKind, well_known::WellKnown, Event};
+use emit::{
+    well_known::{WellKnown, METRIC_KIND_SUM},
+    Event,
+};
 use emit_metrics::{Bucketing, Histogram, MetricsCollector};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
@@ -90,7 +93,7 @@ impl emit::emitter::Emitter for Stdout {
                 let histogram = histogram.compute();
 
                 with_shared_buf(&self.writer, |writer, buf| {
-                    print_histogram(writer, buf, &*metric, MetricKind::Sum, &histogram);
+                    print_histogram(writer, buf, &*metric, METRIC_KIND_SUM, &histogram);
                 });
             }
         }
@@ -271,7 +274,7 @@ fn print_histogram(
     out: &BufferWriter,
     buf: &mut Buffer,
     metric_name: &str,
-    metric_kind: MetricKind,
+    metric_kind: &str,
     histogram: &Histogram,
 ) {
     const BLOCKS: [&'static str; 7] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇"];

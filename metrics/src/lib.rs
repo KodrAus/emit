@@ -1,8 +1,6 @@
 use std::{borrow::Cow, cmp, collections::HashMap, mem, ops::Range, time::Duration};
 
-use emit_core::{
-    event::Event, metrics::MetricKind, props::Props, timestamp::Timestamp, well_known::WellKnown,
-};
+use emit_core::{event::Event, props::Props, timestamp::Timestamp, well_known::WellKnown};
 
 pub struct MetricsCollector {
     bucketing: Bucketing,
@@ -79,7 +77,7 @@ impl MetricsCollector {
             evt.extent().and_then(|extent| extent.as_point()),
             evt.props().metric(),
         ) {
-            if let Some(MetricKind::Sum) = metric.kind() {
+            if metric.is_sum() {
                 if let Some(value) = metric.value().to_f64() {
                     return self.record_sum_point(metric.name().to_cow(), *extent, value);
                 }

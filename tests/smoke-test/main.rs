@@ -96,12 +96,16 @@ fn increment(metric: &AtomicUsize) {
 fn sample_metrics() {
     let now = emit::now();
 
-    for (metric, kind, name) in [(&COUNT, emit::metrics::MetricKind::Sum, "smoke_test::count")] {
+    for (metric, kind, name) in [(
+        &COUNT,
+        emit::well_known::METRIC_KIND_SUM,
+        "smoke_test::count",
+    )] {
         emit::emit(&emit::Event::new(
             now,
             emit::tpl!("{metric_kind} of {metric_name} is {metric_value}"),
             emit::metrics::Metric::new(
-                Some(kind),
+                emit::key::Key::new(kind),
                 emit::key::Key::new(name),
                 metric.load(Ordering::Relaxed),
             ),
