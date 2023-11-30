@@ -1,7 +1,8 @@
-use core::{fmt, marker::PhantomData};
+use core::fmt;
 
 use crate::{
     empty::Empty,
+    key::Key,
     props::Props,
     value::{ToValue, Value},
 };
@@ -77,10 +78,7 @@ impl<'a> Template<'a> {
 
     pub fn as_static_str(&self) -> Option<&'static str> {
         match self.0.parts() {
-            [Part(PartKind::Text {
-                value_static: Some(value),
-                ..
-            })] => Some(value),
+            [Part(PartKind::Text { value, .. })] => value.as_static_str(),
             _ => None,
         }
     }
@@ -150,11 +148,13 @@ pub trait Write: fmt::Write {
         self.write_str(text)
     }
 
-    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
+    fn write_hole_value(&mut self, label: &str, value: Value) -> fmt::Result {
+        let _ = label;
         self.write_fmt(format_args!("{}", value))
     }
 
-    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
+    fn write_hole_fmt(&mut self, label: &str, value: Value, formatter: Formatter) -> fmt::Result {
+        let _ = label;
         self.write_fmt(format_args!("{}", formatter.apply(value)))
     }
 
@@ -168,12 +168,12 @@ impl<'a, W: Write + ?Sized> Write for &'a mut W {
         (**self).write_text(text)
     }
 
-    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
-        (**self).write_hole_value(value)
+    fn write_hole_value(&mut self, label: &str, value: Value) -> fmt::Result {
+        (**self).write_hole_value(label, value)
     }
 
-    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
-        (**self).write_hole_fmt(value, formatter)
+    fn write_hole_fmt(&mut self, label: &str, value: Value, formatter: Formatter) -> fmt::Result {
+        (**self).write_hole_fmt(label, value, formatter)
     }
 
     fn write_hole_label(&mut self, label: &str) -> fmt::Result {
@@ -182,11 +182,11 @@ impl<'a, W: Write + ?Sized> Write for &'a mut W {
 }
 
 impl<'a> Write for fmt::Formatter<'a> {
-    fn write_hole_value(&mut self, value: Value) -> fmt::Result {
+    fn write_hole_value(&mut self, _: &str, value: Value) -> fmt::Result {
         fmt::Display::fmt(&value, self)
     }
 
-    fn write_hole_fmt(&mut self, value: Value, formatter: Formatter) -> fmt::Result {
+    fn write_hole_fmt(&mut self, _: &str, value: Value, formatter: Formatter) -> fmt::Result {
         formatter.fmt(value, self)
     }
 }
@@ -225,22 +225,14 @@ pub struct Part<'a>(PartKind<'a>);
 impl Part<'static> {
     pub const fn text(text: &'static str) -> Self {
         Part(PartKind::Text {
-            value: text as *const str,
-            value_static: Some(text),
-            #[cfg(feature = "alloc")]
-            value_owned: None,
-            _marker: PhantomData,
+            value: Key::new(text),
         })
     }
 
     pub const fn hole(label: &'static str) -> Self {
         Part(PartKind::Hole {
-            label: label as *const str,
-            label_static: Some(label),
+            label: Key::new(label),
             formatter: None,
-            #[cfg(feature = "alloc")]
-            label_owned: None,
-            _marker: PhantomData,
         })
     }
 }
@@ -248,88 +240,47 @@ impl Part<'static> {
 impl<'a> Part<'a> {
     pub const fn text_ref(text: &'a str) -> Self {
         Part(PartKind::Text {
-            value: text as *const str,
-            value_static: None,
-            #[cfg(feature = "alloc")]
-            value_owned: None,
-            _marker: PhantomData,
+            value: Key::new_ref(text),
         })
     }
 
     pub const fn hole_ref(label: &'a str) -> Self {
         Part(PartKind::Hole {
-            label: label as *const str,
-            label_static: None,
-            #[cfg(feature = "alloc")]
-            label_owned: None,
+            label: Key::new_ref(label),
             formatter: None,
-            _marker: PhantomData,
         })
     }
 
     pub const fn as_str(&self) -> Option<&str> {
         match self.0 {
-            PartKind::Text { value, .. } => Some(unsafe { &*value }),
+            PartKind::Text { ref value, .. } => Some(value.as_str()),
             _ => None,
         }
     }
 
     pub fn by_ref<'b>(&'b self) -> Part<'b> {
         match self.0 {
-            PartKind::Text {
-                value,
-                value_static,
-                ..
-            } => Part(PartKind::Text {
-                value,
-                value_static,
-                #[cfg(feature = "alloc")]
-                value_owned: None,
-                _marker: PhantomData,
+            PartKind::Text { ref value } => Part(PartKind::Text {
+                value: value.by_ref(),
             }),
             PartKind::Hole {
-                label,
-                label_static,
+                ref label,
                 ref formatter,
-                ..
             } => Part(PartKind::Hole {
-                label,
-                label_static,
-                #[cfg(feature = "alloc")]
-                label_owned: None,
+                label: label.by_ref(),
                 formatter: formatter.clone(),
-                _marker: PhantomData,
             }),
         }
     }
 
     pub fn with_formatter(self, formatter: Formatter) -> Self {
         match self.0 {
-            #[cfg(not(feature = "alloc"))]
             PartKind::Hole {
                 label,
-                label_static,
                 formatter: _,
-                _marker,
             } => Part(PartKind::Hole {
                 label,
-                label_static,
                 formatter: Some(formatter),
-                _marker,
-            }),
-            #[cfg(feature = "alloc")]
-            PartKind::Hole {
-                label,
-                label_static,
-                label_owned,
-                formatter: _,
-                _marker,
-            } => Part(PartKind::Hole {
-                label,
-                label_static,
-                label_owned,
-                formatter: Some(formatter),
-                _marker: PhantomData,
             }),
             part => Part(part),
         }
@@ -337,19 +288,19 @@ impl<'a> Part<'a> {
 
     fn write(&self, mut writer: impl Write, props: impl Props) -> fmt::Result {
         match self.0 {
-            PartKind::Text { value, .. } => writer.write_text(unsafe { &*value }),
+            PartKind::Text { ref value, .. } => writer.write_text(value.as_str()),
             PartKind::Hole {
-                label,
+                ref label,
                 ref formatter,
                 ..
             } => {
-                let label = unsafe { &*label };
+                let label = label.as_str();
 
                 if let Some(value) = props.get(label) {
                     if let Some(formatter) = formatter {
-                        writer.write_hole_fmt(value, formatter.clone())
+                        writer.write_hole_fmt(label, value, formatter.clone())
                     } else {
-                        writer.write_hole_value(value)
+                        writer.write_hole_value(label, value)
                     }
                 } else {
                     writer.write_hole_label(label)
@@ -392,105 +343,15 @@ impl Formatter {
     }
 }
 
+#[derive(Clone)]
 enum PartKind<'a> {
     Text {
-        value: *const str,
-        value_static: Option<&'static str>,
-        #[cfg(feature = "alloc")]
-        value_owned: Option<Box<str>>,
-        _marker: PhantomData<&'a str>,
+        value: Key<'a>,
     },
     Hole {
-        label: *const str,
-        label_static: Option<&'static str>,
-        #[cfg(feature = "alloc")]
-        label_owned: Option<Box<str>>,
+        label: Key<'a>,
         formatter: Option<Formatter>,
-        _marker: PhantomData<&'a str>,
     },
-}
-
-unsafe impl<'a> Send for PartKind<'a> {}
-unsafe impl<'a> Sync for PartKind<'a> {}
-
-impl<'a> Clone for PartKind<'a> {
-    fn clone(&self) -> Self {
-        match self {
-            #[cfg(feature = "alloc")]
-            PartKind::Text {
-                value,
-                value_static,
-                value_owned,
-                _marker,
-            } => match value_owned {
-                Some(value_owned) => {
-                    let value_owned = value_owned.clone();
-
-                    PartKind::Text {
-                        value: &*value_owned as *const str,
-                        value_static: None,
-                        value_owned: Some(value_owned),
-                        _marker: PhantomData,
-                    }
-                }
-                None => PartKind::Text {
-                    value: *value,
-                    value_static: *value_static,
-                    value_owned: None,
-                    _marker: PhantomData,
-                },
-            },
-            #[cfg(not(feature = "alloc"))]
-            PartKind::Text {
-                value,
-                value_static,
-                _marker,
-            } => PartKind::Text {
-                value: *value,
-                value_static: *value_static,
-                _marker: PhantomData,
-            },
-            #[cfg(feature = "alloc")]
-            PartKind::Hole {
-                label,
-                label_static,
-                label_owned,
-                ref formatter,
-                _marker,
-            } => match label_owned {
-                Some(label_owned) => {
-                    let label_owned = label_owned.clone();
-
-                    PartKind::Hole {
-                        label: &*label_owned as *const str,
-                        label_static: None,
-                        label_owned: Some(label_owned),
-                        formatter: formatter.clone(),
-                        _marker: PhantomData,
-                    }
-                }
-                None => PartKind::Hole {
-                    label: *label,
-                    label_static: *label_static,
-                    label_owned: None,
-                    formatter: formatter.clone(),
-                    _marker: PhantomData,
-                },
-            },
-            #[cfg(not(feature = "alloc"))]
-            PartKind::Hole {
-                label,
-                label_static,
-                ref formatter,
-                _marker,
-            } => PartKind::Hole {
-                label: *label,
-                label_static: *label_static,
-                formatter: formatter.clone(),
-                _marker: PhantomData,
-            },
-        }
-    }
 }
 
 #[cfg(feature = "alloc")]
@@ -524,25 +385,15 @@ mod alloc_support {
 
     impl Part<'static> {
         pub fn text_owned(text: impl Into<Box<str>>) -> Self {
-            let value_owned = text.into();
-
             Part(PartKind::Text {
-                value: &*value_owned as *const str,
-                value_static: None,
-                value_owned: Some(value_owned),
-                _marker: PhantomData,
+                value: Key::new_owned(text),
             })
         }
 
         pub fn hole_owned(label: impl Into<Box<str>>) -> Self {
-            let label_owned = label.into();
-
             Part(PartKind::Hole {
-                label: &*label_owned as *const str,
-                label_static: None,
-                label_owned: Some(label_owned),
+                label: Key::new_owned(label),
                 formatter: None,
-                _marker: PhantomData,
             })
         }
     }
@@ -550,46 +401,17 @@ mod alloc_support {
     impl<'a> Part<'a> {
         fn to_owned(&self) -> Part<'static> {
             match self.0 {
-                PartKind::Text {
-                    value_static: Some(value),
-                    ..
-                } => Part::text(value),
-                PartKind::Text { value, .. } => {
-                    let value_owned = unsafe { (*value).to_owned().into_boxed_str() };
-
-                    Part(PartKind::Text {
-                        value: &*value_owned as *const str,
-                        value_static: None,
-                        value_owned: Some(value_owned),
-                        _marker: PhantomData,
-                    })
-                }
+                PartKind::Text { ref value, .. } => Part(PartKind::Text {
+                    value: value.to_owned(),
+                }),
                 PartKind::Hole {
-                    label_static: Some(label),
+                    ref label,
                     ref formatter,
                     ..
                 } => Part(PartKind::Hole {
-                    label,
-                    label_static: Some(label),
-                    label_owned: None,
+                    label: label.to_owned(),
                     formatter: formatter.clone(),
-                    _marker: PhantomData,
                 }),
-                PartKind::Hole {
-                    label,
-                    ref formatter,
-                    ..
-                } => {
-                    let label_owned = unsafe { (*label).to_owned().into_boxed_str() };
-
-                    Part(PartKind::Hole {
-                        label: &*label_owned as *const str,
-                        label_static: None,
-                        label_owned: Some(label_owned),
-                        formatter: formatter.clone(),
-                        _marker: PhantomData,
-                    })
-                }
             }
         }
     }

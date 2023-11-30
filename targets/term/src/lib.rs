@@ -359,12 +359,13 @@ impl<'a> fmt::Write for Writer<'a> {
 }
 
 impl<'a> emit::template::Write for Writer<'a> {
-    fn write_hole_value(&mut self, value: emit::Value) -> fmt::Result {
+    fn write_hole_value(&mut self, _: &str, value: emit::Value) -> fmt::Result {
         sval_fmt::stream_to_token_write(self, value)
     }
 
     fn write_hole_fmt(
         &mut self,
+        _: &str,
         value: emit::Value,
         formatter: emit::template::Formatter,
     ) -> fmt::Result {
