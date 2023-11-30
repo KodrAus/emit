@@ -2,7 +2,7 @@ use emit_batcher::BatchError;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, PreEncoded},
+    data::{self, logs, traces, PreEncoded},
     Error,
 };
 
@@ -19,14 +19,14 @@ pub struct OtlpClient {
 impl emit_core::emitter::Emitter for OtlpClient {
     fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
         if self.emit_traces {
-            if let Some(encoded) = crate::traces::encode_event(evt) {
+            if let Some(encoded) = traces::encode_event(evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
             }
         }
 
         if self.emit_logs {
             self.sender
-                .send(ChannelItem::LogRecord(crate::logs::encode_event(evt)));
+                .send(ChannelItem::LogRecord(logs::encode_event(evt)));
         }
     }
 
@@ -182,7 +182,7 @@ impl OtlpClientBuilder {
                 let mut r = Ok(());
 
                 if let Some(client) = client.logs {
-                    if let Err(e) = client.send(logs, crate::logs::encode_request).await {
+                    if let Err(e) = client.send(logs, logs::encode_request).await {
                         r = Err(e.map(|logs| Channel {
                             logs,
                             traces: Vec::new(),
@@ -191,7 +191,7 @@ impl OtlpClientBuilder {
                 }
 
                 if let Some(client) = client.traces {
-                    if let Err(e) = client.send(traces, crate::traces::encode_request).await {
+                    if let Err(e) = client.send(traces, traces::encode_request).await {
                         r = if let Err(re) = r {
                             Err(re.map(|mut channel| {
                                 channel.traces = e.into_retryable();

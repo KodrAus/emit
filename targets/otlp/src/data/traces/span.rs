@@ -130,26 +130,11 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
                     }
                     emit_core::well_known::ERR_KEY => {
                         has_err = true;
-                        true
+                        false
                     }
                     _ => false,
                 })
             },
-        )?;
-
-        let status = Status {
-            code: match level {
-                emit_core::level::Level::Error => StatusCode::Error,
-                _ => StatusCode::Ok,
-            },
-            message: sval::Display::new_borrowed(&level),
-        };
-
-        stream_field(
-            &mut *stream,
-            &SPAN_STATUS_LABEL,
-            &SPAN_STATUS_INDEX,
-            |stream| stream.value_computed(&status),
         )?;
 
         if trace_id != [0; 32] {
@@ -192,23 +177,37 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
         }
 
         if has_err {
+            let err = self.props.get(emit_core::well_known::ERR_KEY).unwrap();
+
             stream_field(
                 &mut *stream,
                 &SPAN_EVENTS_LABEL,
                 &SPAN_EVENTS_INDEX,
                 |stream| {
-                    let err = self.props.get(emit_core::well_known::ERR_KEY).unwrap();
-
                     stream.value_computed(&[Event {
                         name: "exception",
                         time_unix_nano: self.time_unix_nano,
                         dropped_attributes_count: 0,
                         attributes: &[KeyValue {
                             key: "exception.message",
-                            value: AnyValue::<_, (), (), ()>::String(&sval::Display::new(err)),
+                            value: AnyValue::<_, (), (), ()>::String(sval::Display::new_borrowed(
+                                &err,
+                            )),
                         }],
                     }])
                 },
+            )?;
+
+            let status = Status {
+                code: StatusCode::Error,
+                message: sval::Display::new_borrowed(&err),
+            };
+
+            stream_field(
+                &mut *stream,
+                &SPAN_STATUS_LABEL,
+                &SPAN_STATUS_INDEX,
+                |stream| stream.value_computed(&status),
             )?;
         }
 
