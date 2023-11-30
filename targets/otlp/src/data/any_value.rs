@@ -1,5 +1,7 @@
 use sval_derive::Value;
 
+use super::stream_field;
+
 const ANY_VALUE_STRING_LABEL: sval::Label =
     sval::Label::new("stringValue").with_tag(&sval::tags::VALUE_IDENT);
 const ANY_VALUE_BOOL_LABEL: sval::Label =
@@ -90,19 +92,25 @@ impl<'a, K: sval_ref::ValueRef<'a>, V: sval_ref::ValueRef<'a>> sval_ref::ValueRe
     fn stream_ref<S: sval::Stream<'a> + ?Sized>(&self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, Some(2))?;
 
-        stream.record_tuple_value_begin(None, &KEY_VALUE_KEY_LABEL, &KEY_VALUE_KEY_INDEX)?;
-        sval_ref::stream_ref(&mut *stream, &self.key)?;
-        stream.record_tuple_value_end(None, &KEY_VALUE_KEY_LABEL, &KEY_VALUE_KEY_INDEX)?;
+        stream_field(
+            &mut *stream,
+            &KEY_VALUE_KEY_LABEL,
+            &KEY_VALUE_KEY_INDEX,
+            |stream| sval_ref::stream_ref(&mut *stream, &self.key),
+        )?;
 
-        stream.record_tuple_value_begin(None, &KEY_VALUE_VALUE_LABEL, &KEY_VALUE_VALUE_INDEX)?;
-        sval_ref::stream_ref(&mut *stream, &self.value)?;
-        stream.record_tuple_value_end(None, &KEY_VALUE_VALUE_LABEL, &KEY_VALUE_VALUE_INDEX)?;
+        stream_field(
+            &mut *stream,
+            &KEY_VALUE_VALUE_LABEL,
+            &KEY_VALUE_VALUE_INDEX,
+            |stream| sval_ref::stream_ref(&mut *stream, &self.value),
+        )?;
 
         stream.record_tuple_end(None, None, None)
     }
 }
 
-pub(crate) struct EmitValue<'a>(pub emit_core::value::Value<'a>);
+pub struct EmitValue<'a>(pub emit_core::value::Value<'a>);
 
 impl<'a> sval::Value for EmitValue<'a> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {

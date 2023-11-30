@@ -1,6 +1,8 @@
 use sval_derive::Value;
 
-use super::{InstrumentationScope, LogRecord, Resource};
+use crate::data::{InstrumentationScope, Resource};
+
+use super::log_record::LogRecord;
 
 #[derive(Value)]
 pub struct ExportLogsServiceRequest<'a, RL: ?Sized = [ResourceLogs<'a>]> {

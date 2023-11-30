@@ -1,6 +1,6 @@
 use sval_derive::Value;
 
-use super::{attributes::stream_attributes, AnyValue, KeyValue};
+use crate::data::{stream_attributes, stream_field, AnyValue, KeyValue};
 
 #[derive(Value)]
 #[repr(i32)]
@@ -70,9 +70,9 @@ pub struct InlineLogRecordAttributes<'a> {
     pub span_id: &'a sval::BinaryArray<8>,
 }
 
-pub(crate) struct EmitLogRecordAttributes<P>(pub P);
+pub struct PropsLogRecordAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for EmitLogRecordAttributes<P> {
+impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         let mut trace_id = [0; 32];
         let mut span_id = [0; 16];
@@ -80,36 +80,33 @@ impl<P: emit_core::props::Props> sval::Value for EmitLogRecordAttributes<P> {
 
         stream.record_tuple_begin(None, None, None, None)?;
 
-        stream.record_tuple_value_begin(
-            None,
+        stream_field(
+            &mut *stream,
             &LOG_RECORD_ATTRIBUTES_LABEL,
             &LOG_RECORD_ATTRIBUTES_INDEX,
-        )?;
-        stream_attributes(&mut *stream, &self.0, |k, v| match k.as_str() {
-            emit_core::well_known::LVL_KEY => {
-                level = v.to_level().unwrap_or_default();
-                true
-            }
-            emit_core::well_known::SPAN_ID_KEY => {
-                span_id = v
-                    .to_span_id()
-                    .map(|span_id| span_id.to_hex())
-                    .unwrap_or_default();
-                true
-            }
-            emit_core::well_known::TRACE_ID_KEY => {
-                trace_id = v
-                    .to_trace_id()
-                    .map(|trace_id| trace_id.to_hex())
-                    .unwrap_or_default();
-                true
-            }
-            _ => false,
-        })?;
-        stream.record_tuple_value_end(
-            None,
-            &LOG_RECORD_ATTRIBUTES_LABEL,
-            &LOG_RECORD_ATTRIBUTES_INDEX,
+            |stream| {
+                stream_attributes(stream, &self.0, |k, v| match k.as_str() {
+                    emit_core::well_known::LVL_KEY => {
+                        level = v.to_level().unwrap_or_default();
+                        true
+                    }
+                    emit_core::well_known::SPAN_ID_KEY => {
+                        span_id = v
+                            .to_span_id()
+                            .map(|span_id| span_id.to_hex())
+                            .unwrap_or_default();
+                        true
+                    }
+                    emit_core::well_known::TRACE_ID_KEY => {
+                        trace_id = v
+                            .to_trace_id()
+                            .map(|trace_id| trace_id.to_hex())
+                            .unwrap_or_default();
+                        true
+                    }
+                    _ => false,
+                })
+            },
         )?;
 
         let severity_number = match level {
@@ -119,59 +116,43 @@ impl<P: emit_core::props::Props> sval::Value for EmitLogRecordAttributes<P> {
             emit_core::level::Level::Error => SeverityNumber::Error as i32,
         };
 
-        stream.record_tuple_value_begin(
-            None,
+        stream_field(
+            &mut *stream,
             &LOG_RECORD_SEVERITY_NUMBER_LABEL,
             &LOG_RECORD_SEVERITY_NUMBER_INDEX,
-        )?;
-        stream.i32(severity_number)?;
-        stream.record_tuple_value_end(
-            None,
-            &LOG_RECORD_SEVERITY_NUMBER_LABEL,
-            &LOG_RECORD_SEVERITY_NUMBER_INDEX,
+            |stream| stream.i32(severity_number),
         )?;
 
-        stream.record_tuple_value_begin(
-            None,
+        stream_field(
+            &mut *stream,
             &LOG_RECORD_SEVERITY_TEXT_LABEL,
             &LOG_RECORD_SEVERITY_TEXT_INDEX,
-        )?;
-        sval::stream_display(&mut *stream, level)?;
-        stream.record_tuple_value_end(
-            None,
-            &LOG_RECORD_SEVERITY_TEXT_LABEL,
-            &LOG_RECORD_SEVERITY_TEXT_INDEX,
+            |stream| sval::stream_display(stream, level),
         )?;
 
         if trace_id != [0; 32] {
-            stream.record_tuple_value_begin(
-                None,
+            stream_field(
+                &mut *stream,
                 &LOG_RECORD_TRACE_ID_LABEL,
                 &LOG_RECORD_TRACE_ID_INDEX,
-            )?;
-            stream.binary_begin(Some(32))?;
-            stream.binary_fragment_computed(&trace_id)?;
-            stream.binary_end()?;
-            stream.record_tuple_value_end(
-                None,
-                &LOG_RECORD_TRACE_ID_LABEL,
-                &LOG_RECORD_TRACE_ID_INDEX,
+                |stream| {
+                    stream.binary_begin(Some(32))?;
+                    stream.binary_fragment_computed(&trace_id)?;
+                    stream.binary_end()
+                },
             )?;
         }
 
         if span_id != [0; 16] {
-            stream.record_tuple_value_begin(
-                None,
+            stream_field(
+                &mut *stream,
                 &LOG_RECORD_SPAN_ID_LABEL,
                 &LOG_RECORD_SPAN_ID_INDEX,
-            )?;
-            stream.binary_begin(Some(16))?;
-            stream.binary_fragment_computed(&span_id)?;
-            stream.binary_end()?;
-            stream.record_tuple_value_end(
-                None,
-                &LOG_RECORD_SPAN_ID_LABEL,
-                &LOG_RECORD_SPAN_ID_INDEX,
+                |stream| {
+                    stream.binary_begin(Some(16))?;
+                    stream.binary_fragment_computed(&span_id)?;
+                    stream.binary_end()
+                },
             )?;
         }
 

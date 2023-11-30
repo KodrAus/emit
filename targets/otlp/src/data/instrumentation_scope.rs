@@ -1,6 +1,6 @@
 use sval_derive::Value;
 
-use super::{attributes::stream_attributes, AnyValue, KeyValue};
+use super::{stream_attributes, stream_field, AnyValue, KeyValue};
 
 #[derive(Value)]
 pub struct InstrumentationScope<'a, A: ?Sized = InlineInstrumentationScopeAttributes<'a>> {
@@ -25,22 +25,17 @@ pub struct InlineInstrumentationScopeAttributes<'a> {
     pub attributes: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
 }
 
-pub struct EmitInstrumentationScopeAttributes<P>(pub P);
+pub struct PropsInstrumentationScopeAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for EmitInstrumentationScopeAttributes<P> {
+impl<P: emit_core::props::Props> sval::Value for PropsInstrumentationScopeAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, None)?;
 
-        stream.record_tuple_value_begin(
-            None,
+        stream_field(
+            &mut *stream,
             &INSTRUMENTATION_SCOPE_ATTRIBUTES_LABEL,
             &INSTRUMENTATION_SCOPE_ATTRIBUTES_INDEX,
-        )?;
-        stream_attributes(&mut *stream, &self.0, |_, _| false)?;
-        stream.record_tuple_value_end(
-            None,
-            &INSTRUMENTATION_SCOPE_ATTRIBUTES_LABEL,
-            &INSTRUMENTATION_SCOPE_ATTRIBUTES_INDEX,
+            |stream| stream_attributes(stream, &self.0, |_, _| false),
         )?;
 
         stream.record_tuple_end(None, None, None)

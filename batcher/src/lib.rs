@@ -170,6 +170,16 @@ impl<T: Channel> BatchError<T> {
             retryable: T::new(),
         }
     }
+
+    pub fn into_retryable(self) -> T {
+        self.retryable
+    }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> BatchError<U> {
+        BatchError {
+            retryable: f(self.retryable),
+        }
+    }
 }
 
 impl<T: Channel> Receiver<T> {

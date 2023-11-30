@@ -1,24 +1,22 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet, ops::ControlFlow};
 
 use bytes::Buf;
 use sval_derive::Value;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
 
+pub mod logs;
+pub mod traces;
+
 mod any_value;
-mod attributes;
-mod export_logs_service;
 mod instrumentation_scope;
-mod log_record;
 mod resource;
 
 #[cfg(feature = "grpc")]
 pub(crate) mod generated;
 
-pub(crate) use self::{
-    any_value::*, export_logs_service::*, instrumentation_scope::*, log_record::*, resource::*,
-};
+pub use self::{any_value::*, instrumentation_scope::*, resource::*};
 
-#[derive(Value)]
+#[derive(Value, Clone)]
 #[sval(dynamic)]
 pub(crate) enum PreEncoded {
     Proto(ProtoBuf),
@@ -60,4 +58,52 @@ impl Buf for PreEncodedCursor {
             PreEncodedCursor::Proto(cursor) => cursor.advance(cnt),
         }
     }
+}
+
+pub(crate) fn stream_field<'sval, S: sval::Stream<'sval> + ?Sized>(
+    stream: &mut S,
+    label: &sval::Label,
+    index: &sval::Index,
+    field: impl FnOnce(&mut S) -> sval::Result,
+) -> sval::Result {
+    stream.record_tuple_value_begin(None, label, index)?;
+    field(&mut *stream)?;
+    stream.record_tuple_value_end(None, label, index)
+}
+
+pub(crate) fn stream_attributes<'sval>(
+    stream: &mut (impl sval::Stream<'sval> + ?Sized),
+    props: &'sval impl emit_core::props::Props,
+    mut for_each: impl FnMut(&emit_core::key::Key, &emit_core::value::Value) -> bool,
+) -> sval::Result {
+    stream.seq_begin(None)?;
+
+    let mut seen = HashSet::new();
+    props.for_each(|k, v| {
+        if !for_each(&k, &v) && seen.insert(k.to_cow()) {
+            stream
+                .seq_value_begin()
+                .map(|_| ControlFlow::Continue(()))
+                .unwrap_or(ControlFlow::Break(()))?;
+
+            sval_ref::stream_ref(
+                &mut *stream,
+                KeyValue {
+                    key: k,
+                    value: EmitValue(v),
+                },
+            )
+            .map(|_| ControlFlow::Continue(()))
+            .unwrap_or(ControlFlow::Break(()))?;
+
+            stream
+                .seq_value_end()
+                .map(|_| ControlFlow::Continue(()))
+                .unwrap_or(ControlFlow::Break(()))?;
+        }
+
+        ControlFlow::Continue(())
+    });
+
+    stream.seq_end()
 }

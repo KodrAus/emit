@@ -1,6 +1,11 @@
 mod client;
-mod data;
+pub mod data;
 mod error;
 
-pub use self::error::*;
-pub mod logs;
+pub use self::{client::*, error::*};
+mod logs;
+mod traces;
+
+pub fn proto() -> OtlpClientBuilder {
+    OtlpClientBuilder::proto()
+}

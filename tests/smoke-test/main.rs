@@ -12,15 +12,15 @@ extern crate serde_derive;
 #[tokio::main]
 async fn main() {
     let emitter = emit::setup()
-        .to(
-            emit_otlp::logs::http_proto("http://localhost:5341/ingest/otlp/v1/logs")
-                .resource(emit::props! {
-                    #[emit::key("service.name")]
-                    service_name: "smoke-test-rs",
-                })
-                .spawn()
-                .unwrap(),
-        )
+        .to(emit_otlp::proto()
+            .logs_http("http://localhost:5341/ingest/otlp/v1/logs")
+            .traces_http("http://localhost:5341/ingest/otlp/v1/traces")
+            .resource(emit::props! {
+                #[emit::key("service.name")]
+                service_name: "smoke-test-rs",
+            })
+            .spawn()
+            .unwrap())
         .and_to(emit_term::stdout().plot_metrics_by_count(30))
         .init();
 

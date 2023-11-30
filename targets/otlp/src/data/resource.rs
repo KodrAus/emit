@@ -1,6 +1,6 @@
 use sval_derive::Value;
 
-use super::{attributes::stream_attributes, AnyValue, KeyValue};
+use super::{stream_attributes, stream_field, AnyValue, KeyValue};
 
 #[derive(Value)]
 pub struct Resource<'a, A: ?Sized = InlineResourceAttributes<'a>> {
@@ -21,22 +21,17 @@ pub struct InlineResourceAttributes<'a> {
     pub attributes: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
 }
 
-pub struct EmitResourceAttributes<P>(pub P);
+pub struct PropsResourceAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for EmitResourceAttributes<P> {
+impl<P: emit_core::props::Props> sval::Value for PropsResourceAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, None)?;
 
-        stream.record_tuple_value_begin(
-            None,
+        stream_field(
+            &mut *stream,
             &RESOURCE_ATTRIBUTES_LABEL,
             &RESOURCE_ATTRIBUTES_INDEX,
-        )?;
-        stream_attributes(&mut *stream, &self.0, |_, _| false)?;
-        stream.record_tuple_value_end(
-            None,
-            &RESOURCE_ATTRIBUTES_LABEL,
-            &RESOURCE_ATTRIBUTES_INDEX,
+            |stream| stream_attributes(stream, &self.0, |_, _| false),
         )?;
 
         stream.record_tuple_end(None, None, None)
