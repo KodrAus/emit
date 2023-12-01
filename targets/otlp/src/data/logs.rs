@@ -5,30 +5,40 @@ use emit_batcher::BatchError;
 
 pub use self::{export_logs_service::*, log_record::*};
 
-use super::{AnyValue, PreEncoded};
+use super::{AnyValue, MessageFormatter, MessageRenderer, PreEncoded};
 
-pub(crate) fn encode_event(
-    evt: &emit_core::event::Event<impl emit_core::props::Props>,
-) -> PreEncoded {
-    let time_unix_nano = evt
-        .extent()
-        .map(|extent| extent.to_point().to_unix_time().as_nanos() as u64)
-        .unwrap_or_default();
+pub(crate) struct EventEncoder {
+    pub body: Box<MessageFormatter>,
+}
 
-    let observed_time_unix_nano = time_unix_nano;
+impl EventEncoder {
+    pub(crate) fn encode_event(
+        &self,
+        evt: &emit_core::event::Event<impl emit_core::props::Props>,
+    ) -> PreEncoded {
+        let time_unix_nano = evt
+            .extent()
+            .map(|extent| extent.to_point().to_unix_time().as_nanos() as u64)
+            .unwrap_or_default();
 
-    let protobuf = sval_protobuf::stream_to_protobuf(LogRecord {
-        time_unix_nano,
-        observed_time_unix_nano,
-        body: &Some(AnyValue::<_, (), (), ()>::String(&sval::Display::new(
-            evt.tpl(),
-        ))),
-        attributes: &PropsLogRecordAttributes(evt.props()),
-        dropped_attributes_count: 0,
-        flags: Default::default(),
-    });
+        let observed_time_unix_nano = time_unix_nano;
 
-    PreEncoded::Proto(protobuf)
+        let protobuf = sval_protobuf::stream_to_protobuf(LogRecord {
+            time_unix_nano,
+            observed_time_unix_nano,
+            body: &Some(AnyValue::<_, (), (), ()>::String(&sval::Display::new(
+                MessageRenderer {
+                    fmt: &self.body,
+                    evt,
+                },
+            ))),
+            attributes: &PropsLogRecordAttributes(evt.props()),
+            dropped_attributes_count: 0,
+            flags: Default::default(),
+        });
+
+        PreEncoded::Proto(protobuf)
+    }
 }
 
 pub(crate) fn encode_request(

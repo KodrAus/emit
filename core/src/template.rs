@@ -201,21 +201,87 @@ impl<'a, P: Props> fmt::Debug for Render<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use fmt::Write as _;
 
-        struct Escape<W>(W);
+        f.write_char('"')?;
+        write!(WriteEscaped(&mut *f), "{}", self)?;
+        f.write_char('"')
+    }
+}
 
-        impl<W: fmt::Write> fmt::Write for Escape<W> {
-            fn write_str(&mut self, s: &str) -> fmt::Result {
-                for c in s.escape_debug() {
-                    self.0.write_char(c)?;
-                }
+struct WriteEscaped<W>(W);
 
-                Ok(())
-            }
+impl<W: fmt::Write> WriteEscaped<W> {
+    pub fn write_fmt(&mut self, args: fmt::Arguments) -> fmt::Result {
+        self.0.write_fmt(args)
+    }
+}
+
+impl<W: fmt::Write> fmt::Write for WriteEscaped<W> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for c in s.escape_debug() {
+            self.0.write_char(c)?;
         }
 
-        f.write_char('"')?;
-        write!(Escape(&mut *f), "{}", self)?;
-        f.write_char('"')
+        Ok(())
+    }
+}
+
+struct WriteBraced<W>(W);
+
+impl<W: fmt::Write> WriteBraced<W> {
+    pub fn write_fmt(&mut self, args: fmt::Arguments) -> fmt::Result {
+        self.0.write_fmt(args)
+    }
+}
+
+impl<W: fmt::Write> fmt::Write for WriteBraced<W> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.write_str(s)
+    }
+
+    fn write_char(&mut self, c: char) -> fmt::Result {
+        self.0.write_char(c)
+    }
+
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        self.write_fmt(args)
+    }
+}
+
+impl<W: Write> Write for WriteBraced<W> {
+    fn write_text(&mut self, text: &str) -> fmt::Result {
+        self.0.write_text(text)
+    }
+
+    fn write_hole_value(&mut self, label: &str, value: Value) -> fmt::Result {
+        self.0.write_hole_value(label, value)
+    }
+
+    fn write_hole_fmt(&mut self, label: &str, value: Value, formatter: Formatter) -> fmt::Result {
+        self.0.write_hole_fmt(label, value, formatter)
+    }
+
+    fn write_hole_label(&mut self, label: &str) -> fmt::Result {
+        self.0.write_fmt(format_args!("{{{}}}", label))
+    }
+}
+
+pub struct Braced<'a, P>(Render<'a, P>);
+
+impl<'a> Template<'a> {
+    pub fn braced<'b>(&'b self) -> Braced<'b, Empty> {
+        self.render(Empty).braced()
+    }
+}
+
+impl<'a, P> Render<'a, P> {
+    pub fn braced(self) -> Braced<'a, P> {
+        Braced(self)
+    }
+}
+
+impl<'a, P: Props> fmt::Display for Braced<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.write(WriteBraced(f))
     }
 }
 

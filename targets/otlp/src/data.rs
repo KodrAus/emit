@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, ops::ControlFlow};
+use std::{borrow::Cow, collections::HashSet, fmt, ops::ControlFlow};
 
 use bytes::Buf;
 use sval_derive::Value;
@@ -106,4 +106,26 @@ pub(crate) fn stream_attributes<'sval>(
     });
 
     stream.seq_end()
+}
+
+pub(crate) type MessageFormatter = dyn Fn(
+        &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
+        &mut fmt::Formatter,
+    ) -> fmt::Result
+    + Send
+    + Sync;
+
+pub(crate) fn default_message_formatter() -> Box<MessageFormatter> {
+    Box::new(|evt, f| write!(f, "{}", evt.msg()))
+}
+
+pub(crate) struct MessageRenderer<'a, P> {
+    pub fmt: &'a MessageFormatter,
+    pub evt: &'a emit_core::event::Event<'a, P>,
+}
+
+impl<'a, P: emit_core::props::Props> fmt::Display for MessageRenderer<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.fmt)(&self.evt.erase(), f)
+    }
 }

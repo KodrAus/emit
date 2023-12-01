@@ -1,8 +1,8 @@
 use emit_batcher::BatchError;
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, logs, traces, PreEncoded},
+    data::{self, default_message_formatter, logs, traces, PreEncoded},
     Error,
 };
 
@@ -11,22 +11,22 @@ use self::http::HttpConnection;
 mod http;
 
 pub struct OtlpClient {
-    emit_logs: bool,
-    emit_traces: bool,
+    logs: Option<logs::EventEncoder>,
+    traces: Option<traces::EventEncoder>,
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
 impl emit_core::emitter::Emitter for OtlpClient {
     fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
-        if self.emit_traces {
-            if let Some(encoded) = traces::encode_event(evt) {
+        if let Some(ref encoder) = self.traces {
+            if let Some(encoded) = encoder.encode_event(evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
             }
         }
 
-        if self.emit_logs {
+        if let Some(ref encoder) = self.logs {
             self.sender
-                .send(ChannelItem::LogRecord(logs::encode_event(evt)));
+                .send(ChannelItem::LogRecord(encoder.encode_event(evt)));
         }
     }
 
@@ -76,8 +76,40 @@ pub struct OtlpClientBuilder {
     resource: Option<PreEncoded>,
     scope: Option<PreEncoded>,
     encoding: Encoding,
-    logs: Option<Transport>,
-    traces: Option<Transport>,
+    logs: Option<OtlpLogsBuilder>,
+    traces: Option<OtlpTracesBuilder>,
+}
+
+pub struct OtlpLogsBuilder {
+    encoder: logs::EventEncoder,
+    transport: Transport,
+}
+
+impl OtlpLogsBuilder {
+    pub fn http(dst: impl Into<String>) -> Self {
+        OtlpLogsBuilder {
+            encoder: logs::EventEncoder {
+                body: default_message_formatter(),
+            },
+            transport: Transport::Http { url: dst.into() },
+        }
+    }
+}
+
+pub struct OtlpTracesBuilder {
+    encoder: traces::EventEncoder,
+    transport: Transport,
+}
+
+impl OtlpTracesBuilder {
+    pub fn http(dst: impl Into<String>) -> Self {
+        OtlpTracesBuilder {
+            encoder: traces::EventEncoder {
+                name: default_message_formatter(),
+            },
+            transport: Transport::Http { url: dst.into() },
+        }
+    }
 }
 
 enum Encoding {
@@ -99,15 +131,21 @@ impl OtlpClientBuilder {
         }
     }
 
-    pub fn logs_http(mut self, dst: impl Into<String>) -> Self {
-        self.logs = Some(Transport::Http { url: dst.into() });
+    pub fn logs_http(self, dst: impl Into<String>) -> Self {
+        self.logs(OtlpLogsBuilder::http(dst))
+    }
 
+    pub fn logs(mut self, builder: OtlpLogsBuilder) -> Self {
+        self.logs = Some(builder);
         self
     }
 
-    pub fn traces_http(mut self, dst: impl Into<String>) -> Self {
-        self.traces = Some(Transport::Http { url: dst.into() });
+    pub fn traces_http(self, dst: impl Into<String>) -> Self {
+        self.traces(OtlpTracesBuilder::http(dst))
+    }
 
+    pub fn traces(mut self, builder: OtlpTracesBuilder) -> Self {
+        self.traces = Some(builder);
         self
     }
 
@@ -151,27 +189,39 @@ impl OtlpClientBuilder {
     pub fn spawn(self) -> Result<OtlpClient, Error> {
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
+        let mut logs = None;
+        let mut traces = None;
+
         let client = OtlpSender {
             logs: match self.logs {
-                Some(Transport::Http { url }) => Some(Arc::new(RawClient::Http {
-                    http: HttpConnection::new(&url)?,
-                    resource: self.resource.clone(),
-                    scope: self.scope.clone(),
-                })),
+                Some(OtlpLogsBuilder {
+                    encoder,
+                    transport: Transport::Http { url },
+                }) => {
+                    logs = Some(encoder);
+                    Some(Arc::new(RawClient::Http {
+                        http: HttpConnection::new(&url)?,
+                        resource: self.resource.clone(),
+                        scope: self.scope.clone(),
+                    }))
+                }
                 None => None,
             },
             traces: match self.traces {
-                Some(Transport::Http { url }) => Some(Arc::new(RawClient::Http {
-                    http: HttpConnection::new(&url)?,
-                    resource: self.resource.clone(),
-                    scope: self.scope.clone(),
-                })),
+                Some(OtlpTracesBuilder {
+                    encoder,
+                    transport: Transport::Http { url },
+                }) => {
+                    traces = Some(encoder);
+                    Some(Arc::new(RawClient::Http {
+                        http: HttpConnection::new(&url)?,
+                        resource: self.resource.clone(),
+                        scope: self.scope.clone(),
+                    }))
+                }
                 None => None,
             },
         };
-
-        let emit_logs = client.logs.is_some();
-        let emit_traces = client.traces.is_some();
 
         emit_batcher::tokio::spawn(receiver, move |batch: Channel<PreEncoded>| {
             let client = client.clone();
@@ -211,10 +261,42 @@ impl OtlpClientBuilder {
         });
 
         Ok(OtlpClient {
-            emit_logs,
-            emit_traces,
+            logs,
+            traces,
             sender,
         })
+    }
+}
+
+impl OtlpLogsBuilder {
+    pub fn body(
+        mut self,
+        writer: impl Fn(
+                &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.body = Box::new(writer);
+        self
+    }
+}
+
+impl OtlpTracesBuilder {
+    pub fn name(
+        mut self,
+        writer: impl Fn(
+                &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.name = Box::new(writer);
+        self
     }
 }
 
