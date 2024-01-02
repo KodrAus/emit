@@ -290,21 +290,19 @@ pub use self::alloc_support::*;
 
 #[cfg(all(feature = "sval", not(feature = "serde")))]
 mod seq {
+    use core::marker::PhantomData;
+
     use super::*;
 
     impl<'v> Value<'v> {
         pub(super) fn to_sequence<E: Default + for<'a> Extend<Option<Value<'a>>>>(
             &self,
         ) -> Option<E> {
-            if let Ok(seq) = sval_nested::stream_ref(Root(Default::default()), &self.0) {
-                Some(seq)
-            } else {
-                None
-            }
+            sval_nested::stream_ref(Root(Default::default()), &self.0).ok()
         }
     }
 
-    struct Root<C>(C);
+    struct Root<C>(PhantomData<C>);
 
     struct Seq<C>(C);
 
@@ -315,7 +313,7 @@ mod seq {
 
         type Map = sval_nested::Unsupported<C>;
 
-        type Tuple = sval_nested::Unsupported<C>;
+        type Tuple = Seq<C>;
 
         type Record = sval_nested::Unsupported<C>;
 
@@ -354,9 +352,9 @@ mod seq {
             _: Option<sval::Tag>,
             _: Option<sval::Label>,
             _: Option<sval::Index>,
-            _: Option<usize>,
+            num_entries: Option<usize>,
         ) -> sval_nested::Result<Self::Tuple> {
-            Err(sval_nested::Error::invalid_value("not a sequence"))
+            self.seq_begin(num_entries)
         }
 
         fn record_begin(
@@ -392,25 +390,40 @@ mod seq {
             Ok(self.0)
         }
     }
+
+    impl<'sval, C: for<'a> Extend<Option<Value<'a>>>> sval_nested::StreamTuple<'sval> for Seq<C> {
+        type Ok = C;
+
+        fn value_computed<V: sval::Value>(
+            &mut self,
+            tag: Option<sval::Tag>,
+            _: sval::Index,
+            value: V,
+        ) -> sval_nested::Result {
+            sval_nested::StreamSeq::value_computed(self, value)
+        }
+
+        fn end(self) -> sval_nested::Result<Self::Ok> {
+            sval_nested::StreamSeq::end(self)
+        }
+    }
 }
 
 #[cfg(feature = "serde")]
 mod seq {
+    use core::marker::PhantomData;
+
     use super::*;
 
     impl<'v> Value<'v> {
         pub(super) fn to_sequence<E: Default + for<'a> Extend<Option<Value<'a>>>>(
             &self,
         ) -> Option<E> {
-            if let Ok(seq) = serde::Serialize::serialize(&self.0, Root(Default::default())) {
-                Some(seq)
-            } else {
-                None
-            }
+            serde::Serialize::serialize(&self.0, Root(Default::default())).ok()
         }
     }
 
-    struct Root<C>(C);
+    struct Root<C>(PhantomData<C>);
 
     struct Seq<C>(C);
 
@@ -441,7 +454,7 @@ mod seq {
 
         type SerializeSeq = Seq<C>;
 
-        type SerializeTuple = serde::ser::Impossible<C, Unsupported>;
+        type SerializeTuple = Seq<C>;
 
         type SerializeTupleStruct = serde::ser::Impossible<C, Unsupported>;
 
@@ -565,8 +578,8 @@ mod seq {
             Ok(Seq(C::default()))
         }
 
-        fn serialize_tuple(self, _: usize) -> Result<Self::SerializeTuple, Self::Error> {
-            Err(Unsupported)
+        fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+            self.serialize_seq(Some(len))
         }
 
         fn serialize_tuple_struct(
@@ -626,6 +639,23 @@ mod seq {
 
         fn end(self) -> Result<Self::Ok, Self::Error> {
             Ok(self.0)
+        }
+    }
+
+    impl<C: for<'a> Extend<Option<Value<'a>>>> serde::ser::SerializeTuple for Seq<C> {
+        type Ok = C;
+
+        type Error = Unsupported;
+
+        fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+        where
+            T: serde::Serialize,
+        {
+            serde::ser::SerializeSeq::serialize_element(self, value)
+        }
+
+        fn end(self) -> Result<Self::Ok, Self::Error> {
+            serde::ser::SerializeSeq::end(self)
         }
     }
 }
