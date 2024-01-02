@@ -4,9 +4,9 @@ version = "0.0.0"
 edition = "2021"
 
 [features]
-std = ["alloc", "value-bag/error"]
-alloc = ["value-bag/alloc", "value-bag/owned"]
-sval = ["value-bag/sval", "dep:sval", "dep:sval_ref"]
+std = ["alloc", "value-bag/error", "sval_nested?/std", "sval?/std", "serde?/std"]
+alloc = ["value-bag/alloc", "value-bag/owned", "sval_nested?/alloc", "sval?/alloc", "serde?/alloc"]
+sval = ["value-bag/sval", "dep:sval", "dep:sval_ref", "dep:sval_nested"]
 serde = ["value-bag/serde", "dep:serde"]
 
 [dependencies.value-bag]
@@ -18,6 +18,11 @@ optional = true
 default-features = false
 
 [dependencies.sval_ref]
+version = "2"
+optional = true
+default-features = false
+
+[dependencies.sval_nested]
 version = "2"
 optional = true
 default-features = false

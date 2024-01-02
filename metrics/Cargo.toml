@@ -1,7 +1,8 @@
 [package]
-name = "emit-metrics"
+name = "emit_metrics"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies.emit_core]
 path = "../core"
+features = ["sval"]

@@ -1,5 +1,8 @@
 use core::{borrow::Borrow, fmt, hash, marker::PhantomData};
 
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
+
 pub struct Key<'k> {
     value: *const str,
     value_static: Option<&'static str>,
@@ -244,7 +247,7 @@ impl<'k> serde::Serialize for Key<'k> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::borrow::Cow;
+    use alloc::borrow::{Cow, ToOwned};
 
     use super::*;
 
@@ -286,6 +289,3 @@ mod alloc_support {
 }
 
 use crate::value::{ToValue, Value};
-
-#[cfg(feature = "alloc")]
-pub use self::alloc_support::*;

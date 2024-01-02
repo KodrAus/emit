@@ -12,10 +12,10 @@ path = "main.rs"
 path = "../../"
 features = ["serde"]
 
-[dependencies.emit-otlp]
+[dependencies.emit_otlp]
 path = "../../targets/otlp"
 
-[dependencies.emit-term]
+[dependencies.emit_term]
 path = "../../targets/term"
 
 [dependencies.serde]

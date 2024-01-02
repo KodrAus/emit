@@ -1,13 +1,13 @@
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
 use core::{fmt, str, time::Duration};
-use std::{cell::RefCell, io::Write, sync::Mutex};
+use std::{cell::RefCell, cmp, io::Write, sync::Mutex};
 
 use emit::{
     well_known::{WellKnown, METRIC_KIND_SUM},
     Event,
 };
-use emit_metrics::{Bucketing, Histogram, MetricsCollector};
+use emit_metrics::{Bucketing, MetricsCollector};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -73,7 +73,7 @@ fn with_shared_buf(writer: &BufferWriter, with_buf: impl FnOnce(&BufferWriter, &
 }
 
 impl emit::emitter::Emitter for Stdout {
-    fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
+    fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
         if let Some(ref metrics_collector) = self.metrics_collector {
             if metrics_collector.lock().unwrap().record_metric(evt) {
                 return;
@@ -85,15 +85,40 @@ impl emit::emitter::Emitter for Stdout {
 
     fn blocking_flush(&self, _: Duration) {
         if let Some(ref metrics_collector) = self.metrics_collector {
-            for (metric, histogram) in metrics_collector.lock().unwrap().take_sums() {
+            for (metric_name, histogram) in metrics_collector.lock().unwrap().take_sums() {
                 if histogram.is_empty() {
                     continue;
                 }
 
+                let metric_kind = METRIC_KIND_SUM;
+
                 let histogram = histogram.compute();
+                let x = histogram.timestamp_range();
+                let y = histogram.value_range();
+
+                let bucket_size = friendly_duration(histogram.bucket_size());
+                let metric_value = histogram.buckets();
+                let metric_value = &metric_value;
 
                 with_shared_buf(&self.writer, |writer, buf| {
-                    print_histogram(writer, buf, &*metric, METRIC_KIND_SUM, &histogram);
+                    print_event(
+                        writer,
+                        buf,
+                        &Event::new(
+                            x,
+                            emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
+                            emit::props! {
+                                metric_kind,
+                                metric_name,
+                                #[emit::as_sval]
+                                metric_value,
+                                min: y.start,
+                                max: y.end,
+                                bucket_size: bucket_size.value,
+                                bucket_size_unit: bucket_size.unit,
+                            },
+                        ),
+                    );
                 });
             }
         }
@@ -225,7 +250,11 @@ fn write_duration(buf: &mut Buffer, duration: Duration) {
     write_fg(buf, unit, TEXT);
 }
 
-fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit::Props>) {
+fn print_event(
+    out: &BufferWriter,
+    buf: &mut Buffer,
+    evt: &emit::event::Event<impl emit::props::Props>,
+) {
     if let Some(span_id) = evt.props().span_id() {
         if let Some(trace_id) = evt.props().trace_id() {
             let trace_id_color = trace_id_color(&trace_id);
@@ -268,43 +297,29 @@ fn print_event(out: &BufferWriter, buf: &mut Buffer, evt: &emit::Event<impl emit
     write_plain(buf, "\n");
 
     let _ = out.print(&buf);
+
+    if let Some(value) = evt.props().metric_value() {
+        if let Some(buckets) = value.to_f64_sequence() {
+            buf.clear();
+            print_histogram(out, buf, &buckets);
+        }
+    }
 }
 
-fn print_histogram(
-    out: &BufferWriter,
-    buf: &mut Buffer,
-    metric_name: &str,
-    metric_kind: &str,
-    histogram: &Histogram,
-) {
+fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64]) {
     const BLOCKS: [&'static str; 7] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇"];
 
-    let x = histogram.timestamp_range();
-    let y = histogram.value_range();
+    let mut bucket_min = f64::NAN;
+    let mut bucket_max = -f64::NAN;
 
-    let bucket_size = friendly_duration(histogram.bucket_size());
+    for v in buckets {
+        bucket_min = cmp::min_by(*v, bucket_min, f64::total_cmp);
+        bucket_max = cmp::max_by(*v, bucket_max, f64::total_cmp);
+    }
 
-    print_event(
-        out,
-        buf,
-        &Event::new(
-            x,
-            emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
-            emit::props! {
-                metric_kind,
-                metric_name,
-                min: y.start,
-                max: y.end,
-                bucket_size: bucket_size.value,
-                bucket_size_unit: bucket_size.unit,
-            },
-        ),
-    );
-    buf.clear();
-
-    for v in histogram.iter_values() {
-        let idx =
-            (((v - y.start) / (y.end - y.start)) * ((BLOCKS.len() - 1) as f64)).ceil() as usize;
+    for v in buckets {
+        let idx = (((v - bucket_min) / (bucket_max - bucket_min)) * ((BLOCKS.len() - 1) as f64))
+            .ceil() as usize;
         let _ = buf.write(BLOCKS[idx].as_bytes());
     }
 

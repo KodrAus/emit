@@ -28,7 +28,7 @@ full = ["emit/std", "emit/rng", "emit/serde", "emit/sval"]
 [dependencies.emit]
 path = "../"
 
-[dependencies.emit-batcher]
+[dependencies.emit_batcher]
 path = "../batcher"
 
 [dependencies.criterion]

@@ -90,6 +90,6 @@ mod tests {
 
         assert_eq!("metric", well_known.name());
         assert_eq!("sum", well_known.kind());
-        assert_eq!(1, well_known.value().to_usize().unwrap());
+        assert_eq!(1.0, well_known.value().to_f64().unwrap());
     }
 }

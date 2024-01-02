@@ -33,19 +33,8 @@ impl Histogram {
         self.bucket_size
     }
 
-    pub fn iter_values<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
-        self.buckets.iter().copied()
-    }
-
-    pub fn iter_buckets<'a>(&'a self) -> impl Iterator<Item = (Range<Timestamp>, f64)> + 'a {
-        let mut start = self.timestamp_range.start;
-
-        self.buckets.iter().map(move |bucket| {
-            let range = start..start + self.bucket_size;
-            start += self.bucket_size;
-
-            (range, *bucket)
-        })
+    pub fn buckets(&self) -> &[f64] {
+        &self.buckets
     }
 }
 

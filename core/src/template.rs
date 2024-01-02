@@ -1,5 +1,8 @@
 use core::fmt;
 
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
+
 use crate::{
     empty::Empty,
     key::Key,
@@ -424,6 +427,8 @@ enum PartKind<'a> {
 mod alloc_support {
     use super::*;
 
+    use alloc::vec::Vec;
+
     impl Template<'static> {
         pub fn new_owned(parts: impl Into<Box<[Part<'static>]>>) -> Self {
             let parts = parts.into();
@@ -482,6 +487,3 @@ mod alloc_support {
         }
     }
 }
-
-#[cfg(feature = "alloc")]
-pub use self::alloc_support::*;

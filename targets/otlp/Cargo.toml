@@ -1,5 +1,5 @@
 [package]
-name = "emit-otlp"
+name = "emit_otlp"
 version = "0.0.0"
 edition = "2021"
 
@@ -12,7 +12,7 @@ grpc = ["dep:prost", "dep:serde", "emit_core/serde"]
 path = "../../core"
 features = ["std", "sval"]
 
-[dependencies.emit-batcher]
+[dependencies.emit_batcher]
 path = "../../batcher"
 features = ["tokio"]
 
@@ -37,12 +37,13 @@ features = ["rt-multi-thread", "sync"]
 
 [dependencies.hyper]
 optional = true
-version = "1.0.0-rc.4"
+version = "1"
 features = ["client", "http1"]
 
 [dependencies.hyper-util]
 optional = true
-git = "https://github.com/hyperium/hyper-util"
+version = "0.1"
+features = ["tokio"]
 
 [dependencies.bytes]
 version = "1"

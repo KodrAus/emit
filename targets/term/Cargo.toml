@@ -1,5 +1,5 @@
 [package]
-name = "emit-term"
+name = "emit_term"
 version = "0.0.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 path = "../../"
 features = ["sval"]
 
-[dependencies.emit-metrics]
+[dependencies.emit_metrics]
 path = "../../metrics"
 
 [dependencies.sval]
