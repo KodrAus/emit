@@ -299,7 +299,9 @@ fn print_event(
     let _ = out.print(&buf);
 
     if let Some(value) = evt.props().metric_value() {
-        if let Some(buckets) = value.to_f64_sequence() {
+        let buckets = value.as_f64_sequence();
+
+        if !buckets.is_empty() {
             buf.clear();
             print_histogram(out, buf, &buckets);
         }
