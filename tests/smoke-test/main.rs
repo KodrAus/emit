@@ -39,8 +39,16 @@ async fn main() {
 
 #[emit::with(trace_id: emit::new_trace_id())]
 async fn in_trace() -> Result<(), io::Error> {
+    let mut futures = Vec::new();
+
     for i in 0..100 {
-        let _ = in_ctxt(i).await;
+        futures.push(tokio::spawn(
+            emit::with(emit::empty::Empty).into_future(in_ctxt(i)),
+        ));
+    }
+
+    for future in futures {
+        let _ = future.await;
 
         sample_metrics();
     }
