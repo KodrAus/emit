@@ -7,17 +7,17 @@ use core::{
 };
 use emit_core::{ctxt::Ctxt, props::Props};
 
-pub struct LocalFrame<C: Ctxt> {
-    scope: mem::ManuallyDrop<C::LocalFrame>,
+pub struct Frame<C: Ctxt> {
+    scope: mem::ManuallyDrop<C::Frame>,
     ctxt: C,
 }
 
-impl<C: Ctxt> LocalFrame<C> {
+impl<C: Ctxt> Frame<C> {
     #[track_caller]
     pub fn new(ctxt: C, props: impl Props) -> Self {
         let scope = mem::ManuallyDrop::new(ctxt.open(props));
 
-        LocalFrame { ctxt, scope }
+        Frame { ctxt, scope }
     }
 
     #[track_caller]
@@ -31,8 +31,14 @@ impl<C: Ctxt> LocalFrame<C> {
     }
 
     #[track_caller]
-    pub fn into_future<F>(self, future: F) -> LocalFrameFuture<C, F> {
-        LocalFrameFuture {
+    pub fn with<R>(mut self, scope: impl FnOnce() -> R) -> R {
+        let __guard = self.enter();
+        scope()
+    }
+
+    #[track_caller]
+    pub fn with_future<F>(self, future: F) -> FrameFuture<C, F> {
+        FrameFuture {
             frame: self,
             future,
         }
@@ -40,7 +46,7 @@ impl<C: Ctxt> LocalFrame<C> {
 }
 
 pub struct EnterGuard<'a, C: Ctxt> {
-    scope: &'a mut LocalFrame<C>,
+    scope: &'a mut Frame<C>,
     _marker: PhantomData<*mut fn()>,
 }
 
@@ -50,19 +56,19 @@ impl<'a, C: Ctxt> Drop for EnterGuard<'a, C> {
     }
 }
 
-impl<C: Ctxt> Drop for LocalFrame<C> {
+impl<C: Ctxt> Drop for Frame<C> {
     fn drop(&mut self) {
         self.ctxt
             .close(unsafe { mem::ManuallyDrop::take(&mut self.scope) })
     }
 }
 
-pub struct LocalFrameFuture<C: Ctxt, F> {
-    frame: LocalFrame<C>,
+pub struct FrameFuture<C: Ctxt, F> {
+    frame: Frame<C>,
     future: F,
 }
 
-impl<C: Ctxt, F: Future> Future for LocalFrameFuture<C, F> {
+impl<C: Ctxt, F: Future> Future for FrameFuture<C, F> {
     type Output = F::Output;
 
     #[track_caller]

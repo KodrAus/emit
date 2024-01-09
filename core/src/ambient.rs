@@ -129,26 +129,26 @@ impl<TEmitter, TFilter: Filter, TCtxt, TClock, TIdGen> Filter
 impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TIdGen> Ctxt
     for Ambient<TEmitter, TFilter, TCtxt, TClock, TIdGen>
 {
-    type CurrentProps = TCtxt::CurrentProps;
-    type LocalFrame = TCtxt::LocalFrame;
+    type Props = TCtxt::Props;
+    type Frame = TCtxt::Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+    fn open<P: Props>(&self, props: P) -> Self::Frame {
         self.ctxt.open(props)
     }
 
-    fn enter(&self, scope: &mut Self::LocalFrame) {
+    fn enter(&self, scope: &mut Self::Frame) {
         self.ctxt.enter(scope)
     }
 
-    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
         self.ctxt.with_current(with)
     }
 
-    fn exit(&self, scope: &mut Self::LocalFrame) {
+    fn exit(&self, scope: &mut Self::Frame) {
         self.ctxt.exit(scope)
     }
 
-    fn close(&self, span: Self::LocalFrame) {
+    fn close(&self, span: Self::Frame) {
         self.ctxt.close(span)
     }
 }
@@ -293,7 +293,7 @@ mod std_support {
         TEmitter: Emitter + Send + Sync + 'static,
         TFilter: Filter + Send + Sync + 'static,
         TCtxt: Ctxt + Send + Sync + 'static,
-        TCtxt::LocalFrame: Send + 'static,
+        TCtxt::Frame: Send + 'static,
         TClock: Clock + Send + Sync + 'static,
         TIdGen: IdGen + Send + Sync + 'static,
     {

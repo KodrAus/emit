@@ -40,14 +40,14 @@ impl Props for ThreadLocalSpan {
 }
 
 impl Ctxt for ThreadLocalCtxt {
-    type CurrentProps = ThreadLocalSpan;
-    type LocalFrame = ThreadLocalSpan;
+    type Props = ThreadLocalSpan;
+    type Frame = ThreadLocalSpan;
 
-    fn with_current<F: FnOnce(&Self::CurrentProps)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
         ACTIVE.with(|span| with(&*span.borrow()))
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::LocalFrame {
+    fn open<P: Props>(&self, props: P) -> Self::Frame {
         let mut span = ACTIVE.with(|span| span.borrow().clone());
 
         props.for_each(|k, v| {
@@ -58,13 +58,13 @@ impl Ctxt for ThreadLocalCtxt {
         span
     }
 
-    fn enter(&self, link: &mut Self::LocalFrame) {
+    fn enter(&self, link: &mut Self::Frame) {
         ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
     }
 
-    fn exit(&self, link: &mut Self::LocalFrame) {
+    fn exit(&self, link: &mut Self::Frame) {
         ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
     }
 
-    fn close(&self, _: Self::LocalFrame) {}
+    fn close(&self, _: Self::Frame) {}
 }

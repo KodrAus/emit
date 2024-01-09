@@ -1,7 +1,0 @@
-error: unexpected field `not_an_arg`
- --> fail/log_unkown_attr_arg.rs:6:5
-  |
-6 |     emit::info!("Logging with a deeply nested {#[emit::as_display(not_an_arg: false)] value: v}");
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `emit::info` (in Nightly builds, run with -Z macro-backtrace for more info)

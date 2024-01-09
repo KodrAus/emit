@@ -21,12 +21,12 @@ mod emit;
 mod filter;
 mod fmt;
 mod hook;
+mod in_ctxt;
 mod key;
 mod optional;
 mod props;
 mod template;
 mod util;
-mod with;
 
 use util::ResultToTokens;
 
@@ -122,13 +122,13 @@ pub fn optional(
 }
 
 #[proc_macro_attribute]
-pub fn with(
+pub fn in_ctxt(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    with::expand_tokens(with::ExpandTokens {
-        sync_receiver: quote!(__private::__private_with),
-        async_receiver: quote!(__private::__private_with),
+    in_ctxt::expand_tokens(in_ctxt::ExpandTokens {
+        sync_receiver: quote!(__private::__private_push_ctxt),
+        async_receiver: quote!(__private::__private_push_ctxt),
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })

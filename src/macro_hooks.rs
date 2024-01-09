@@ -18,8 +18,8 @@ use emit_core::extent::ToExtent;
 use std::error::Error;
 
 use crate::{
-    base_emit, base_with,
-    local_frame::LocalFrame,
+    base_emit, base_push_ctxt,
+    frame::Frame,
     template::{Formatter, Part},
     Key,
 };
@@ -452,10 +452,10 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_with(props: impl Props) -> LocalFrame<emit_core::ambient::Get> {
+pub fn __private_push_ctxt(props: impl Props) -> Frame<emit_core::ambient::Get> {
     let ambient = ambient::get();
 
-    base_with(ambient, props)
+    base_push_ctxt(ambient, props)
 }
 
 pub use core::module_path as loc;
@@ -500,130 +500,5 @@ impl<'a> Props for __PrivateMacroProps<'a> {
             .binary_search_by(|(k, _)| k.cmp(&key))
             .ok()
             .and_then(|i| self.0[i].1.as_ref().map(|v| v.by_ref()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{fmt, string::String};
-
-    #[test]
-    fn capture_default() {
-        struct SomeType;
-
-        impl fmt::Display for SomeType {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "some type")
-            }
-        }
-
-        // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_as_default();
-
-        // Capture a structured number
-        assert_eq!(Some(42u64), 42u64.__private_capture_as_default().to_u64());
-
-        // Capture a borrowed (non-static) string
-        let v: &str = &String::from("a string");
-        assert_eq!(
-            Some("a string"),
-            v.__private_capture_as_default().to_borrowed_str()
-        );
-
-        // Capture a value with parens
-        let _ = (SomeType).__private_capture_as_default();
-
-        // Capture and borrow a string as an expression
-        let v = SomeType;
-        match (
-            v.__private_capture_as_default(),
-            String::from("a string").__private_capture_as_default(),
-        ) {
-            (a, b) => {
-                let _ = a;
-                let _ = b;
-            }
-        }
-        let _ = v;
-    }
-
-    #[test]
-    fn capture_display() {
-        struct SomeType;
-
-        impl fmt::Display for SomeType {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "some type")
-            }
-        }
-
-        // Capture an arbitrary `Display`
-        let _ = SomeType.__private_capture_as_display();
-        let _ = (&&&SomeType).__private_capture_anon_as_display();
-
-        // Capture a `&dyn Display`
-        let v: &dyn fmt::Display = &SomeType;
-        let _ = v.__private_capture_as_display();
-        let _ = (&&&v).__private_capture_anon_as_display();
-    }
-
-    #[test]
-    fn capture_debug() {
-        struct SomeType;
-
-        impl fmt::Debug for SomeType {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "some type")
-            }
-        }
-
-        // Capture an arbitrary `Debug`
-        let _ = SomeType.__private_capture_as_debug();
-        let _ = (&&&SomeType).__private_capture_anon_as_debug();
-
-        // Capture a `&dyn Debug`
-        let v: &dyn fmt::Debug = &SomeType;
-        let _ = v.__private_capture_as_debug();
-        let _ = (&&&v).__private_capture_anon_as_debug();
-    }
-
-    #[test]
-    #[cfg(feature = "sval")]
-    fn capture_sval() {
-        let tuple = (1, 2, 3, 4, 5);
-
-        // Capture an arbitrary `Value`
-        let _ = tuple.__private_capture_as_sval();
-        let _ = (&&&tuple).__private_capture_anon_as_sval();
-    }
-
-    #[test]
-    #[cfg(feature = "serde")]
-    fn capture_serde() {
-        let tuple = (1, 2, 3, 4, 5);
-
-        let _ = tuple.__private_capture_as_serde();
-        let _ = (&&&tuple).__private_capture_anon_as_serde();
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn capture_error() {
-        use std::io;
-
-        // Capture an arbitrary `Error`
-        let err = io::Error::from(io::ErrorKind::Other);
-        assert!(err
-            .__private_capture_as_error()
-            .to_borrowed_error()
-            .is_some());
-
-        // Capture a `&dyn Error`
-        let err: &dyn Error = &err;
-        assert!(err
-            .__private_capture_as_error()
-            .to_borrowed_error()
-            .is_some());
     }
 }

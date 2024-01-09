@@ -1,5 +1,0 @@
-error[E0425]: cannot find value `x` in this scope
- --> fail/log_unknown_key.rs:4:41
-  |
-4 |     emit::info!("something went wrong", x);
-  |                                         ^ not found in this scope

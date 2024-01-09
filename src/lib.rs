@@ -5,18 +5,18 @@ extern crate alloc;
 
 use emit_core::extent::ToExtent;
 
-use crate::local_frame::LocalFrame;
+use crate::frame::Frame;
 
 #[doc(inline)]
 pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, metrics, props, template,
-    timestamp, value, well_known,
+    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, props, template, timestamp,
+    value, well_known,
 };
 
-pub mod local_frame;
+pub mod frame;
 
 pub use self::{
     clock::{Clock, Timer},
@@ -28,7 +28,6 @@ pub use self::{
     id::{IdGen, SpanId, TraceId},
     key::Key,
     level::Level,
-    metrics::Metric,
     props::Props,
     template::Template,
     timestamp::Timestamp,
@@ -63,8 +62,8 @@ fn base_emit(
 }
 
 #[track_caller]
-fn base_with<C: Ctxt>(ctxt: C, props: impl Props) -> LocalFrame<C> {
-    LocalFrame::new(ctxt, props)
+fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
+    Frame::new(ctxt, props)
 }
 
 #[track_caller]
@@ -78,7 +77,7 @@ pub fn emit(evt: &Event<impl Props>) {
     base_emit(ambient, ambient, ambient, extent, tpl, props);
 }
 
-pub type With = LocalFrame<emit_core::ambient::Get>;
+pub type PushCtxt = Frame<emit_core::ambient::Get>;
 
 pub type StartTimer = Timer<emit_core::ambient::Get>;
 
@@ -88,8 +87,13 @@ pub fn now() -> Option<Timestamp> {
 }
 
 #[track_caller]
-pub fn with(props: impl Props) -> With {
-    base_with(emit_core::ambient::get(), props)
+pub fn push_ctxt(props: impl Props) -> PushCtxt {
+    base_push_ctxt(emit_core::ambient::get(), props)
+}
+
+#[track_caller]
+pub fn current_ctxt() -> PushCtxt {
+    base_push_ctxt(emit_core::ambient::get(), empty::Empty)
 }
 
 #[track_caller]

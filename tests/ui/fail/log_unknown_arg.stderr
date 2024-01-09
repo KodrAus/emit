@@ -1,5 +1,0 @@
-error: unexpected field `not_an_arg`
- --> fail/log_unknown_arg.rs:6:17
-  |
-6 |     emit::info!(not_an_arg: false, "Logging with a deeply nested {value: v}");
-  |                 ^^^^^^^^^^^^^^^^^

@@ -81,7 +81,7 @@ impl<
         TCtxt: Ctxt + Send + Sync + 'static,
     > Setup<TEmitter, TFilter, TCtxt>
 where
-    TCtxt::LocalFrame: Send + 'static,
+    TCtxt::Frame: Send + 'static,
 {
     #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
     pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {

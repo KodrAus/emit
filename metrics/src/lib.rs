@@ -1,6 +1,99 @@
-use std::{borrow::Cow, cmp, collections::HashMap, mem, ops::Range, time::Duration};
+use std::{
+    borrow::Cow,
+    cmp,
+    collections::HashMap,
+    mem,
+    ops::{ControlFlow, Range},
+    time::Duration,
+};
 
-use emit_core::{event::Event, props::Props, timestamp::Timestamp, well_known::WellKnown};
+use emit_core::{
+    event::Event,
+    key::{Key, ToKey},
+    props::Props,
+    timestamp::Timestamp,
+    value::{ToValue, Value},
+    well_known::{
+        WellKnown, METRIC_KIND_KEY, METRIC_KIND_MAX, METRIC_KIND_MIN, METRIC_KIND_SUM,
+        METRIC_NAME_KEY, METRIC_VALUE_KEY,
+    },
+};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Metric<'m, T> {
+    name: Key<'m>,
+    kind: Key<'m>,
+    value: T,
+}
+
+impl<'m> Metric<'m, Value<'m>> {
+    pub fn from_props(props: &'m (impl Props + ?Sized)) -> Option<Self> {
+        Some(Metric::new(
+            props.metric_kind()?,
+            props.metric_name()?,
+            props.metric_value()?,
+        ))
+    }
+}
+
+impl<'m, T> Metric<'m, T> {
+    pub const fn new(kind: Key<'m>, name: Key<'m>, value: T) -> Self {
+        Metric { name, kind, value }
+    }
+
+    pub const fn sum(name: Key<'m>, value: T) -> Self {
+        Metric::new(Key::new(METRIC_KIND_SUM), name, value)
+    }
+
+    pub fn is_sum(&self) -> bool {
+        self.kind() == METRIC_KIND_SUM
+    }
+
+    pub const fn min(name: Key<'m>, value: T) -> Self {
+        Metric::new(Key::new(METRIC_KIND_MIN), name, value)
+    }
+
+    pub fn is_min(&self) -> bool {
+        self.kind() == METRIC_KIND_MIN
+    }
+
+    pub const fn max(name: Key<'m>, value: T) -> Self {
+        Metric::new(Key::new(METRIC_KIND_MAX), name, value)
+    }
+
+    pub fn is_max(&self) -> bool {
+        self.kind() == METRIC_KIND_MAX
+    }
+
+    pub const fn name(&self) -> &Key<'m> {
+        &self.name
+    }
+
+    pub const fn kind(&self) -> &Key<'m> {
+        &self.kind
+    }
+
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+
+    pub fn value_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+impl<'m, V: ToValue> Props for Metric<'m, V> {
+    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for_each(METRIC_NAME_KEY.to_key(), self.name.to_value())?;
+        for_each(METRIC_VALUE_KEY.to_key(), self.value.to_value())?;
+        for_each(METRIC_KIND_KEY.to_key(), self.kind.to_value())?;
+
+        ControlFlow::Continue(())
+    }
+}
 
 pub struct MetricsCollector {
     bucketing: Bucketing,
@@ -64,7 +157,7 @@ impl MetricsCollector {
     pub fn record_metric(&mut self, evt: &Event<impl Props>) -> bool {
         if let (Some(extent), Some(metric)) = (
             evt.extent().and_then(|extent| extent.as_point()),
-            evt.props().metric(),
+            Metric::from_props(evt.props()),
         ) {
             if metric.is_sum() {
                 if let Some(value) = metric.value().to_f64() {

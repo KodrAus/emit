@@ -37,14 +37,12 @@ async fn main() {
     emitter.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::with(trace_id: emit::new_trace_id())]
+#[emit::in_ctxt(trace_id: emit::new_trace_id())]
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
     for i in 0..100 {
-        futures.push(tokio::spawn(
-            emit::with(emit::empty::Empty).into_future(in_ctxt(i)),
-        ));
+        futures.push(tokio::spawn(emit::current_ctxt().with_future(in_ctxt(i))));
     }
 
     for future in futures {
@@ -56,7 +54,7 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::with(span_id: emit::new_span_id(), span_parent: emit::current_span_id(), a)]
+#[emit::in_ctxt(span_id: emit::new_span_id(), span_parent: emit::current_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     increment(&COUNT);
 
@@ -90,7 +88,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     r
 }
 
-#[emit::with(b, bx: 90)]
+#[emit::in_ctxt(b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     emit::warn!(
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
@@ -110,7 +108,7 @@ fn increment(metric: &AtomicUsize) {
 fn sample_metrics() {
     let now = emit::now();
 
-    for (metric, kind, name) in [(
+    for (metric_value, metric_kind, metric_name) in [(
         &COUNT,
         emit::well_known::METRIC_KIND_SUM,
         "smoke_test::count",
@@ -118,11 +116,11 @@ fn sample_metrics() {
         emit::emit(&emit::Event::new(
             now,
             emit::tpl!("{metric_kind} of {metric_name} is {metric_value}"),
-            emit::metrics::Metric::new(
-                emit::key::Key::new(kind),
-                emit::key::Key::new(name),
-                metric.load(Ordering::Relaxed),
-            ),
+            emit::props! {
+                metric_kind,
+                metric_name,
+                metric_value: metric_value.load(Ordering::Relaxed),
+            },
         ));
     }
 }

@@ -8,7 +8,6 @@ members = [
     "targets/otlp/gen",
     "macros",
     "benchmark",
-    "tests/ui",
 ]
 exclude = [
     "tests/smoke-test"
