@@ -74,7 +74,7 @@ pub(crate) fn stream_field<'sval, S: sval::Stream<'sval> + ?Sized>(
 pub(crate) fn stream_attributes<'sval>(
     stream: &mut (impl sval::Stream<'sval> + ?Sized),
     props: &'sval impl emit_core::props::Props,
-    mut for_each: impl FnMut(&emit_core::key::Key, &emit_core::value::Value) -> bool,
+    mut for_each: impl FnMut(&emit_core::str::Str, &emit_core::value::Value) -> bool,
 ) -> sval::Result {
     stream.seq_begin(None)?;
 

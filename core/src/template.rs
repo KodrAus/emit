@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 
 use crate::{
     empty::Empty,
-    key::Key,
+    str::Str,
     props::Props,
     value::{ToValue, Value},
 };
@@ -294,13 +294,13 @@ pub struct Part<'a>(PartKind<'a>);
 impl Part<'static> {
     pub const fn text(text: &'static str) -> Self {
         Part(PartKind::Text {
-            value: Key::new(text),
+            value: Str::new(text),
         })
     }
 
     pub const fn hole(label: &'static str) -> Self {
         Part(PartKind::Hole {
-            label: Key::new(label),
+            label: Str::new(label),
             formatter: None,
         })
     }
@@ -309,13 +309,13 @@ impl Part<'static> {
 impl<'a> Part<'a> {
     pub const fn text_ref(text: &'a str) -> Self {
         Part(PartKind::Text {
-            value: Key::new_ref(text),
+            value: Str::new_ref(text),
         })
     }
 
     pub const fn hole_ref(label: &'a str) -> Self {
         Part(PartKind::Hole {
-            label: Key::new_ref(label),
+            label: Str::new_ref(label),
             formatter: None,
         })
     }
@@ -415,10 +415,10 @@ impl Formatter {
 #[derive(Clone)]
 enum PartKind<'a> {
     Text {
-        value: Key<'a>,
+        value: Str<'a>,
     },
     Hole {
-        label: Key<'a>,
+        label: Str<'a>,
         formatter: Option<Formatter>,
     },
 }
@@ -457,13 +457,13 @@ mod alloc_support {
     impl Part<'static> {
         pub fn text_owned(text: impl Into<Box<str>>) -> Self {
             Part(PartKind::Text {
-                value: Key::new_owned(text),
+                value: Str::new_owned(text),
             })
         }
 
         pub fn hole_owned(label: impl Into<Box<str>>) -> Self {
             Part(PartKind::Hole {
-                label: Key::new_owned(label),
+                label: Str::new_owned(label),
                 formatter: None,
             })
         }

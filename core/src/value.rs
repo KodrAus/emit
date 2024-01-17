@@ -12,6 +12,14 @@ impl<'v> Value<'v> {
         Value(value_bag::ValueBag::from_display(value))
     }
 
+    pub fn capture_debug(value: &'v (impl fmt::Debug + 'static)) -> Self {
+        Value(value_bag::ValueBag::capture_debug(value))
+    }
+
+    pub fn from_debug(value: &'v impl fmt::Debug) -> Self {
+        Value(value_bag::ValueBag::from_debug(value))
+    }
+
     pub fn by_ref<'b>(&'b self) -> Value<'b> {
         Value(self.0.by_ref())
     }
@@ -38,6 +46,10 @@ impl<'v> Value<'v> {
         }
 
         let _ = self.0.visit(Visit(visitor));
+    }
+
+    pub fn cast<T: FromValue<'v>>(&self) -> Option<T> {
+        T::from_value(self)
     }
 
     pub fn parse<T: FromStr>(&self) -> Option<T> {
@@ -189,6 +201,21 @@ impl ToValue for f64 {
 impl<'v> From<f64> for Value<'v> {
     fn from(value: f64) -> Self {
         Value(value.into())
+    }
+}
+
+pub trait FromValue<'v> {
+    fn from_value(value: &Value<'v>) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+impl<'v> FromValue<'v> for &'v str {
+    fn from_value(value: &Value<'v>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        value.to_borrowed_str()
     }
 }
 

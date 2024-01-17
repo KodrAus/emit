@@ -4,6 +4,7 @@
 extern crate alloc;
 
 use emit_core::extent::ToExtent;
+use id::{IdRng, SpanId, TraceId};
 
 use crate::frame::Frame;
 
@@ -12,11 +13,14 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, id, key, level, props, template, timestamp,
-    value, well_known,
+    clock, ctxt, emitter, empty, event, extent, filter, str, props, rng, runtime, template,
+    timestamp, value,
 };
 
 pub mod frame;
+pub mod id;
+pub mod level;
+pub mod well_known;
 
 pub use self::{
     clock::{Clock, Timer},
@@ -25,10 +29,10 @@ pub use self::{
     event::Event,
     extent::Extent,
     filter::Filter,
-    id::{IdGen, SpanId, TraceId},
-    key::Key,
+    str::Str,
     level::Level,
     props::Props,
+    rng::Rng,
     template::Template,
     timestamp::Timestamp,
     value::Value,
@@ -68,7 +72,7 @@ fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
 
 #[track_caller]
 pub fn emit(evt: &Event<impl Props>) {
-    let ambient = emit_core::ambient::get();
+    let ambient = emit_core::runtime::SHARED.get();
 
     let tpl = evt.tpl();
     let props = evt.props();
@@ -77,40 +81,40 @@ pub fn emit(evt: &Event<impl Props>) {
     base_emit(ambient, ambient, ambient, extent, tpl, props);
 }
 
-pub type PushCtxt = Frame<emit_core::ambient::Get>;
+pub type PushCtxt = Frame<emit_core::runtime::AmbientRuntime<'static>>;
 
-pub type StartTimer = Timer<emit_core::ambient::Get>;
+pub type StartTimer = Timer<emit_core::runtime::AmbientRuntime<'static>>;
 
 #[track_caller]
 pub fn now() -> Option<Timestamp> {
-    emit_core::ambient::get().now()
+    emit_core::runtime::SHARED.get().now()
 }
 
 #[track_caller]
 pub fn push_ctxt(props: impl Props) -> PushCtxt {
-    base_push_ctxt(emit_core::ambient::get(), props)
+    base_push_ctxt(emit_core::runtime::SHARED.get(), props)
 }
 
 #[track_caller]
 pub fn current_ctxt() -> PushCtxt {
-    base_push_ctxt(emit_core::ambient::get(), empty::Empty)
+    base_push_ctxt(emit_core::runtime::SHARED.get(), empty::Empty)
 }
 
 #[track_caller]
 pub fn start_timer() -> StartTimer {
-    Timer::start(emit_core::ambient::get())
+    Timer::start(emit_core::runtime::SHARED.get())
 }
 
 #[track_caller]
 pub fn new_span_id() -> Option<SpanId> {
-    emit_core::ambient::get().new_span_id()
+    emit_core::runtime::SHARED.get().gen_span_id()
 }
 
 #[track_caller]
 pub fn current_span_id() -> Option<SpanId> {
     let mut span_id = None;
 
-    emit_core::ambient::get().with_current(|ctxt| {
+    emit_core::runtime::SHARED.get().with_current(|ctxt| {
         span_id = ctxt.span_id();
     });
 
@@ -119,14 +123,14 @@ pub fn current_span_id() -> Option<SpanId> {
 
 #[track_caller]
 pub fn new_trace_id() -> Option<TraceId> {
-    emit_core::ambient::get().new_trace_id()
+    emit_core::runtime::SHARED.get().gen_trace_id()
 }
 
 #[track_caller]
 pub fn current_trace_id() -> Option<TraceId> {
     let mut trace_id = None;
 
-    emit_core::ambient::get().with_current(|ctxt| {
+    emit_core::runtime::SHARED.get().with_current(|ctxt| {
         trace_id = ctxt.trace_id();
     });
 

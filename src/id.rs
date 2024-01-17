@@ -1,7 +1,6 @@
-use crate::{
-    empty::Empty,
-    value::{ToValue, Value},
-};
+use emit_core::{rng::Rng, value::FromValue};
+
+use crate::value::{ToValue, Value};
 use core::{
     fmt,
     num::{NonZeroU128, NonZeroU64},
@@ -38,11 +37,12 @@ impl ToValue for TraceId {
     }
 }
 
-impl<'v> Value<'v> {
-    pub fn to_trace_id(&self) -> Option<TraceId> {
-        self.downcast_ref::<TraceId>()
+impl<'v> FromValue<'v> for TraceId {
+    fn from_value(value: &Value<'v>) -> Option<Self> {
+        value
+            .downcast_ref::<TraceId>()
             .copied()
-            .or_else(|| TraceId::try_from_hex(self).ok())
+            .or_else(|| TraceId::try_from_hex(value).ok())
     }
 }
 
@@ -138,11 +138,12 @@ impl ToValue for SpanId {
     }
 }
 
-impl<'v> Value<'v> {
-    pub fn to_span_id(&self) -> Option<SpanId> {
-        self.downcast_ref::<SpanId>()
+impl<'v> FromValue<'v> for SpanId {
+    fn from_value(value: &Value<'v>) -> Option<Self> {
+        value
+            .downcast_ref::<SpanId>()
             .copied()
-            .or_else(|| SpanId::try_from_hex(self).ok())
+            .or_else(|| SpanId::try_from_hex(value).ok())
     }
 }
 
@@ -297,102 +298,24 @@ impl<const N: usize> fmt::Write for Buffer<N> {
     }
 }
 
-pub trait IdGen {
-    fn new_trace_id(&self) -> Option<TraceId>;
-    fn new_span_id(&self) -> Option<SpanId>;
+pub trait IdRng: Rng {
+    fn gen_trace_id(&self) -> Option<TraceId>;
+
+    fn gen_span_id(&self) -> Option<SpanId>;
 }
 
-impl<'a, T: IdGen + ?Sized> IdGen for &'a T {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        (**self).new_trace_id()
+impl<T: Rng + ?Sized> IdRng for T {
+    fn gen_trace_id(&self) -> Option<TraceId> {
+        let a = self.gen_u64()? as u128;
+        let b = (self.gen_u64()? as u128) << 64;
+
+        Some(TraceId::new(NonZeroU128::new(a | b)?))
     }
 
-    fn new_span_id(&self) -> Option<SpanId> {
-        (**self).new_span_id()
-    }
-}
+    fn gen_span_id(&self) -> Option<SpanId> {
+        let a = self.gen_u64()?;
 
-impl<'a, T: IdGen> IdGen for Option<T> {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        self.as_ref().and_then(|id| id.new_trace_id())
-    }
-
-    fn new_span_id(&self) -> Option<SpanId> {
-        self.as_ref().and_then(|id| id.new_span_id())
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<'a, T: IdGen + ?Sized + 'a> IdGen for alloc::boxed::Box<T> {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        (**self).new_trace_id()
-    }
-
-    fn new_span_id(&self) -> Option<SpanId> {
-        (**self).new_span_id()
-    }
-}
-
-impl IdGen for Empty {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        None
-    }
-
-    fn new_span_id(&self) -> Option<SpanId> {
-        None
-    }
-}
-
-mod internal {
-    use super::{SpanId, TraceId};
-
-    pub trait DispatchGenId {
-        fn dispatch_new_trace_id(&self) -> Option<TraceId>;
-        fn dispatch_new_span_id(&self) -> Option<SpanId>;
-    }
-
-    pub trait SealedIdGen {
-        fn erase_id_gen(&self) -> crate::internal::Erased<&dyn DispatchGenId>;
-    }
-}
-
-pub trait ErasedIdGen: internal::SealedIdGen {}
-
-impl<T: IdGen> ErasedIdGen for T {}
-
-impl<T: IdGen> internal::SealedIdGen for T {
-    fn erase_id_gen(&self) -> crate::internal::Erased<&dyn internal::DispatchGenId> {
-        crate::internal::Erased(self)
-    }
-}
-
-impl<T: IdGen> internal::DispatchGenId for T {
-    fn dispatch_new_trace_id(&self) -> Option<TraceId> {
-        self.new_trace_id()
-    }
-
-    fn dispatch_new_span_id(&self) -> Option<SpanId> {
-        self.new_span_id()
-    }
-}
-
-impl<'a> IdGen for dyn ErasedIdGen + 'a {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        self.erase_id_gen().0.dispatch_new_trace_id()
-    }
-
-    fn new_span_id(&self) -> Option<SpanId> {
-        self.erase_id_gen().0.dispatch_new_span_id()
-    }
-}
-
-impl<'a> IdGen for dyn ErasedIdGen + Send + Sync + 'a {
-    fn new_trace_id(&self) -> Option<TraceId> {
-        (self as &(dyn ErasedIdGen + 'a)).new_trace_id()
-    }
-
-    fn new_span_id(&self) -> Option<SpanId> {
-        (self as &(dyn ErasedIdGen + 'a)).new_span_id()
+        Some(SpanId::new(NonZeroU64::new(a)?))
     }
 }
 

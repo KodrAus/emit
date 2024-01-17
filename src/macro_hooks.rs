@@ -1,14 +1,14 @@
 use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
-    ambient,
     clock::Clock,
+    ctxt::Ctxt,
     emitter::Emitter,
     filter::Filter,
-    id::{SpanId, TraceId},
-    key::ToKey,
-    level::Level,
+    str::ToStr,
     props::Props,
+    rng::Rng,
+    runtime::Runtime,
     template::Template,
     value::{ToValue, Value},
 };
@@ -20,8 +20,9 @@ use std::error::Error;
 use crate::{
     base_emit, base_push_ctxt,
     frame::Frame,
+    id::{SpanId, TraceId},
     template::{Formatter, Part},
-    Key,
+    Str, Level,
 };
 
 /**
@@ -417,13 +418,13 @@ pub trait __PrivateKeyHook {
         Self: Sized;
 }
 
-impl<'a> __PrivateKeyHook for Key<'a> {
+impl<'a> __PrivateKeyHook for Str<'a> {
     fn __private_key_as_default(self) -> Self {
         self
     }
 
     fn __private_key_as_static(self, key: &'static str) -> Self {
-        Key::new(key)
+        Str::new(key)
     }
 
     fn __private_key_as<K: Into<Self>>(self, key: K) -> Self {
@@ -433,52 +434,52 @@ impl<'a> __PrivateKeyHook for Key<'a> {
 
 #[track_caller]
 pub fn __private_emit(
+    rt: &Runtime<impl Emitter, impl Filter, impl Ctxt, impl Clock, impl Rng>,
     to: impl Emitter,
     when: impl Filter,
     extent: impl ToExtent,
     tpl: Template,
     props: impl Props,
 ) {
-    let ambient = ambient::get();
-
     base_emit(
-        to.and(ambient),
-        when.and(ambient),
-        ambient,
-        extent.to_extent().or_else(|| ambient.now().to_extent()),
+        rt.emitter().and(to),
+        rt.filter().and(when),
+        rt.ctxt(),
+        extent.to_extent().or_else(|| rt.now().to_extent()),
         tpl,
         props,
     );
 }
 
 #[track_caller]
-pub fn __private_push_ctxt(props: impl Props) -> Frame<emit_core::ambient::Get> {
-    let ambient = ambient::get();
-
-    base_push_ctxt(ambient, props)
+pub fn __private_push_ctxt<C: Ctxt>(
+    rt: &Runtime<impl Emitter, impl Filter, C, impl Clock, impl Rng>,
+    props: impl Props,
+) -> Frame<&C> {
+    base_push_ctxt(rt.ctxt(), props)
 }
 
 pub use core::module_path as loc;
 
 #[repr(transparent)]
-pub struct __PrivateMacroProps<'a>([(Key<'a>, Option<Value<'a>>)]);
+pub struct __PrivateMacroProps<'a>([(Str<'a>, Option<Value<'a>>)]);
 
 impl __PrivateMacroProps<'static> {
-    pub fn new(props: &'static [(Key<'static>, Option<Value<'static>>)]) -> &'static Self {
+    pub fn new(props: &'static [(Str<'static>, Option<Value<'static>>)]) -> &'static Self {
         Self::new_ref(props)
     }
 }
 
 impl<'a> __PrivateMacroProps<'a> {
-    pub fn new_ref<'b>(props: &'b [(Key<'a>, Option<Value<'a>>)]) -> &'b Self {
+    pub fn new_ref<'b>(props: &'b [(Str<'a>, Option<Value<'a>>)]) -> &'b Self {
         unsafe {
-            &*(props as *const [(Key<'a>, Option<Value<'a>>)] as *const __PrivateMacroProps<'a>)
+            &*(props as *const [(Str<'a>, Option<Value<'a>>)] as *const __PrivateMacroProps<'a>)
         }
     }
 }
 
 impl<'a> Props for __PrivateMacroProps<'a> {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
@@ -493,8 +494,8 @@ impl<'a> Props for __PrivateMacroProps<'a> {
         ControlFlow::Continue(())
     }
 
-    fn get<'v, K: ToKey>(&'v self, key: K) -> Option<Value<'v>> {
-        let key = key.to_key();
+    fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
+        let key = key.to_str();
 
         self.0
             .binary_search_by(|(k, _)| k.cmp(&key))

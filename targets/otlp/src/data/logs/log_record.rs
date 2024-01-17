@@ -74,8 +74,8 @@ pub struct PropsLogRecordAttributes<P>(pub P);
 
 impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
-        let mut trace_id = [0; 32];
-        let mut span_id = [0; 16];
+        let mut trace_id = [0; 16];
+        let mut span_id = [0; 8];
         let mut level = emit_core::level::Level::default();
 
         stream.record_tuple_begin(None, None, None, None)?;
@@ -93,14 +93,14 @@ impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
                     emit_core::well_known::SPAN_ID_KEY => {
                         span_id = v
                             .to_span_id()
-                            .map(|span_id| span_id.to_hex())
+                            .map(|span_id| span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
                     emit_core::well_known::TRACE_ID_KEY => {
                         trace_id = v
                             .to_trace_id()
-                            .map(|trace_id| trace_id.to_hex())
+                            .map(|trace_id| trace_id.to_u128().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
@@ -130,29 +130,21 @@ impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
             |stream| sval::stream_display(stream, level),
         )?;
 
-        if trace_id != [0; 32] {
+        if trace_id != [0; 16] {
             stream_field(
                 &mut *stream,
                 &LOG_RECORD_TRACE_ID_LABEL,
                 &LOG_RECORD_TRACE_ID_INDEX,
-                |stream| {
-                    stream.binary_begin(Some(32))?;
-                    stream.binary_fragment_computed(&trace_id)?;
-                    stream.binary_end()
-                },
+                |stream| stream.value_computed(&sval::BinaryArray::new(&trace_id)),
             )?;
         }
 
-        if span_id != [0; 16] {
+        if span_id != [0; 8] {
             stream_field(
                 &mut *stream,
                 &LOG_RECORD_SPAN_ID_LABEL,
                 &LOG_RECORD_SPAN_ID_INDEX,
-                |stream| {
-                    stream.binary_begin(Some(16))?;
-                    stream.binary_fragment_computed(&span_id)?;
-                    stream.binary_end()
-                },
+                |stream| stream.value_computed(&sval::BinaryArray::new(&span_id)),
             )?;
         }
 

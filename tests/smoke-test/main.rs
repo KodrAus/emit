@@ -14,21 +14,32 @@ async fn main() {
     let emitter = emit::setup()
         .to(emit_otlp::proto()
             .logs(
-                emit_otlp::logs_http("http://localhost:5341/ingest/otlp/v1/logs")
+                emit_otlp::logs_http("http://localhost:4318/v1/logs")
                     .body(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
-            .traces(
-                emit_otlp::traces_http("http://localhost:5341/ingest/otlp/v1/traces")
+            /*.traces(
+                emit_otlp::traces_http("http://localhost:4318/v1/traces")
                     .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
-            )
+            )*/
             .resource(emit::props! {
                 #[emit::key("service.name")]
                 service_name: "smoke-test-rs",
+                #[emit::key("telemetry.sdk.language")]
+                language: "rust",
+                #[emit::key("telemetry.sdk.name")]
+                sdk: "emit",
+                #[emit::key("telemetry.sdk.version")]
+                version: "0.1"
             })
+            .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        .and_to(emit_term::stdout().plot_metrics_by_count(30))
+        //.and_to(emit_term::stdout().plot_metrics_by_count(30))
         .init();
+
+    emit::setup()
+        .to(emit_term::stdout().plot_metrics_by_count(30))
+        .init_internal();
 
     sample_metrics();
 

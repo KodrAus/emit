@@ -89,9 +89,9 @@ pub struct PropsSpanAttributes<P> {
 
 impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
-        let mut trace_id = [0; 32];
-        let mut span_id = [0; 16];
-        let mut parent_span_id = [0; 16];
+        let mut trace_id = [0; 16];
+        let mut span_id = [0; 8];
+        let mut parent_span_id = [0; 8];
         let mut level = emit_core::level::Level::default();
         let mut has_err = false;
 
@@ -110,21 +110,21 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
                     emit_core::well_known::SPAN_ID_KEY => {
                         span_id = v
                             .to_span_id()
-                            .map(|span_id| span_id.to_hex())
+                            .map(|span_id| span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
                     emit_core::well_known::SPAN_PARENT_KEY => {
                         parent_span_id = v
                             .to_span_id()
-                            .map(|parent_span_id| parent_span_id.to_hex())
+                            .map(|parent_span_id| parent_span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
                     emit_core::well_known::TRACE_ID_KEY => {
                         trace_id = v
                             .to_trace_id()
-                            .map(|trace_id| trace_id.to_hex())
+                            .map(|trace_id| trace_id.to_u128().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
@@ -137,42 +137,30 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
             },
         )?;
 
-        if trace_id != [0; 32] {
+        if trace_id != [0; 16] {
             stream_field(
                 &mut *stream,
                 &SPAN_TRACE_ID_LABEL,
                 &SPAN_TRACE_ID_INDEX,
-                |stream| {
-                    stream.binary_begin(Some(32))?;
-                    stream.binary_fragment_computed(&trace_id)?;
-                    stream.binary_end()
-                },
+                |stream| stream.value_computed(&sval::BinaryArray::new(&trace_id)),
             )?;
         }
 
-        if span_id != [0; 16] {
+        if span_id != [0; 8] {
             stream_field(
                 &mut *stream,
                 &SPAN_SPAN_ID_LABEL,
                 &SPAN_SPAN_ID_INDEX,
-                |stream| {
-                    stream.binary_begin(Some(16))?;
-                    stream.binary_fragment_computed(&span_id)?;
-                    stream.binary_end()
-                },
+                |stream| stream.value_computed(&sval::BinaryArray::new(&span_id)),
             )?;
         }
 
-        if parent_span_id != [0; 16] {
+        if parent_span_id != [0; 8] {
             stream_field(
                 &mut *stream,
                 &SPAN_PARENT_SPAN_ID_LABEL,
                 &SPAN_PARENT_SPAN_ID_INDEX,
-                |stream| {
-                    stream.binary_begin(Some(16))?;
-                    stream.binary_fragment_computed(&parent_span_id)?;
-                    stream.binary_end()
-                },
+                |stream| stream.value_computed(&sval::BinaryArray::new(&parent_span_id)),
             )?;
         }
 

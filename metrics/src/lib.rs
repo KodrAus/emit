@@ -9,7 +9,7 @@ use std::{
 
 use emit_core::{
     event::Event,
-    key::{Key, ToKey},
+    str::{Str, ToStr},
     props::Props,
     timestamp::Timestamp,
     value::{ToValue, Value},
@@ -21,8 +21,8 @@ use emit_core::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Metric<'m, T> {
-    name: Key<'m>,
-    kind: Key<'m>,
+    name: Str<'m>,
+    kind: Str<'m>,
     value: T,
 }
 
@@ -37,39 +37,39 @@ impl<'m> Metric<'m, Value<'m>> {
 }
 
 impl<'m, T> Metric<'m, T> {
-    pub const fn new(kind: Key<'m>, name: Key<'m>, value: T) -> Self {
+    pub const fn new(kind: Str<'m>, name: Str<'m>, value: T) -> Self {
         Metric { name, kind, value }
     }
 
-    pub const fn sum(name: Key<'m>, value: T) -> Self {
-        Metric::new(Key::new(METRIC_KIND_SUM), name, value)
+    pub const fn sum(name: Str<'m>, value: T) -> Self {
+        Metric::new(Str::new(METRIC_KIND_SUM), name, value)
     }
 
     pub fn is_sum(&self) -> bool {
         self.kind() == METRIC_KIND_SUM
     }
 
-    pub const fn min(name: Key<'m>, value: T) -> Self {
-        Metric::new(Key::new(METRIC_KIND_MIN), name, value)
+    pub const fn min(name: Str<'m>, value: T) -> Self {
+        Metric::new(Str::new(METRIC_KIND_MIN), name, value)
     }
 
     pub fn is_min(&self) -> bool {
         self.kind() == METRIC_KIND_MIN
     }
 
-    pub const fn max(name: Key<'m>, value: T) -> Self {
-        Metric::new(Key::new(METRIC_KIND_MAX), name, value)
+    pub const fn max(name: Str<'m>, value: T) -> Self {
+        Metric::new(Str::new(METRIC_KIND_MAX), name, value)
     }
 
     pub fn is_max(&self) -> bool {
         self.kind() == METRIC_KIND_MAX
     }
 
-    pub const fn name(&self) -> &Key<'m> {
+    pub const fn name(&self) -> &Str<'m> {
         &self.name
     }
 
-    pub const fn kind(&self) -> &Key<'m> {
+    pub const fn kind(&self) -> &Str<'m> {
         &self.kind
     }
 
@@ -83,13 +83,13 @@ impl<'m, T> Metric<'m, T> {
 }
 
 impl<'m, V: ToValue> Props for Metric<'m, V> {
-    fn for_each<'kv, F: FnMut(Key<'kv>, Value<'kv>) -> ControlFlow<()>>(
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for_each(METRIC_NAME_KEY.to_key(), self.name.to_value())?;
-        for_each(METRIC_VALUE_KEY.to_key(), self.value.to_value())?;
-        for_each(METRIC_KIND_KEY.to_key(), self.kind.to_value())?;
+        for_each(METRIC_NAME_KEY.to_str(), self.name.to_value())?;
+        for_each(METRIC_VALUE_KEY.to_str(), self.value.to_value())?;
+        for_each(METRIC_KIND_KEY.to_str(), self.kind.to_value())?;
 
         ControlFlow::Continue(())
     }

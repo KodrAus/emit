@@ -1,12 +1,14 @@
 use std::{
+    future::Future,
+    mem,
     pin::Pin,
     sync::Mutex,
-    task::{Context, Poll},
+    task::{self, Context, Poll},
 };
 
 use bytes::Buf;
 use hyper::{
-    body::{Body, Frame, SizeHint},
+    body::{self, Body, Frame, SizeHint},
     client::conn::{http1, http1::SendRequest},
     Method, Request, Uri,
 };
@@ -21,6 +23,49 @@ use crate::{
 pub(crate) struct HttpConnection {
     uri: Uri,
     sender: Mutex<Option<SendRequest<HttpBody>>>,
+}
+
+pub(crate) struct HttpResponse {
+    res: hyper::Response<body::Incoming>,
+}
+
+impl HttpResponse {
+    pub fn status(&self) -> u16 {
+        self.res.status().as_u16()
+    }
+
+    pub async fn read_to_vec(mut self) -> Result<Vec<u8>, Error> {
+        struct BufNext<'a>(&'a mut body::Incoming, &'a mut Vec<u8>);
+
+        impl<'a> Future for BufNext<'a> {
+            type Output = Result<bool, Error>;
+
+            fn poll(
+                mut self: Pin<&mut Self>,
+                ctx: &mut task::Context<'_>,
+            ) -> task::Poll<Self::Output> {
+                match Pin::new(&mut self.0).poll_frame(ctx) {
+                    Poll::Ready(Some(Ok(frame))) => {
+                        if let Some(frame) = frame.data_ref() {
+                            self.1.extend_from_slice(frame);
+                        }
+
+                        Poll::Ready(Ok(true))
+                    }
+                    Poll::Ready(None) => Poll::Ready(Ok(false)),
+                    Poll::Ready(Some(Err(e))) => Poll::Ready(Err(Error::new(e))),
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
+
+        let frame = self.res.body_mut();
+        let mut body = Vec::new();
+
+        while BufNext(frame, &mut body).await? {}
+
+        Ok(body)
+    }
 }
 
 impl HttpConnection {
@@ -39,7 +84,7 @@ impl HttpConnection {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
-    pub async fn send(&self, body: PreEncoded) -> Result<(), Error> {
+    pub async fn send(&self, body: PreEncoded) -> Result<HttpResponse, Error> {
         let mut sender = match self.poison() {
             Some(sender) => sender,
             None => {
@@ -62,11 +107,11 @@ impl HttpConnection {
             }
         };
 
-        send_request(&mut sender, &self.uri, body).await?;
+        let res = send_request(&mut sender, &self.uri, body).await?;
 
         self.unpoison(sender);
 
-        Ok(())
+        Ok(HttpResponse { res })
     }
 }
 
@@ -74,8 +119,8 @@ async fn send_request(
     sender: &mut SendRequest<HttpBody>,
     uri: &Uri,
     body: PreEncoded,
-) -> Result<(), Error> {
-    sender
+) -> Result<hyper::Response<body::Incoming>, Error> {
+    let res = sender
         .send_request(
             Request::builder()
                 .uri(uri)
@@ -93,7 +138,7 @@ async fn send_request(
         .await
         .map_err(Error::new)?;
 
-    Ok(())
+    Ok(res)
 }
 
 pub(crate) struct HttpBody(Option<PreEncodedCursor>);

@@ -1,7 +1,6 @@
 use core::time::Duration;
 
 use emit_core::{
-    ambient::Ambient,
     ctxt::Ctxt,
     emitter::{self, Emitter},
     empty::Empty,
@@ -83,17 +82,18 @@ impl<
 where
     TCtxt::Frame: Send + 'static,
 {
-    #[must_use = "call `blocking_flush(std::time::Duration::from_secs(5))` at the end of `main` to ensure events are flushed."]
+    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
     pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {
-        let ambient = emit_core::ambient::init(
-            Ambient::new()
-                .with_emitter(self.emitter)
-                .with_filter(self.filter)
-                .with_ctxt(self.ctxt)
-                .with_clock(self.platform.clock)
-                .with_id_gen(self.platform.id_gen),
-        )
-        .expect("already initialized");
+        let ambient = emit_core::runtime::SHARED
+            .init(
+                emit_core::runtime::Runtime::new()
+                    .with_emitter(self.emitter)
+                    .with_filter(self.filter)
+                    .with_ctxt(self.ctxt)
+                    .with_clock(self.platform.clock)
+                    .with_id_gen(self.platform.rng),
+            )
+            .expect("already initialized");
 
         Init {
             emitter: *ambient.emitter(),

@@ -232,7 +232,10 @@ impl OtlpClientBuilder {
                 let mut r = Ok(());
 
                 if let Some(client) = client.logs {
-                    if let Err(e) = client.send(logs, logs::encode_request).await {
+                    if let Err(e) = client
+                        .send(logs, logs::encode_request, logs::decode_response)
+                        .await
+                    {
                         r = Err(e.map(|logs| Channel {
                             logs,
                             traces: Vec::new(),
@@ -241,7 +244,10 @@ impl OtlpClientBuilder {
                 }
 
                 if let Some(client) = client.traces {
-                    if let Err(e) = client.send(traces, traces::encode_request).await {
+                    if let Err(e) = client
+                        .send(traces, traces::encode_request, traces::decode_response)
+                        .await
+                    {
                         r = if let Err(re) = r {
                             Err(re.map(|mut channel| {
                                 channel.traces = e.into_retryable();
@@ -324,6 +330,7 @@ impl RawClient {
             Option<&PreEncoded>,
             &[PreEncoded],
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
+        decode: impl FnOnce(Result<&[u8], &[u8]>),
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
         match self {
             RawClient::Http {
@@ -331,9 +338,22 @@ impl RawClient {
                 ref resource,
                 ref scope,
             } => {
-                http.send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
+                let res = http
+                    .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                     .await
                     .map_err(|e| BatchError::no_retry(e))?;
+
+                let status = res.status();
+                let body = res
+                    .read_to_vec()
+                    .await
+                    .map_err(|e| BatchError::no_retry(e))?;
+
+                if status >= 200 && status < 300 {
+                    decode(Ok(&body));
+                } else {
+                    decode(Err(&body));
+                }
             }
         }
 

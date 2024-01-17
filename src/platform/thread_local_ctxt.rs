@@ -6,7 +6,7 @@ use std::{
 
 use emit_core::{
     ctxt::Ctxt,
-    key::Key,
+    str::Str,
     props::Props,
     value::{OwnedValue, Value},
 };
@@ -23,11 +23,11 @@ pub struct ThreadLocalCtxt;
 
 #[derive(Clone)]
 pub struct ThreadLocalSpan {
-    props: HashMap<Key<'static>, OwnedValue>,
+    props: HashMap<Str<'static>, OwnedValue>,
 }
 
 impl Props for ThreadLocalSpan {
-    fn for_each<'a, F: FnMut(Key<'a>, Value<'a>) -> ControlFlow<()>>(
+    fn for_each<'a, F: FnMut(Str<'a>, Value<'a>) -> ControlFlow<()>>(
         &'a self,
         mut for_each: F,
     ) -> ControlFlow<()> {

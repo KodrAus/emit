@@ -64,3 +64,7 @@ pub(crate) fn encode_request(
         },
     )))
 }
+
+pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
+    println!("body: {:?}", body);
+}

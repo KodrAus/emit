@@ -1,3 +1,5 @@
+use emit_core::value::FromValue;
+
 use crate::value::{ToValue, Value};
 use core::{fmt, str::FromStr};
 
@@ -85,11 +87,12 @@ impl ToValue for Level {
     }
 }
 
-impl<'v> Value<'v> {
-    pub fn to_level(&self) -> Option<Level> {
-        self.downcast_ref::<Level>()
+impl<'v> FromValue<'v> for Level {
+    fn from_value(value: &Value<'v>) -> Option<Self> {
+        value
+            .downcast_ref::<Level>()
             .copied()
-            .or_else(|| self.parse())
+            .or_else(|| value.parse())
     }
 }
 
