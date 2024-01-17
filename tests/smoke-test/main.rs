@@ -34,7 +34,7 @@ async fn main() {
             .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        //.and_to(emit_term::stdout().plot_metrics_by_count(30))
+        .and_to(emit_term::stdout().plot_metrics_by_count(30))
         .init();
 
     emit::setup()

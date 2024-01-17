@@ -4,7 +4,7 @@ use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write, sync::Mutex};
 
 use emit::{
-    well_known::{METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY},
+    well_known::{METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY, LOCATION_KEY},
     Event,
 };
 use emit_metrics::{Bucketing, MetricsCollector};
@@ -293,6 +293,10 @@ fn print_event(
         }
     }
 
+    if let Some(loc) = evt.props().get(LOCATION_KEY) {
+        write_fg(buf, format_args!("{} ", loc), LOCATION);
+    }
+
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");
 
@@ -396,6 +400,8 @@ impl<'a> emit::template::Write for Writer<'a> {
         Ok(())
     }
 }
+
+const LOCATION: Color = Color::Ansi256(244);
 
 const TEXT: Color = Color::Ansi256(69);
 const NUMBER: Color = Color::Ansi256(135);
