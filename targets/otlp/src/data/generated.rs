@@ -46,7 +46,7 @@ use serde::ser::{
 
 use common::v1::{any_value::Value, AnyValue, ArrayValue, KeyValue, KeyValueList};
 
-pub(crate) fn to_value(value: emit_core::value::Value) -> Option<AnyValue> {
+pub(crate) fn to_value(value: emit::value::Value) -> Option<AnyValue> {
     value.serialize(ValueSerializer).ok()
 }
 

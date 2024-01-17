@@ -24,8 +24,28 @@ impl<'v> Value<'v> {
         Value(self.0.by_ref())
     }
 
+    pub fn pull<'a, T: FromValue<'v>>(self) -> Option<T> {
+        T::from_value(self)
+    }
+
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
         self.0.downcast_ref()
+    }
+
+    pub fn parse<T: FromStr>(&self) -> Option<T> {
+        struct Extract<T>(Option<T>);
+
+        impl<'v, T: FromStr> Visitor<'v> for Extract<T> {
+            fn visit_any(&mut self, _: Value) {}
+
+            fn visit_str(&mut self, value: &str) {
+                self.0 = value.parse().ok();
+            }
+        }
+
+        let mut visitor = Extract(None);
+        self.visit(&mut visitor);
+        visitor.0
     }
 
     pub fn visit(&self, visitor: impl Visitor<'v>) {
@@ -48,26 +68,6 @@ impl<'v> Value<'v> {
         let _ = self.0.visit(Visit(visitor));
     }
 
-    pub fn cast<T: FromValue<'v>>(&self) -> Option<T> {
-        T::from_value(self)
-    }
-
-    pub fn parse<T: FromStr>(&self) -> Option<T> {
-        struct Extract<T>(Option<T>);
-
-        impl<'v, T: FromStr> Visitor<'v> for Extract<T> {
-            fn visit_any(&mut self, _: Value) {}
-
-            fn visit_str(&mut self, value: &str) {
-                self.0 = value.parse().ok();
-            }
-        }
-
-        let mut visitor = Extract(None);
-        self.visit(&mut visitor);
-        visitor.0
-    }
-
     pub fn to_borrowed_str(&self) -> Option<&'v str> {
         self.0.to_borrowed_str()
     }
@@ -78,6 +78,10 @@ impl<'v> Value<'v> {
 
     pub fn as_f64(&self) -> f64 {
         self.0.as_f64()
+    }
+
+    pub fn to_usize(&self) -> Option<usize> {
+        self.0.to_u64()?.try_into().ok()
     }
 }
 
@@ -144,6 +148,12 @@ pub trait ToValue {
     fn to_value(&self) -> Value;
 }
 
+pub trait FromValue<'v> {
+    fn from_value(value: Value<'v>) -> Option<Self>
+    where
+        Self: Sized;
+}
+
 impl<'a, T: ToValue + ?Sized> ToValue for &'a T {
     fn to_value(&self) -> Value {
         (**self).to_value()
@@ -153,6 +163,12 @@ impl<'a, T: ToValue + ?Sized> ToValue for &'a T {
 impl<'v> ToValue for Value<'v> {
     fn to_value(&self) -> Value {
         self.by_ref()
+    }
+}
+
+impl<'v> FromValue<'v> for Value<'v> {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        Some(value)
     }
 }
 
@@ -180,6 +196,12 @@ impl<'v> From<&'v str> for Value<'v> {
     }
 }
 
+impl<'v> FromValue<'v> for &'v str {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        value.to_borrowed_str()
+    }
+}
+
 impl ToValue for usize {
     fn to_value(&self) -> Value {
         Value::from(*self)
@@ -189,6 +211,12 @@ impl ToValue for usize {
 impl<'v> From<usize> for Value<'v> {
     fn from(value: usize) -> Self {
         Value(value.into())
+    }
+}
+
+impl<'v> FromValue<'v> for usize {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        value.to_usize()
     }
 }
 
@@ -204,18 +232,9 @@ impl<'v> From<f64> for Value<'v> {
     }
 }
 
-pub trait FromValue<'v> {
-    fn from_value(value: &Value<'v>) -> Option<Self>
-    where
-        Self: Sized;
-}
-
-impl<'v> FromValue<'v> for &'v str {
-    fn from_value(value: &Value<'v>) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        value.to_borrowed_str()
+impl<'v> FromValue<'v> for f64 {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        value.to_f64()
     }
 }
 
@@ -239,7 +258,7 @@ mod alloc_support {
             OwnedValue(self.0.to_owned())
         }
 
-        pub fn to_str(&self) -> Option<Cow<'v, str>> {
+        pub fn to_cow_str(&self) -> Option<Cow<'v, str>> {
             self.0.to_str()
         }
     }

@@ -49,6 +49,10 @@ pub trait Props {
     fn by_ref(&self) -> ByRef<Self> {
         ByRef(self)
     }
+
+    fn pull<'kv, P: FromProps<'kv>>(&'kv self) -> Option<P> {
+        P::from_props(self)
+    }
 }
 
 impl<'a, P: Props + ?Sized> Props for &'a P {
@@ -198,6 +202,12 @@ impl<T: Props, F: Fn(Str, Value) -> bool> Props for Filter<T, F> {
             _ => None,
         }
     }
+}
+
+pub trait FromProps<'kv> {
+    fn from_props<P: Props + ?Sized>(props: &'kv P) -> Option<Self>
+    where
+        Self: Sized;
 }
 
 mod internal {

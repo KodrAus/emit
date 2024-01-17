@@ -84,14 +84,26 @@ where
 {
     #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
     pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {
-        let ambient = emit_core::runtime::SHARED
+        self.init_rt(&emit_core::runtime::SHARED)
+    }
+
+    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
+    pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
+        self.init_rt(&emit_core::runtime::INTERNAL)
+    }
+
+    fn init_rt(
+        self,
+        rt: &'static emit_core::runtime::Ambient,
+    ) -> Init<&'static TEmitter, &'static TCtxt> {
+        let ambient = rt
             .init(
                 emit_core::runtime::Runtime::new()
                     .with_emitter(self.emitter)
                     .with_filter(self.filter)
                     .with_ctxt(self.ctxt)
                     .with_clock(self.platform.clock)
-                    .with_id_gen(self.platform.rng),
+                    .with_rng(self.platform.rng),
             )
             .expect("already initialized");
 

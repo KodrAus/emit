@@ -72,11 +72,11 @@ pub struct InlineLogRecordAttributes<'a> {
 
 pub struct PropsLogRecordAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
+impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         let mut trace_id = [0; 16];
         let mut span_id = [0; 8];
-        let mut level = emit_core::level::Level::default();
+        let mut level = emit::level::Level::default();
 
         stream.record_tuple_begin(None, None, None, None)?;
 
@@ -86,20 +86,22 @@ impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
             &LOG_RECORD_ATTRIBUTES_INDEX,
             |stream| {
                 stream_attributes(stream, &self.0, |k, v| match k.as_str() {
-                    emit_core::well_known::LVL_KEY => {
-                        level = v.to_level().unwrap_or_default();
+                    emit::well_known::LVL_KEY => {
+                        level = v.by_ref().pull::<emit::Level>().unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::SPAN_ID_KEY => {
+                    emit::well_known::SPAN_ID_KEY => {
                         span_id = v
-                            .to_span_id()
+                            .by_ref()
+                            .pull::<emit::SpanId>()
                             .map(|span_id| span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::TRACE_ID_KEY => {
+                    emit::well_known::TRACE_ID_KEY => {
                         trace_id = v
-                            .to_trace_id()
+                            .by_ref()
+                            .pull::<emit::TraceId>()
                             .map(|trace_id| trace_id.to_u128().to_be_bytes())
                             .unwrap_or_default();
                         true
@@ -110,10 +112,10 @@ impl<P: emit_core::props::Props> sval::Value for PropsLogRecordAttributes<P> {
         )?;
 
         let severity_number = match level {
-            emit_core::level::Level::Debug => SeverityNumber::Debug as i32,
-            emit_core::level::Level::Info => SeverityNumber::Info as i32,
-            emit_core::level::Level::Warn => SeverityNumber::Warn as i32,
-            emit_core::level::Level::Error => SeverityNumber::Error as i32,
+            emit::level::Level::Debug => SeverityNumber::Debug as i32,
+            emit::level::Level::Info => SeverityNumber::Info as i32,
+            emit::level::Level::Warn => SeverityNumber::Warn as i32,
+            emit::level::Level::Error => SeverityNumber::Error as i32,
         };
 
         stream_field(

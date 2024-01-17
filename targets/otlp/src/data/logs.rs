@@ -2,7 +2,6 @@ mod export_logs_service;
 mod log_record;
 
 use emit_batcher::BatchError;
-use emit_core::{clock::Clock, emitter::Emitter};
 use prost::Message;
 
 pub use self::{export_logs_service::*, log_record::*};
@@ -16,7 +15,7 @@ pub(crate) struct EventEncoder {
 impl EventEncoder {
     pub(crate) fn encode_event(
         &self,
-        evt: &emit_core::event::Event<impl emit_core::props::Props>,
+        evt: &emit::event::Event<impl emit::props::Props>,
     ) -> PreEncoded {
         let time_unix_nano = evt
             .extent()
@@ -66,48 +65,22 @@ pub(crate) fn encode_request(
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
     match body {
         Ok(body) => {
-            let res =
+            let response =
                 crate::data::generated::collector::logs::v1::ExportLogsServiceResponse::decode(
                     body,
                 )
                 .unwrap();
 
-            let emitter = emit_core::ambient::get_internal();
-
-            emitter.emit(&emit_core::event::Event::new(
-                emitter.now(),
-                emit_core::template::Template::new({
-                    const TEMPLATE: &'static [emit_core::template::Part<'static>] = &[
-                        emit_core::template::Part::text("received "),
-                        emit_core::template::Part::hole("response"),
-                    ];
-
-                    TEMPLATE
-                }),
-                &[("response", emit_core::value::Value::from_debug(&res))],
-            ));
+            emit::debug!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
         }
         Err(body) => {
-            let res =
+            let response =
                 crate::data::generated::collector::logs::v1::ExportLogsServiceResponse::decode(
                     body,
                 )
                 .unwrap();
 
-            let emitter = emit_core::ambient::get_internal();
-
-            emitter.emit(&emit_core::event::Event::new(
-                emitter.now(),
-                emit_core::template::Template::new({
-                    const TEMPLATE: &'static [emit_core::template::Part<'static>] = &[
-                        emit_core::template::Part::text("received "),
-                        emit_core::template::Part::hole("response"),
-                    ];
-
-                    TEMPLATE
-                }),
-                &[("response", emit_core::value::Value::from_debug(&res))],
-            ));
+            emit::warn!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
         }
     }
 }

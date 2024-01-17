@@ -7,7 +7,6 @@ use crate::{
 };
 
 pub struct ExpandTokens {
-    pub receiver: TokenStream,
     pub level: TokenStream,
     pub input: TokenStream,
 }
@@ -16,6 +15,7 @@ struct Args {
     extent: TokenStream,
     to: TokenStream,
     when: TokenStream,
+    rt: Option<TokenStream>,
 }
 
 impl Parse for Args {
@@ -35,16 +35,22 @@ impl Parse for Args {
 
             Ok(quote!(#expr))
         });
+        let mut rt = Arg::token_stream("rt", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut extent, &mut to, &mut when],
+            [&mut extent, &mut to, &mut when, &mut rt],
         )?;
 
         Ok(Args {
             extent: extent.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
+            rt: rt.take(),
         })
     }
 }
@@ -80,19 +86,34 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
     let template_tokens = template.template_tokens();
 
-    let receiver_tokens = opts.receiver;
-
-    Ok(quote!({
-        match (#(#props_match_input_tokens),*) {
-            (#(#props_match_binding_tokens),*) => {
-                emit::#receiver_tokens(
-                    #to_tokens,
-                    #when_tokens,
-                    #extent_tokens,
-                    #template_tokens,
-                    #props_tokens,
-                )
+    if let Some(rt_tokens) = args.rt {
+        Ok(quote!({
+            match (#(#props_match_input_tokens),*) {
+                (#(#props_match_binding_tokens),*) => {
+                    emit::__private::__private_emit_rt(
+                        #rt_tokens,
+                        #to_tokens,
+                        #when_tokens,
+                        #extent_tokens,
+                        #template_tokens,
+                        #props_tokens,
+                    )
+                }
             }
-        }
-    }))
+        }))
+    } else {
+        Ok(quote!({
+            match (#(#props_match_input_tokens),*) {
+                (#(#props_match_binding_tokens),*) => {
+                    emit::__private::__private_emit(
+                        #to_tokens,
+                        #when_tokens,
+                        #extent_tokens,
+                        #template_tokens,
+                        #props_tokens,
+                    )
+                }
+            }
+        }))
+    }
 }

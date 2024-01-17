@@ -73,8 +73,8 @@ pub(crate) fn stream_field<'sval, S: sval::Stream<'sval> + ?Sized>(
 
 pub(crate) fn stream_attributes<'sval>(
     stream: &mut (impl sval::Stream<'sval> + ?Sized),
-    props: &'sval impl emit_core::props::Props,
-    mut for_each: impl FnMut(&emit_core::str::Str, &emit_core::value::Value) -> bool,
+    props: &'sval impl emit::props::Props,
+    mut for_each: impl FnMut(&emit::str::Str, &emit::value::Value) -> bool,
 ) -> sval::Result {
     stream.seq_begin(None)?;
 
@@ -108,10 +108,7 @@ pub(crate) fn stream_attributes<'sval>(
     stream.seq_end()
 }
 
-pub(crate) type MessageFormatter = dyn Fn(
-        &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
-        &mut fmt::Formatter,
-    ) -> fmt::Result
+pub(crate) type MessageFormatter = dyn Fn(&emit::event::Event<&dyn emit::props::ErasedProps>, &mut fmt::Formatter) -> fmt::Result
     + Send
     + Sync;
 
@@ -121,10 +118,10 @@ pub(crate) fn default_message_formatter() -> Box<MessageFormatter> {
 
 pub(crate) struct MessageRenderer<'a, P> {
     pub fmt: &'a MessageFormatter,
-    pub evt: &'a emit_core::event::Event<'a, P>,
+    pub evt: &'a emit::event::Event<'a, P>,
 }
 
-impl<'a, P: emit_core::props::Props> fmt::Display for MessageRenderer<'a, P> {
+impl<'a, P: emit::props::Props> fmt::Display for MessageRenderer<'a, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (self.fmt)(&self.evt.erase(), f)
     }

@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 
 use crate::{
     empty::Empty,
-    str::Str,
     props::Props,
+    str::Str,
     value::{ToValue, Value},
 };
 

@@ -14,7 +14,7 @@ pub(crate) struct EventEncoder {
 impl EventEncoder {
     pub(crate) fn encode_event(
         &self,
-        evt: &emit_core::event::Event<impl emit_core::props::Props>,
+        evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
         let (start_time_unix_nano, end_time_unix_nano) = evt
             .extent()

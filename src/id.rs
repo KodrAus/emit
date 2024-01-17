@@ -1,4 +1,9 @@
-use emit_core::{rng::Rng, value::FromValue};
+use emit_core::{
+    props::{FromProps, Props},
+    rng::Rng,
+    value::FromValue,
+    well_known::{SPAN_ID_KEY, TRACE_ID_KEY},
+};
 
 use crate::value::{ToValue, Value};
 use core::{
@@ -38,11 +43,17 @@ impl ToValue for TraceId {
 }
 
 impl<'v> FromValue<'v> for TraceId {
-    fn from_value(value: &Value<'v>) -> Option<Self> {
+    fn from_value(value: Value<'v>) -> Option<Self> {
         value
             .downcast_ref::<TraceId>()
             .copied()
             .or_else(|| TraceId::try_from_hex(value).ok())
+    }
+}
+
+impl<'v> FromProps<'v> for TraceId {
+    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
+        props.get(TRACE_ID_KEY)?.pull()
     }
 }
 
@@ -139,11 +150,17 @@ impl ToValue for SpanId {
 }
 
 impl<'v> FromValue<'v> for SpanId {
-    fn from_value(value: &Value<'v>) -> Option<Self> {
+    fn from_value(value: Value<'v>) -> Option<Self> {
         value
             .downcast_ref::<SpanId>()
             .copied()
             .or_else(|| SpanId::try_from_hex(value).ok())
+    }
+}
+
+impl<'v> FromProps<'v> for SpanId {
+    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
+        props.get(SPAN_ID_KEY)?.pull()
     }
 }
 

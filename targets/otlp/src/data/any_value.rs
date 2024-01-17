@@ -110,7 +110,7 @@ impl<'a, K: sval_ref::ValueRef<'a>, V: sval_ref::ValueRef<'a>> sval_ref::ValueRe
     }
 }
 
-pub struct EmitValue<'a>(pub emit_core::value::Value<'a>);
+pub struct EmitValue<'a>(pub emit::value::Value<'a>);
 
 impl<'a> sval::Value for EmitValue<'a> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {

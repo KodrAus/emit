@@ -1,4 +1,8 @@
-use emit_core::value::FromValue;
+use emit_core::{
+    props::{FromProps, Props},
+    value::FromValue,
+    well_known::LVL_KEY,
+};
 
 use crate::value::{ToValue, Value};
 use core::{fmt, str::FromStr};
@@ -88,11 +92,17 @@ impl ToValue for Level {
 }
 
 impl<'v> FromValue<'v> for Level {
-    fn from_value(value: &Value<'v>) -> Option<Self> {
+    fn from_value(value: Value<'v>) -> Option<Self> {
         value
             .downcast_ref::<Level>()
             .copied()
             .or_else(|| value.parse())
+    }
+}
+
+impl<'v> FromProps<'v> for Level {
+    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
+        props.get(LVL_KEY)?.pull()
     }
 }
 

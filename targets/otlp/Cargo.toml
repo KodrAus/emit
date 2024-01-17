@@ -6,11 +6,12 @@ edition = "2021"
 [features]
 default = ["http", "grpc"]
 http = ["dep:hyper", "dep:hyper-util"]
-grpc = ["dep:prost", "dep:serde", "emit_core/serde"]
+grpc = ["dep:prost", "dep:serde", "emit/serde"]
 
-[dependencies.emit_core]
-path = "../../core"
+[dependencies.emit]
+path = "../../"
 features = ["std", "sval"]
+default-features = false
 
 [dependencies.emit_batcher]
 path = "../../batcher"

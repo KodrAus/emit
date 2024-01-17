@@ -6,8 +6,8 @@ use std::{
 
 use emit_core::{
     ctxt::Ctxt,
-    str::Str,
     props::Props,
+    str::Str,
     value::{OwnedValue, Value},
 };
 

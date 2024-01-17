@@ -4,7 +4,6 @@
 extern crate alloc;
 
 use emit_core::extent::ToExtent;
-use id::{IdRng, SpanId, TraceId};
 
 use crate::frame::Frame;
 
@@ -13,14 +12,13 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, str, props, rng, runtime, template,
-    timestamp, value,
+    clock, ctxt, emitter, empty, event, extent, filter, props, rng, runtime, str, template,
+    timestamp, value, well_known,
 };
 
 pub mod frame;
 pub mod id;
 pub mod level;
-pub mod well_known;
 
 pub use self::{
     clock::{Clock, Timer},
@@ -29,14 +27,14 @@ pub use self::{
     event::Event,
     extent::Extent,
     filter::Filter,
-    str::Str,
+    id::{IdRng, SpanId, TraceId},
     level::Level,
     props::Props,
     rng::Rng,
+    str::Str,
     template::Template,
     timestamp::Timestamp,
     value::Value,
-    well_known::WellKnown,
 };
 
 mod macro_hooks;
@@ -81,9 +79,9 @@ pub fn emit(evt: &Event<impl Props>) {
     base_emit(ambient, ambient, ambient, extent, tpl, props);
 }
 
-pub type PushCtxt = Frame<emit_core::runtime::AmbientRuntime<'static>>;
+pub type PushCtxt = Frame<&'static emit_core::runtime::AmbientRuntime<'static>>;
 
-pub type StartTimer = Timer<emit_core::runtime::AmbientRuntime<'static>>;
+pub type StartTimer = Timer<&'static emit_core::runtime::AmbientRuntime<'static>>;
 
 #[track_caller]
 pub fn now() -> Option<Timestamp> {
@@ -115,7 +113,7 @@ pub fn current_span_id() -> Option<SpanId> {
     let mut span_id = None;
 
     emit_core::runtime::SHARED.get().with_current(|ctxt| {
-        span_id = ctxt.span_id();
+        span_id = ctxt.pull();
     });
 
     span_id
@@ -131,7 +129,7 @@ pub fn current_trace_id() -> Option<TraceId> {
     let mut trace_id = None;
 
     emit_core::runtime::SHARED.get().with_current(|ctxt| {
-        trace_id = ctxt.trace_id();
+        trace_id = ctxt.pull();
     });
 
     trace_id

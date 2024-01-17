@@ -183,15 +183,15 @@ impl<'k> ToValue for Str<'k> {
     }
 }
 
-impl<'v> Value<'v> {
-    pub fn to_key(&self) -> Option<Str<'v>> {
+impl<'k> FromValue<'k> for Str<'k> {
+    fn from_value<'a>(value: Value<'k>) -> Option<Self> {
         #[cfg(feature = "alloc")]
         {
-            self.to_str().map(Str::new_cow_ref)
+            value.to_cow_str().map(Str::new_cow_ref)
         }
         #[cfg(not(feature = "alloc"))]
         {
-            self.to_borrowed_str().map(Str::new_ref)
+            value.to_borrowed_str().map(Str::new_ref)
         }
     }
 }
@@ -288,4 +288,4 @@ mod alloc_support {
     }
 }
 
-use crate::value::{ToValue, Value};
+use crate::value::{FromValue, ToValue, Value};

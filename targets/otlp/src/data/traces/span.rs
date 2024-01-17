@@ -87,12 +87,12 @@ pub struct PropsSpanAttributes<P> {
     pub props: P,
 }
 
-impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
+impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         let mut trace_id = [0; 16];
         let mut span_id = [0; 8];
         let mut parent_span_id = [0; 8];
-        let mut level = emit_core::level::Level::default();
+        let mut level = emit::level::Level::default();
         let mut has_err = false;
 
         stream.record_tuple_begin(None, None, None, None)?;
@@ -103,32 +103,35 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
             &SPAN_ATTRIBUTES_INDEX,
             |stream| {
                 stream_attributes(stream, &self.props, |k, v| match k.as_str() {
-                    emit_core::well_known::LVL_KEY => {
-                        level = v.to_level().unwrap_or_default();
+                    emit::well_known::LVL_KEY => {
+                        level = v.by_ref().pull().unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::SPAN_ID_KEY => {
+                    emit::well_known::SPAN_ID_KEY => {
                         span_id = v
-                            .to_span_id()
+                            .by_ref()
+                            .pull::<emit::SpanId>()
                             .map(|span_id| span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::SPAN_PARENT_KEY => {
+                    emit::well_known::SPAN_PARENT_KEY => {
                         parent_span_id = v
-                            .to_span_id()
+                            .by_ref()
+                            .pull::<emit::SpanId>()
                             .map(|parent_span_id| parent_span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::TRACE_ID_KEY => {
+                    emit::well_known::TRACE_ID_KEY => {
                         trace_id = v
-                            .to_trace_id()
+                            .by_ref()
+                            .pull::<emit::TraceId>()
                             .map(|trace_id| trace_id.to_u128().to_be_bytes())
                             .unwrap_or_default();
                         true
                     }
-                    emit_core::well_known::ERR_KEY => {
+                    emit::well_known::ERR_KEY => {
                         has_err = true;
                         false
                     }
@@ -165,7 +168,7 @@ impl<P: emit_core::props::Props> sval::Value for PropsSpanAttributes<P> {
         }
 
         if has_err {
-            let err = self.props.get(emit_core::well_known::ERR_KEY).unwrap();
+            let err = self.props.get(emit::well_known::ERR_KEY).unwrap();
 
             stream_field(
                 &mut *stream,
@@ -240,7 +243,7 @@ pub struct InlineEventAttributes<'a> {
 
 pub struct PropsEventAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for PropsEventAttributes<P> {
+impl<P: emit::props::Props> sval::Value for PropsEventAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, None)?;
 

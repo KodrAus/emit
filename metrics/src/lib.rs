@@ -9,13 +9,13 @@ use std::{
 
 use emit_core::{
     event::Event,
+    props::{FromProps, Props},
     str::{Str, ToStr},
-    props::Props,
     timestamp::Timestamp,
-    value::{ToValue, Value},
+    value::{FromValue, ToValue, Value},
     well_known::{
-        WellKnown, METRIC_KIND_KEY, METRIC_KIND_MAX, METRIC_KIND_MIN, METRIC_KIND_SUM,
-        METRIC_NAME_KEY, METRIC_VALUE_KEY,
+        METRIC_KIND_KEY, METRIC_KIND_MAX, METRIC_KIND_MIN, METRIC_KIND_SUM, METRIC_NAME_KEY,
+        METRIC_VALUE_KEY,
     },
 };
 
@@ -26,12 +26,12 @@ pub struct Metric<'m, T> {
     value: T,
 }
 
-impl<'m> Metric<'m, Value<'m>> {
-    pub fn from_props(props: &'m (impl Props + ?Sized)) -> Option<Self> {
+impl<'m, V: FromValue<'m>> FromProps<'m> for Metric<'m, V> {
+    fn from_props<P: Props + ?Sized>(props: &'m P) -> Option<Self> {
         Some(Metric::new(
-            props.metric_kind()?,
-            props.metric_name()?,
-            props.metric_value()?,
+            props.get(METRIC_KIND_KEY)?.pull()?,
+            props.get(METRIC_NAME_KEY)?.pull()?,
+            props.get(METRIC_VALUE_KEY)?.pull()?,
         ))
     }
 }
@@ -157,12 +157,14 @@ impl MetricsCollector {
     pub fn record_metric(&mut self, evt: &Event<impl Props>) -> bool {
         if let (Some(extent), Some(metric)) = (
             evt.extent().and_then(|extent| extent.as_point()),
-            Metric::from_props(evt.props()),
+            evt.props().pull::<Metric<Value>>(),
         ) {
             if metric.is_sum() {
-                if let Some(value) = metric.value().to_f64() {
-                    return self.record_sum_point(metric.name().to_cow(), *extent, value);
-                }
+                return self.record_sum_point(
+                    metric.name().to_cow(),
+                    *extent,
+                    metric.value().as_f64(),
+                );
             }
         }
 

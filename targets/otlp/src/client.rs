@@ -16,8 +16,8 @@ pub struct OtlpClient {
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
-impl emit_core::emitter::Emitter for OtlpClient {
-    fn emit<P: emit_core::props::Props>(&self, evt: &emit_core::event::Event<P>) {
+impl emit::emitter::Emitter for OtlpClient {
+    fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
         if let Some(ref encoder) = self.traces {
             if let Some(encoded) = encoder.encode_event(evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
@@ -149,7 +149,7 @@ impl OtlpClientBuilder {
         self
     }
 
-    pub fn resource(mut self, attributes: impl emit_core::props::Props) -> Self {
+    pub fn resource(mut self, attributes: impl emit::props::Props) -> Self {
         match self.encoding {
             Encoding::Proto => {
                 let protobuf = sval_protobuf::stream_to_protobuf(data::Resource {
@@ -164,12 +164,7 @@ impl OtlpClientBuilder {
         self
     }
 
-    pub fn scope(
-        mut self,
-        name: &str,
-        version: &str,
-        attributes: impl emit_core::props::Props,
-    ) -> Self {
+    pub fn scope(mut self, name: &str, version: &str, attributes: impl emit::props::Props) -> Self {
         match self.encoding {
             Encoding::Proto => {
                 let protobuf = sval_protobuf::stream_to_protobuf(data::InstrumentationScope {
@@ -278,7 +273,7 @@ impl OtlpLogsBuilder {
     pub fn body(
         mut self,
         writer: impl Fn(
-                &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
                 &mut fmt::Formatter,
             ) -> fmt::Result
             + Send
@@ -294,7 +289,7 @@ impl OtlpTracesBuilder {
     pub fn name(
         mut self,
         writer: impl Fn(
-                &emit_core::event::Event<&dyn emit_core::props::ErasedProps>,
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
                 &mut fmt::Formatter,
             ) -> fmt::Result
             + Send

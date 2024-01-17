@@ -4,7 +4,7 @@ use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write, sync::Mutex};
 
 use emit::{
-    well_known::{WellKnown, METRIC_KIND_SUM},
+    well_known::{METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY},
     Event,
 };
 use emit_metrics::{Bucketing, MetricsCollector};
@@ -255,8 +255,8 @@ fn print_event(
     buf: &mut Buffer,
     evt: &emit::event::Event<impl emit::props::Props>,
 ) {
-    if let Some(span_id) = evt.props().span_id() {
-        if let Some(trace_id) = evt.props().trace_id() {
+    if let Some(span_id) = evt.props().pull::<emit::SpanId>() {
+        if let Some(trace_id) = evt.props().get(TRACE_ID_KEY).and_then(|id| id.pull()) {
             let trace_id_color = trace_id_color(&trace_id);
 
             write_fg(buf, "▒", Color::Ansi256(trace_id_color));
@@ -286,7 +286,7 @@ fn print_event(
         }
     }
 
-    if let Some(level) = evt.props().lvl() {
+    if let Some(level) = evt.props().pull::<emit::Level>() {
         if let Some(level_color) = level_color(&level) {
             write_fg(buf, level, Color::Ansi256(level_color));
             write_plain(buf, " ");
@@ -298,7 +298,7 @@ fn print_event(
 
     let _ = out.print(&buf);
 
-    if let Some(value) = evt.props().metric_value() {
+    if let Some(value) = evt.props().get(METRIC_VALUE_KEY) {
         let buckets = value.as_f64_sequence();
 
         if !buckets.is_empty() {

@@ -27,7 +27,7 @@ pub struct InlineInstrumentationScopeAttributes<'a> {
 
 pub struct PropsInstrumentationScopeAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for PropsInstrumentationScopeAttributes<P> {
+impl<P: emit::props::Props> sval::Value for PropsInstrumentationScopeAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, None)?;
 

@@ -68,7 +68,6 @@ Format a template.
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     emit::expand_tokens(emit::ExpandTokens {
-        receiver: quote!(__private::__format),
         level: quote!(default()),
         input: TokenStream::from(item),
     })
@@ -127,8 +126,6 @@ pub fn in_ctxt(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     in_ctxt::expand_tokens(in_ctxt::ExpandTokens {
-        sync_receiver: quote!(__private::__private_push_ctxt),
-        async_receiver: quote!(__private::__private_push_ctxt),
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })
@@ -270,12 +267,7 @@ pub fn as_error(
 
 fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
-        emit::expand_tokens(emit::ExpandTokens {
-            receiver: quote!(__private::__private_emit),
-            level,
-            input: item,
-        })
-        .unwrap_or_compile_error()
+        emit::expand_tokens(emit::ExpandTokens { level, input: item }).unwrap_or_compile_error()
     } else {
         proc_macro::TokenStream::new()
     }

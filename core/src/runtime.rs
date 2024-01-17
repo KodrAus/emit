@@ -22,7 +22,7 @@ impl Default for Runtime {
 }
 
 impl Runtime {
-    pub fn new() -> Runtime {
+    pub const fn new() -> Runtime {
         Runtime {
             emitter: Empty,
             filter: Empty,
@@ -34,7 +34,7 @@ impl Runtime {
 }
 
 impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, TClock, TRng> {
-    pub fn emitter(&self) -> &TEmitter {
+    pub const fn emitter(&self) -> &TEmitter {
         &self.emitter
     }
 
@@ -55,7 +55,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
         }
     }
 
-    pub fn filter(&self) -> &TFilter {
+    pub const fn filter(&self) -> &TFilter {
         &self.filter
     }
 
@@ -76,7 +76,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
         }
     }
 
-    pub fn ctxt(&self) -> &TCtxt {
+    pub const fn ctxt(&self) -> &TCtxt {
         &self.ctxt
     }
 
@@ -97,7 +97,7 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
         }
     }
 
-    pub fn clock(&self) -> &TClock {
+    pub const fn clock(&self) -> &TClock {
         &self.clock
     }
 
@@ -118,15 +118,15 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
         }
     }
 
-    pub fn rng(&self) -> &TRng {
+    pub const fn rng(&self) -> &TRng {
         &self.rng
     }
 
-    pub fn with_id_gen<U>(self, id_gen: U) -> Runtime<TEmitter, TFilter, TCtxt, TClock, U> {
-        self.map_id_gen(|_| id_gen)
+    pub fn with_rng<U>(self, id_gen: U) -> Runtime<TEmitter, TFilter, TCtxt, TClock, U> {
+        self.map_rng(|_| id_gen)
     }
 
-    pub fn map_id_gen<U>(
+    pub fn map_rng<U>(
         self,
         id_gen: impl FnOnce(TRng) -> U,
     ) -> Runtime<TEmitter, TFilter, TCtxt, TClock, U> {
@@ -290,25 +290,39 @@ mod std_support {
         }
     }
 
-    pub struct Ambient(
-        OnceLock<
-            Runtime<
-                Box<dyn AmbientTarget + Send + Sync>,
-                Box<dyn AmbientFilter + Send + Sync>,
-                Box<dyn AmbientCtxt + Send + Sync>,
-                Box<dyn AmbientClock + Send + Sync>,
-                Box<dyn AmbientGenId + Send + Sync>,
-            >,
-        >,
-    );
+    pub struct Ambient(OnceLock<AmbientSync>);
+
+    struct AmbientSync {
+        value: AmbientSyncValue,
+        runtime: AmbientSyncRuntime,
+    }
+
+    type AmbientSyncValue = Runtime<
+        Box<dyn AmbientTarget + Send + Sync>,
+        Box<dyn AmbientFilter + Send + Sync>,
+        Box<dyn AmbientCtxt + Send + Sync>,
+        Box<dyn AmbientClock + Send + Sync>,
+        Box<dyn AmbientGenId + Send + Sync>,
+    >;
+
+    type AmbientSyncRuntime = Runtime<
+        *const (dyn ErasedEmitter + Send + Sync),
+        *const (dyn ErasedFilter + Send + Sync),
+        *const (dyn ErasedCtxt + Send + Sync),
+        *const (dyn ErasedClock + Send + Sync),
+        *const (dyn ErasedRng + Send + Sync),
+    >;
 
     pub type AmbientRuntime<'a> = Runtime<
-        Option<&'a (dyn ErasedEmitter + Send + Sync)>,
-        Option<&'a (dyn ErasedFilter + Send + Sync)>,
-        Option<&'a (dyn ErasedCtxt + Send + Sync)>,
-        Option<&'a (dyn ErasedClock + Send + Sync)>,
-        Option<&'a (dyn ErasedRng + Send + Sync)>,
+        &'a (dyn ErasedEmitter + Send + Sync),
+        &'a (dyn ErasedFilter + Send + Sync),
+        &'a (dyn ErasedCtxt + Send + Sync),
+        &'a (dyn ErasedClock + Send + Sync),
+        &'a (dyn ErasedRng + Send + Sync),
     >;
+
+    unsafe impl Send for AmbientSync where AmbientSyncValue: Send {}
+    unsafe impl Sync for AmbientSync where AmbientSyncValue: Sync {}
 
     impl Ambient {
         pub const fn new() -> Self {
@@ -328,8 +342,8 @@ mod std_support {
             TRng: Rng + Send + Sync + 'static,
         {
             self.0
-                .set(
-                    pipeline
+                .set({
+                    let value = pipeline
                         .map_emitter(|emitter| {
                             Box::new(emitter) as Box<dyn AmbientTarget + Send + Sync>
                         })
@@ -338,39 +352,46 @@ mod std_support {
                         })
                         .map_ctxt(|ctxt| Box::new(ctxt) as Box<dyn AmbientCtxt + Send + Sync>)
                         .map_clock(|clock| Box::new(clock) as Box<dyn AmbientClock + Send + Sync>)
-                        .map_id_gen(|id_gen| {
-                            Box::new(id_gen) as Box<dyn AmbientGenId + Send + Sync>
-                        }),
-                )
+                        .map_rng(|id_gen| Box::new(id_gen) as Box<dyn AmbientGenId + Send + Sync>);
+
+                    let runtime = Runtime::default()
+                        .with_emitter(value.emitter().as_super() as *const _)
+                        .with_filter(value.filter().as_super() as *const _)
+                        .with_ctxt(value.ctxt().as_super() as *const _)
+                        .with_clock(value.clock().as_super() as *const _)
+                        .with_rng(value.rng().as_super() as *const _);
+
+                    AmbientSync { value, runtime }
+                })
                 .ok()?;
 
             let rt = self.0.get()?;
 
             Some(
                 Runtime::default()
-                    .with_emitter(rt.emitter().as_any().downcast_ref()?)
-                    .with_filter(rt.filter().as_any().downcast_ref()?)
-                    .with_ctxt(rt.ctxt().as_any().downcast_ref()?)
-                    .with_clock(rt.clock().as_any().downcast_ref()?)
-                    .with_id_gen(rt.rng().as_any().downcast_ref()?),
+                    .with_emitter(rt.value.emitter().as_any().downcast_ref()?)
+                    .with_filter(rt.value.filter().as_any().downcast_ref()?)
+                    .with_ctxt(rt.value.ctxt().as_any().downcast_ref()?)
+                    .with_clock(rt.value.clock().as_any().downcast_ref()?)
+                    .with_rng(rt.value.rng().as_any().downcast_ref()?),
             )
         }
 
-        pub fn get(&self) -> AmbientRuntime {
-            match self.0.get() {
-                Some(rt) => Runtime::default()
-                    .with_emitter(Some(rt.emitter().as_super()))
-                    .with_filter(Some(rt.filter().as_super()))
-                    .with_ctxt(Some(rt.ctxt().as_super()))
-                    .with_clock(Some(rt.clock().as_super()))
-                    .with_id_gen(Some(rt.rng().as_super())),
-                None => Runtime::default()
-                    .with_emitter(None)
-                    .with_filter(None)
-                    .with_ctxt(None)
-                    .with_clock(None)
-                    .with_id_gen(None),
-            }
+        pub fn get(&self) -> &AmbientRuntime {
+            const EMPTY_AMBIENT_RUNTIME: AmbientRuntime = Runtime {
+                emitter: &Empty as &(dyn ErasedEmitter + Send + Sync + 'static),
+                filter: &Empty as &(dyn ErasedFilter + Send + Sync + 'static),
+                ctxt: &Empty as &(dyn ErasedCtxt + Send + Sync + 'static),
+                clock: &Empty as &(dyn ErasedClock + Send + Sync + 'static),
+                rng: &Empty as &(dyn ErasedRng + Send + Sync + 'static),
+            };
+
+            self.0
+                .get()
+                .map(|rt| unsafe {
+                    &*(&rt.runtime as *const AmbientSyncRuntime as *const AmbientRuntime)
+                })
+                .unwrap_or(&EMPTY_AMBIENT_RUNTIME)
         }
     }
 }
@@ -389,8 +410,10 @@ mod no_std_support {
             Ambient {}
         }
 
-        pub fn get(&self) -> Runtime {
-            Runtime::default()
+        pub fn get(&self) -> &Runtime {
+            const EMPTY_AMBIENT_RUNTIME: Runtime = Runtime::new();
+
+            &EMPTY_AMBIENT_RUNTIME
         }
     }
 

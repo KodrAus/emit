@@ -2,13 +2,13 @@ use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
     clock::Clock,
-    ctxt::Ctxt,
+    ctxt::{Ctxt, ErasedCtxt},
     emitter::Emitter,
     filter::Filter,
-    str::ToStr,
     props::Props,
     rng::Rng,
     runtime::Runtime,
+    str::ToStr,
     template::Template,
     value::{ToValue, Value},
 };
@@ -22,7 +22,7 @@ use crate::{
     frame::Frame,
     id::{SpanId, TraceId},
     template::{Formatter, Part},
-    Str, Level,
+    Level, Str,
 };
 
 /**
@@ -434,6 +434,26 @@ impl<'a> __PrivateKeyHook for Str<'a> {
 
 #[track_caller]
 pub fn __private_emit(
+    to: impl Emitter,
+    when: impl Filter,
+    extent: impl ToExtent,
+    tpl: Template,
+    props: impl Props,
+) {
+    let rt = crate::runtime::SHARED.get();
+
+    base_emit(
+        rt.emitter().and(to),
+        rt.filter().and(when),
+        rt.ctxt(),
+        extent.to_extent().or_else(|| rt.now().to_extent()),
+        tpl,
+        props,
+    );
+}
+
+#[track_caller]
+pub fn __private_emit_rt(
     rt: &Runtime<impl Emitter, impl Filter, impl Ctxt, impl Clock, impl Rng>,
     to: impl Emitter,
     when: impl Filter,
@@ -452,10 +472,17 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_push_ctxt<C: Ctxt>(
+pub fn __private_in_ctxt_rt<C: Ctxt>(
     rt: &Runtime<impl Emitter, impl Filter, C, impl Clock, impl Rng>,
     props: impl Props,
 ) -> Frame<&C> {
+    base_push_ctxt(rt.ctxt(), props)
+}
+
+#[track_caller]
+pub fn __private_in_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
+    let rt = crate::runtime::SHARED.get();
+
     base_push_ctxt(rt.ctxt(), props)
 }
 

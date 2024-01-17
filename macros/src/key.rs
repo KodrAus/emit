@@ -14,7 +14,7 @@ pub fn key_with_hook(attrs: &[Attribute], key_expr: &ExprLit) -> TokenStream {
         #(#attrs)*
         {
             use emit::__private::__PrivateKeyHook as _;
-            emit::Key::new(#key_expr).__private_key_as_default()
+            emit::Str::new(#key_expr).__private_key_as_default()
         }
     )
 }

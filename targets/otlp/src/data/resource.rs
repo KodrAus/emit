@@ -23,7 +23,7 @@ pub struct InlineResourceAttributes<'a> {
 
 pub struct PropsResourceAttributes<P>(pub P);
 
-impl<P: emit_core::props::Props> sval::Value for PropsResourceAttributes<P> {
+impl<P: emit::props::Props> sval::Value for PropsResourceAttributes<P> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         stream.record_tuple_begin(None, None, None, None)?;
 

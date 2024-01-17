@@ -1,3 +1,5 @@
+#![feature(stmt_expr_attributes, proc_macro_hygiene)]
+
 mod client;
 pub mod data;
 mod error;

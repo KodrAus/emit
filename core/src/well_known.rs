@@ -8,6 +8,11 @@ pub const METRIC_NAME_KEY: &'static str = "metric_name";
 pub const METRIC_KIND_KEY: &'static str = "metric_kind";
 pub const METRIC_VALUE_KEY: &'static str = "metric_value";
 
+pub const LVL_DEBUG: &'static str = "debug";
+pub const LVL_INFO: &'static str = "info";
+pub const LVL_WARN: &'static str = "warn";
+pub const LVL_ERR: &'static str = "err";
+
 pub const METRIC_KIND_SUM: &'static str = "sum";
 pub const METRIC_KIND_MIN: &'static str = "min";
 pub const METRIC_KIND_MAX: &'static str = "max";

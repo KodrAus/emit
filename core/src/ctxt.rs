@@ -156,7 +156,7 @@ impl Ctxt for Empty {
 mod internal {
     use core::{marker::PhantomData, ops::ControlFlow};
 
-    use crate::{str::Str, props::Props, value::Value};
+    use crate::{props::Props, str::Str, value::Value};
 
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
@@ -193,8 +193,8 @@ mod alloc_support {
         use core::{marker::PhantomData, mem, ops::ControlFlow};
 
         use crate::{
-            str::Str,
             props::{ErasedProps, Props},
+            str::Str,
             value::Value,
         };
 
