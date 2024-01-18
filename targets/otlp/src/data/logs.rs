@@ -72,14 +72,14 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
                 )
                 .unwrap();
 
-            emit::debug!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
+            emit::debug!(rt: emit::runtime::internal(), "received {#[emit::as_debug] response}");
         }
         Err(body) => {
             let response =
                 crate::data::generated::collector::logs::v1::ExportLogsPartialSuccess::decode(body)
                     .unwrap();
 
-            emit::warn!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
+            emit::warn!(rt: emit::runtime::internal(), "received {#[emit::as_debug] response}");
         }
     }
 }

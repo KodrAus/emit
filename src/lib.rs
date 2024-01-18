@@ -70,7 +70,7 @@ fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
 
 #[track_caller]
 pub fn emit(evt: &Event<impl Props>) {
-    let ambient = emit_core::runtime::SHARED.get();
+    let ambient = emit_core::runtime::shared();
 
     let tpl = evt.tpl();
     let props = evt.props();
@@ -85,34 +85,34 @@ pub type StartTimer = Timer<&'static emit_core::runtime::AmbientRuntime<'static>
 
 #[track_caller]
 pub fn now() -> Option<Timestamp> {
-    emit_core::runtime::SHARED.get().now()
+    emit_core::runtime::shared().now()
 }
 
 #[track_caller]
 pub fn push_ctxt(props: impl Props) -> PushCtxt {
-    base_push_ctxt(emit_core::runtime::SHARED.get(), props)
+    base_push_ctxt(emit_core::runtime::shared(), props)
 }
 
 #[track_caller]
 pub fn current_ctxt() -> PushCtxt {
-    base_push_ctxt(emit_core::runtime::SHARED.get(), empty::Empty)
+    base_push_ctxt(emit_core::runtime::shared(), empty::Empty)
 }
 
 #[track_caller]
 pub fn start_timer() -> StartTimer {
-    Timer::start(emit_core::runtime::SHARED.get())
+    Timer::start(emit_core::runtime::shared())
 }
 
 #[track_caller]
 pub fn new_span_id() -> Option<SpanId> {
-    emit_core::runtime::SHARED.get().gen_span_id()
+    emit_core::runtime::shared().gen_span_id()
 }
 
 #[track_caller]
 pub fn current_span_id() -> Option<SpanId> {
     let mut span_id = None;
 
-    emit_core::runtime::SHARED.get().with_current(|ctxt| {
+    emit_core::runtime::shared().with_current(|ctxt| {
         span_id = ctxt.pull();
     });
 
@@ -121,14 +121,14 @@ pub fn current_span_id() -> Option<SpanId> {
 
 #[track_caller]
 pub fn new_trace_id() -> Option<TraceId> {
-    emit_core::runtime::SHARED.get().gen_trace_id()
+    emit_core::runtime::shared().gen_trace_id()
 }
 
 #[track_caller]
 pub fn current_trace_id() -> Option<TraceId> {
     let mut trace_id = None;
 
-    emit_core::runtime::SHARED.get().with_current(|ctxt| {
+    emit_core::runtime::shared().with_current(|ctxt| {
         trace_id = ctxt.pull();
     });
 

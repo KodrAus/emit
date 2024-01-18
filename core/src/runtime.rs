@@ -3,8 +3,24 @@ use crate::{
     props::Props, rng::Rng, timestamp::Timestamp,
 };
 
-pub static SHARED: Ambient = Ambient::new();
-pub static INTERNAL: Ambient = Ambient::new();
+static SHARED: AmbientSlot = AmbientSlot::new();
+static INTERNAL: AmbientSlot = AmbientSlot::new();
+
+pub fn shared() -> &'static AmbientRuntime<'static> {
+    SHARED.get()
+}
+
+pub fn shared_slot() -> &'static AmbientSlot {
+    &SHARED
+}
+
+pub fn internal() -> &'static AmbientRuntime<'static> {
+    INTERNAL.get()
+}
+
+pub fn internal_slot() -> &'static AmbientSlot {
+    &INTERNAL
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Runtime<TEmitter = Empty, TFilter = Empty, TCtxt = Empty, TClock = Empty, TRng = Empty> {
@@ -290,7 +306,7 @@ mod std_support {
         }
     }
 
-    pub struct Ambient(OnceLock<AmbientSync>);
+    pub struct AmbientSlot(OnceLock<AmbientSync>);
 
     struct AmbientSync {
         value: AmbientSyncValue,
@@ -324,9 +340,9 @@ mod std_support {
     unsafe impl Send for AmbientSync where AmbientSyncValue: Send {}
     unsafe impl Sync for AmbientSync where AmbientSyncValue: Sync {}
 
-    impl Ambient {
+    impl AmbientSlot {
         pub const fn new() -> Self {
-            Ambient(OnceLock::new())
+            AmbientSlot(OnceLock::new())
         }
 
         pub fn init<TEmitter, TFilter, TCtxt, TClock, TRng>(
@@ -403,11 +419,11 @@ pub use self::std_support::*;
 mod no_std_support {
     use super::*;
 
-    pub struct Ambient {}
+    pub struct AmbientSlot {}
 
-    impl Ambient {
+    impl AmbientSlot {
         pub const fn new() -> Self {
-            Ambient {}
+            AmbientSlot {}
         }
 
         pub fn get(&self) -> &Runtime {

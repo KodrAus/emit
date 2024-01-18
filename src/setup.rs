@@ -84,19 +84,20 @@ where
 {
     #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
     pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {
-        self.init_rt(&emit_core::runtime::SHARED)
+        self.init_slot(emit_core::runtime::shared_slot())
     }
 
     #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
     pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
-        self.init_rt(&emit_core::runtime::INTERNAL)
+        self.init_slot(emit_core::runtime::internal_slot())
     }
 
-    fn init_rt(
+    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
+    pub fn init_slot(
         self,
-        rt: &'static emit_core::runtime::Ambient,
+        slot: &'static emit_core::runtime::AmbientSlot,
     ) -> Init<&'static TEmitter, &'static TCtxt> {
-        let ambient = rt
+        let ambient = slot
             .init(
                 emit_core::runtime::Runtime::new()
                     .with_emitter(self.emitter)

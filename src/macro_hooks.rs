@@ -448,7 +448,7 @@ pub fn __private_emit(
     tpl: Template,
     props: impl Props,
 ) {
-    let rt = crate::runtime::SHARED.get();
+    let rt = crate::runtime::shared();
 
     base_emit(
         rt.emitter().and(to),
@@ -489,7 +489,7 @@ pub fn __private_in_ctxt_rt<C: Ctxt>(
 
 #[track_caller]
 pub fn __private_in_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
-    let rt = crate::runtime::SHARED.get();
+    let rt = crate::runtime::shared();
 
     base_push_ctxt(rt.ctxt(), props)
 }
