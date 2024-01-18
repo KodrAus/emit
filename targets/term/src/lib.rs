@@ -4,7 +4,7 @@ use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write, sync::Mutex};
 
 use emit::{
-    well_known::{METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY, LOCATION_KEY},
+    well_known::{LOCATION_KEY, METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY},
     Event,
 };
 use emit_metrics::{Bucketing, MetricsCollector};

@@ -38,8 +38,8 @@ impl<'a, F: Filter + ?Sized> Filter for &'a F {
     }
 }
 
-#[cfg(feature = "std")]
-impl<'a, F: Filter + ?Sized + 'a> Filter for Box<F> {
+#[cfg(feature = "alloc")]
+impl<'a, F: Filter + ?Sized + 'a> Filter for alloc::boxed::Box<F> {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
         (**self).matches(evt)
     }

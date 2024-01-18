@@ -184,6 +184,9 @@ impl<'a, W: Write + ?Sized> Write for &'a mut W {
     }
 }
 
+#[cfg(feature = "alloc")]
+impl Write for alloc::string::String {}
+
 impl<'a> Write for fmt::Formatter<'a> {
     fn write_hole_value(&mut self, _: &str, value: Value) -> fmt::Result {
         fmt::Display::fmt(&value, self)

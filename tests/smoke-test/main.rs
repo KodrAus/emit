@@ -11,16 +11,18 @@ extern crate serde_derive;
 
 #[tokio::main]
 async fn main() {
+    println!("{}", emit::format!("Hello, {x}", x: "world"));
+
     let emitter = emit::setup()
         .to(emit_otlp::proto()
             .logs(
                 emit_otlp::logs_http("http://localhost:4318/v1/logs")
                     .body(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
-            /*.traces(
+            .traces(
                 emit_otlp::traces_http("http://localhost:4318/v1/traces")
                     .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
-            )*/
+            )
             .resource(emit::props! {
                 #[emit::key("service.name")]
                 service_name: "smoke-test-rs",

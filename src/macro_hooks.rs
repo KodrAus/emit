@@ -433,6 +433,14 @@ impl<'a> __PrivateKeyHook for Str<'a> {
 }
 
 #[track_caller]
+pub fn __private_format(tpl: Template, props: impl Props) -> String {
+    let mut s = String::new();
+    tpl.render(props).write(&mut s).expect("infallible write");
+
+    s
+}
+
+#[track_caller]
 pub fn __private_emit(
     to: impl Emitter,
     when: impl Filter,

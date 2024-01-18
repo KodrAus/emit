@@ -2,7 +2,6 @@ mod export_logs_service;
 mod log_record;
 
 use emit_batcher::BatchError;
-use prost::Message;
 
 pub use self::{export_logs_service::*, log_record::*};
 
@@ -63,6 +62,8 @@ pub(crate) fn encode_request(
 }
 
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
+    use prost::Message;
+
     match body {
         Ok(body) => {
             let response =
@@ -75,10 +76,8 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
         }
         Err(body) => {
             let response =
-                crate::data::generated::collector::logs::v1::ExportLogsServiceResponse::decode(
-                    body,
-                )
-                .unwrap();
+                crate::data::generated::collector::logs::v1::ExportLogsPartialSuccess::decode(body)
+                    .unwrap();
 
             emit::warn!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
         }

@@ -20,6 +20,7 @@ mod capture;
 mod emit;
 mod filter;
 mod fmt;
+mod format;
 mod hook;
 mod in_ctxt;
 mod key;
@@ -29,6 +30,17 @@ mod template;
 mod util;
 
 use util::ResultToTokens;
+
+/**
+Format a template.
+*/
+#[proc_macro]
+pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    format::expand_tokens(format::ExpandTokens {
+        input: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
 
 /**
 Emit a debug record.
@@ -60,18 +72,6 @@ Emit an error record.
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     emit(quote!(Error), TokenStream::from(item))
-}
-
-/**
-Format a template.
-*/
-#[proc_macro]
-pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit::expand_tokens(emit::ExpandTokens {
-        level: quote!(default()),
-        input: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
 }
 
 /**

@@ -36,8 +36,8 @@ impl<'a, T: Emitter + ?Sized> Emitter for &'a T {
     }
 }
 
-#[cfg(feature = "std")]
-impl<'a, T: Emitter + ?Sized + 'a> Emitter for Box<T> {
+#[cfg(feature = "alloc")]
+impl<'a, T: Emitter + ?Sized + 'a> Emitter for alloc::boxed::Box<T> {
     fn emit<P: Props>(&self, evt: &Event<P>) {
         (**self).emit(evt)
     }

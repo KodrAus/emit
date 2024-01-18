@@ -179,12 +179,14 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                         name: "exception",
                         time_unix_nano: self.time_unix_nano,
                         dropped_attributes_count: 0,
-                        attributes: &[KeyValue {
-                            key: "exception.message",
-                            value: AnyValue::<_, (), (), ()>::String(sval::Display::new_borrowed(
-                                &err,
-                            )),
-                        }],
+                        attributes: &InlineEventAttributes {
+                            attributes: &[KeyValue {
+                                key: "exception.message",
+                                value: AnyValue::<_, (), (), ()>::String(
+                                    sval::Display::new_borrowed(&err),
+                                ),
+                            }],
+                        },
                     }])
                 },
             )?;
@@ -236,9 +238,9 @@ const EVENT_ATTRIBUTES_LABEL: sval::Label =
 const EVENT_ATTRIBUTES_INDEX: sval::Index = sval::Index::new(3);
 
 #[derive(Value)]
-pub struct InlineEventAttributes<'a> {
+pub struct InlineEventAttributes<'a, A: ?Sized = [KeyValue<&'a str, &'a AnyValue<'a>>]> {
     #[sval(label = EVENT_ATTRIBUTES_LABEL, index = EVENT_ATTRIBUTES_INDEX)]
-    pub attributes: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
+    pub attributes: &'a A,
 }
 
 pub struct PropsEventAttributes<P>(pub P);

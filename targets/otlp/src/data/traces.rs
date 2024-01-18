@@ -66,5 +66,26 @@ pub(crate) fn encode_request(
 }
 
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
-    println!("body: {:?}", body);
+    use prost::Message;
+
+    match body {
+        Ok(body) => {
+            let response =
+                crate::data::generated::collector::trace::v1::ExportTraceServiceResponse::decode(
+                    body,
+                )
+                .unwrap();
+
+            emit::debug!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
+        }
+        Err(body) => {
+            let response =
+                crate::data::generated::collector::trace::v1::ExportTracePartialSuccess::decode(
+                    body,
+                )
+                .unwrap();
+
+            emit::warn!(rt: emit::runtime::INTERNAL.get(), "received {#[emit::as_debug] response}");
+        }
+    }
 }
