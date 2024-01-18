@@ -6,7 +6,7 @@ use core::{
     time::Duration,
 };
 
-use crate::value::{ToValue, Value};
+use crate::value::{ToValue, Value, FromValue};
 
 // 2000-03-01 (mod 400 year, immediately after feb29
 const LEAPOCH_SECS: u64 = 946_684_800 + 86400 * (31 + 29);
@@ -172,11 +172,11 @@ impl ToValue for Timestamp {
     }
 }
 
-impl<'v> Value<'v> {
-    pub fn to_timestamp(&self) -> Option<Timestamp> {
-        self.downcast_ref::<Timestamp>()
+impl<'v> FromValue<'v> for Timestamp {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        value.downcast_ref::<Timestamp>()
             .copied()
-            .or_else(|| self.parse())
+            .or_else(|| value.parse())
     }
 }
 
