@@ -27,10 +27,10 @@ pub trait Channel {
 
     fn push<'a>(&mut self, item: Self::Item);
 
-    fn len(&self) -> usize;
+    fn remaining(&self) -> usize;
 
     fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.remaining() == 0
     }
 
     fn clear(&mut self);
@@ -51,7 +51,7 @@ impl<T> Channel for Vec<T> {
         self.push(item);
     }
 
-    fn len(&self) -> usize {
+    fn remaining(&self) -> usize {
         self.len()
     }
 
@@ -106,7 +106,7 @@ impl<T: Channel> Sender<T> {
         // If the channel is full then drop it; this prevents OOMing
         // when the destination is unavailable. We don't notify the batch
         // in this case because the clearing is opaque to outside observers
-        if state.next_batch.channel.len() >= self.max_capacity {
+        if state.next_batch.channel.remaining() >= self.max_capacity {
             state.next_batch.channel.clear();
         }
 
@@ -242,7 +242,7 @@ impl<T: Channel> Receiver<T> {
 
                 // If there are events then mark that we're in a batch and replace it with an empty one
                 // The sender will start filling this new batch
-                if state.next_batch.channel.len() > 0 {
+                if state.next_batch.channel.remaining() > 0 {
                     state.is_in_batch = true;
 
                     (
@@ -268,14 +268,16 @@ impl<T: Channel> Receiver<T> {
             };
 
             // Run outside of the lock
-            if current_batch.channel.len() > 0 {
+            if current_batch.channel.remaining() > 0 {
                 self.retry.reset();
                 self.retry_delay.reset();
                 self.idle_delay.reset();
 
                 // Re-allocate our next buffer outside of the lock
                 next_batch = Batch {
-                    channel: T::with_capacity(self.capacity.next(current_batch.channel.len())),
+                    channel: T::with_capacity(
+                        self.capacity.next(current_batch.channel.remaining()),
+                    ),
                     watchers: Watchers::new(),
                 };
 
@@ -288,7 +290,7 @@ impl<T: Channel> Receiver<T> {
                         // This depends on `on_batch`, who may or may not return a batch to retry
                         // depending on the kind of failure
                         if let Err(BatchError { retryable }) = AssertUnwindSafe(on_batch).await {
-                            if retryable.len() > 0 && self.retry.next() {
+                            if retryable.remaining() > 0 && self.retry.next() {
                                 // Delay a bit before trying again; this gives the external service
                                 // a chance to get itself together
                                 wait(self.retry_delay.next()).await;

@@ -1,4 +1,4 @@
-use emit_core::rng::Rng;
+use emit_core::{rng::Rng, runtime::InternalRng};
 use rand::Rng as _;
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -9,3 +9,5 @@ impl Rng for ThreadRng {
         Some(rand::thread_rng().gen())
     }
 }
+
+impl InternalRng for ThreadRng {}

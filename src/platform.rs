@@ -3,8 +3,7 @@ use crate::{clock::Clock, rng::Rng, Timestamp};
 #[cfg(not(feature = "std"))]
 use emit_core::empty::Empty;
 
-#[cfg(feature = "std")]
-use emit_core::{clock::ErasedClock, rng::ErasedRng};
+use emit_core::runtime::{InternalClock, InternalRng};
 
 #[cfg(feature = "std")]
 pub(crate) mod system_clock;
@@ -34,11 +33,11 @@ pub(crate) struct Platform {
     #[cfg(not(feature = "std"))]
     pub(crate) clock: DefaultClock,
     #[cfg(feature = "std")]
-    pub(crate) clock: Box<dyn ErasedClock + Send + Sync>,
+    pub(crate) clock: Box<dyn InternalClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
     pub(crate) id_gen: DefaultIdGen,
     #[cfg(feature = "std")]
-    pub(crate) rng: Box<dyn ErasedRng + Send + Sync>,
+    pub(crate) rng: Box<dyn InternalRng + Send + Sync>,
 }
 
 impl Default for Platform {

@@ -4,7 +4,7 @@ use crate::{
 };
 
 static SHARED: AmbientSlot = AmbientSlot::new();
-static INTERNAL: AmbientSlot = AmbientSlot::new();
+static INTERNAL: AmbientInternalSlot = AmbientInternalSlot::new();
 
 pub fn shared() -> &'static AmbientRuntime<'static> {
     SHARED.get()
@@ -18,7 +18,7 @@ pub fn internal() -> &'static AmbientRuntime<'static> {
     INTERNAL.get()
 }
 
-pub fn internal_slot() -> &'static AmbientSlot {
+pub fn internal_slot() -> &'static AmbientInternalSlot {
     &INTERNAL
 }
 
@@ -219,6 +219,41 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng: Rng> Rng
     }
 }
 
+pub trait InternalEmitter: Emitter {}
+
+impl InternalEmitter for Empty {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::boxed::Box<T> {}
+
+pub trait InternalFilter: Filter {}
+
+impl InternalFilter for Empty {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}
+
+pub trait InternalCtxt: Ctxt {}
+
+impl InternalCtxt for Empty {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::boxed::Box<T> {}
+
+pub trait InternalClock: Clock {}
+
+impl InternalClock for Empty {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalClock> InternalClock for alloc::boxed::Box<T> {}
+
+pub trait InternalRng: Rng {}
+
+impl InternalRng for Empty {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalRng> InternalRng for alloc::boxed::Box<T> {}
+
 #[cfg(feature = "std")]
 mod std_support {
     use core::any::Any;
@@ -307,6 +342,8 @@ mod std_support {
     }
 
     pub struct AmbientSlot(OnceLock<AmbientSync>);
+
+    pub struct AmbientInternalSlot(AmbientSlot);
 
     struct AmbientSync {
         value: AmbientSyncValue,
@@ -410,6 +447,31 @@ mod std_support {
                 .unwrap_or(&EMPTY_AMBIENT_RUNTIME)
         }
     }
+
+    impl AmbientInternalSlot {
+        pub(in crate::runtime) const fn new() -> Self {
+            AmbientInternalSlot(AmbientSlot(OnceLock::new()))
+        }
+
+        pub fn init<TEmitter, TFilter, TCtxt, TClock, TRng>(
+            &self,
+            pipeline: Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>,
+        ) -> Option<Runtime<&TEmitter, &TFilter, &TCtxt, &TClock, &TRng>>
+        where
+            TEmitter: InternalEmitter + Send + Sync + 'static,
+            TFilter: InternalFilter + Send + Sync + 'static,
+            TCtxt: InternalCtxt + Send + Sync + 'static,
+            TCtxt::Frame: Send + 'static,
+            TClock: InternalClock + Send + Sync + 'static,
+            TRng: InternalRng + Send + Sync + 'static,
+        {
+            self.0.init(pipeline)
+        }
+
+        pub fn get(&self) -> &AmbientRuntime {
+            self.0.get()
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -421,6 +483,8 @@ mod no_std_support {
 
     pub struct AmbientSlot {}
 
+    pub struct AmbientInternalSlot(AmbientSlot);
+
     impl AmbientSlot {
         pub const fn new() -> Self {
             AmbientSlot {}
@@ -430,6 +494,16 @@ mod no_std_support {
             const EMPTY_AMBIENT_RUNTIME: Runtime = Runtime::new();
 
             &EMPTY_AMBIENT_RUNTIME
+        }
+    }
+
+    impl AmbientInternalSlot {
+        pub(in crate::runtime) const fn new() -> Self {
+            AmbientInternalSlot(AmbientSlot::new())
+        }
+
+        pub fn get(&self) -> &Runtime {
+            self.0.get()
         }
     }
 

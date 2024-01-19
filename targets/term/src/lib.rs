@@ -125,6 +125,8 @@ impl emit::emitter::Emitter for Stdout {
     }
 }
 
+impl emit::runtime::InternalEmitter for Stdout {}
+
 fn trace_id_color(trace_id: &emit::TraceId) -> u8 {
     let mut hash = 0;
 

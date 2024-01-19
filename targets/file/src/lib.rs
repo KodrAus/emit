@@ -132,8 +132,8 @@ impl emit_batcher::Channel for Buffer {
         self.bufs.push(item);
     }
 
-    fn len(&self) -> usize {
-        self.bufs.len()
+    fn remaining(&self) -> usize {
+        self.bufs.len() - self.index
     }
 
     fn clear(&mut self) {

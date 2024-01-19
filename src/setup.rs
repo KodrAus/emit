@@ -5,6 +5,7 @@ use emit_core::{
     emitter::{self, Emitter},
     empty::Empty,
     filter::Filter,
+    runtime::{InternalCtxt, InternalEmitter, InternalFilter},
 };
 
 use crate::platform::{DefaultCtxt, Platform};
@@ -88,16 +89,39 @@ where
     }
 
     #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
-    pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
-        self.init_slot(emit_core::runtime::internal_slot())
-    }
-
-    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
     pub fn init_slot(
         self,
         slot: &'static emit_core::runtime::AmbientSlot,
     ) -> Init<&'static TEmitter, &'static TCtxt> {
         let ambient = slot
+            .init(
+                emit_core::runtime::Runtime::new()
+                    .with_emitter(self.emitter)
+                    .with_filter(self.filter)
+                    .with_ctxt(self.ctxt)
+                    .with_clock(self.platform.clock)
+                    .with_rng(self.platform.rng),
+            )
+            .expect("already initialized");
+
+        Init {
+            emitter: *ambient.emitter(),
+            ctxt: *ambient.ctxt(),
+        }
+    }
+}
+
+impl<
+        TEmitter: InternalEmitter + Send + Sync + 'static,
+        TFilter: InternalFilter + Send + Sync + 'static,
+        TCtxt: InternalCtxt + Send + Sync + 'static,
+    > Setup<TEmitter, TFilter, TCtxt>
+where
+    TCtxt::Frame: Send + 'static,
+{
+    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
+    pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
+        let ambient = emit_core::runtime::internal_slot()
             .init(
                 emit_core::runtime::Runtime::new()
                     .with_emitter(self.emitter)

@@ -7,6 +7,7 @@ use std::{
 use emit_core::{
     ctxt::Ctxt,
     props::Props,
+    runtime::InternalCtxt,
     str::Str,
     value::{OwnedValue, Value},
 };
@@ -68,3 +69,5 @@ impl Ctxt for ThreadLocalCtxt {
 
     fn close(&self, _: Self::Frame) {}
 }
+
+impl InternalCtxt for ThreadLocalCtxt {}

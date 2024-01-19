@@ -62,7 +62,7 @@ impl<T> emit_batcher::Channel for Channel<T> {
         }
     }
 
-    fn len(&self) -> usize {
+    fn remaining(&self) -> usize {
         self.logs.len() + self.traces.len()
     }
 
