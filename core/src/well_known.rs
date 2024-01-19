@@ -1,3 +1,9 @@
+pub const TS_KEY: &'static str = "ts";
+pub const TS_START_KEY: &'static str = "ts_start";
+
+pub const TPL_KEY: &'static str = "tpl";
+pub const MSG_KEY: &'static str = "msg";
+
 pub const ERR_KEY: &'static str = "err";
 pub const LVL_KEY: &'static str = "lvl";
 pub const LOCATION_KEY: &'static str = "loc";

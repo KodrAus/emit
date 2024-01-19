@@ -18,6 +18,9 @@ path = "../../targets/otlp"
 [dependencies.emit_term]
 path = "../../targets/term"
 
+[dependencies.emit_file]
+path = "../../targets/file"
+
 [dependencies.serde]
 version = "1"
 

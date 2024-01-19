@@ -1,6 +1,5 @@
 use std::{
     future::Future,
-    mem,
     pin::Pin,
     sync::Mutex,
     task::{self, Context, Poll},

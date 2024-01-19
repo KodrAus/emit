@@ -4,6 +4,7 @@ members = [
     "batcher",
     "metrics",
     "targets/term",
+    "targets/file",
     "targets/otlp",
     "targets/otlp/gen",
     "macros",

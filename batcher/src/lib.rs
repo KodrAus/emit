@@ -25,7 +25,7 @@ pub trait Channel {
         Self::new()
     }
 
-    fn push(&mut self, item: Self::Item);
+    fn push<'a>(&mut self, item: Self::Item);
 
     fn len(&self) -> usize;
 
@@ -47,7 +47,7 @@ impl<T> Channel for Vec<T> {
         Vec::with_capacity(capacity)
     }
 
-    fn push(&mut self, item: Self::Item) {
+    fn push<'a>(&mut self, item: Self::Item) {
         self.push(item);
     }
 
@@ -100,7 +100,7 @@ impl<T> Drop for Sender<T> {
 }
 
 impl<T: Channel> Sender<T> {
-    pub fn send(&self, msg: T::Item) {
+    pub fn send<'a>(&self, msg: T::Item) {
         let mut state = self.shared.state.lock().unwrap();
 
         // If the channel is full then drop it; this prevents OOMing

@@ -37,6 +37,7 @@ async fn main() {
             .spawn()
             .unwrap())
         .and_to(emit_term::stdout().plot_metrics_by_count(30))
+        .and_to(emit_file::set("./target/logs/log.txt").unwrap().spawn())
         .init();
 
     emit::setup()

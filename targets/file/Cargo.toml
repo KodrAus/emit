@@ -1,0 +1,26 @@
+[package]
+name = "emit_file"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.emit]
+path = "../../"
+features = ["sval"]
+
+[dependencies.sval]
+version = "2"
+
+[dependencies.sval_json]
+version = "2"
+features = ["std"]
+
+[dependencies.emit_batcher]
+path = "../../batcher"
+
+[dependencies.uuid]
+version = "1"
+features = ["v7"]
+
+[dependencies.time]
+version = "0.3"
+features = ["local-offset"]

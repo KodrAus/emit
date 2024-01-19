@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, fmt, ops::ControlFlow};
+use std::{collections::HashSet, fmt, ops::ControlFlow};
 
 use bytes::Buf;
 use sval_derive::Value;
@@ -26,12 +26,6 @@ impl PreEncoded {
     pub fn into_cursor(self) -> PreEncodedCursor {
         match self {
             PreEncoded::Proto(buf) => PreEncodedCursor::Proto(buf.into_cursor()),
-        }
-    }
-
-    pub fn to_vec(&self) -> Cow<[u8]> {
-        match self {
-            PreEncoded::Proto(buf) => buf.to_vec(),
         }
     }
 }

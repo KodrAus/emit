@@ -46,6 +46,7 @@ use serde::ser::{
 
 use common::v1::{any_value::Value, AnyValue, ArrayValue, KeyValue, KeyValueList};
 
+#[cfg(feature = "grpc")]
 pub(crate) fn to_value(value: emit::value::Value) -> Option<AnyValue> {
     value.serialize(ValueSerializer).ok()
 }
