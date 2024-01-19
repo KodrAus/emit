@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File},
+    fs,
     io::Write,
     ops::ControlFlow,
     path::{Path, PathBuf},
@@ -62,7 +62,7 @@ impl FileSetBuilder {
         let handle = thread::spawn(move || {
             let mut active_file = None;
 
-            let _ = receiver.blocking_exec(|batch: Buffer| {
+            let _ = receiver.blocking_exec(|mut batch: Buffer| {
                 let mut file = match active_file.take() {
                     Some(file) => file,
                     None => {
@@ -70,18 +70,32 @@ impl FileSetBuilder {
 
                         let mut path = PathBuf::from(self.dir.clone());
 
-                        fs::create_dir_all(&path)
-                            .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
+                        if let Err(e) = fs::create_dir_all(&path) {
+                            return Err(emit_batcher::BatchError::retry(e, batch));
+                        }
 
                         path.push(format!("{}.{}.{}", self.prefix, id.simple(), self.ext));
 
-                        File::create(path).map_err(|e| emit_batcher::BatchError::no_retry(e))?
+                        match fs::OpenOptions::new()
+                            .create_new(true)
+                            .read(false)
+                            .append(true)
+                            .open(path)
+                        {
+                            Ok(file) => file,
+                            Err(e) => return Err(emit_batcher::BatchError::retry(e, batch)),
+                        }
                     }
                 };
 
-                for buf in batch.bufs {
-                    file.write_all(buf.as_bytes())
-                        .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
+                while batch.index < batch.bufs.len() {
+                    if let Err(e) = file.write_all(batch.bufs[batch.index].as_bytes()) {
+                        return Err(emit_batcher::BatchError::retry(e, batch));
+                    }
+
+                    // Drop the buffer at this point to free some memory
+                    batch.bufs[batch.index] = String::new();
+                    batch.index += 1;
                 }
 
                 file.flush()
@@ -101,13 +115,17 @@ impl FileSetBuilder {
 
 struct Buffer {
     bufs: Vec<String>,
+    index: usize,
 }
 
 impl emit_batcher::Channel for Buffer {
     type Item = String;
 
     fn new() -> Self {
-        Buffer { bufs: Vec::new() }
+        Buffer {
+            bufs: Vec::new(),
+            index: 0,
+        }
     }
 
     fn push<'a>(&mut self, item: Self::Item) {
@@ -132,6 +150,7 @@ impl emit::Emitter for FileSet {
     fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
         if let Ok(mut s) = sval_json::stream_to_string(EventValue(evt)) {
             s.push('\n');
+            s.shrink_to_fit();
             self.sender.send(s);
         }
     }
