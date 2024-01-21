@@ -1,41 +1,19 @@
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
 use core::{fmt, str, time::Duration};
-use std::{cell::RefCell, cmp, io::Write, sync::Mutex};
+use std::{cell::RefCell, cmp, io::Write};
 
-use emit::{
-    well_known::{LOCATION_KEY, METRIC_KIND_SUM, METRIC_VALUE_KEY, TRACE_ID_KEY},
-    Event,
-};
-use emit_metrics::{Bucketing, MetricsCollector};
+use emit::well_known::{LOCATION_KEY, METRIC_VALUE_KEY, TRACE_ID_KEY};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
     Stdout {
         writer: BufferWriter::stdout(ColorChoice::Auto),
-        metrics_collector: None,
     }
 }
 
 pub struct Stdout {
     writer: BufferWriter,
-    metrics_collector: Option<Mutex<MetricsCollector>>,
-}
-
-impl Stdout {
-    pub fn plot_metrics_by_time(mut self, bucket_size: Duration) -> Self {
-        self.metrics_collector = Some(Mutex::new(MetricsCollector::new(Bucketing::ByTime(
-            bucket_size,
-        ))));
-        self
-    }
-
-    pub fn plot_metrics_by_count(mut self, nbuckets: usize) -> Self {
-        self.metrics_collector = Some(Mutex::new(MetricsCollector::new(Bucketing::ByCount(
-            nbuckets,
-        ))));
-        self
-    }
 }
 
 thread_local! {
@@ -74,55 +52,10 @@ fn with_shared_buf(writer: &BufferWriter, with_buf: impl FnOnce(&BufferWriter, &
 
 impl emit::emitter::Emitter for Stdout {
     fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
-        if let Some(ref metrics_collector) = self.metrics_collector {
-            if metrics_collector.lock().unwrap().record_metric(evt) {
-                return;
-            }
-        }
-
         with_shared_buf(&self.writer, |writer, buf| print_event(writer, buf, evt));
     }
 
-    fn blocking_flush(&self, _: Duration) {
-        if let Some(ref metrics_collector) = self.metrics_collector {
-            for (metric_name, histogram) in metrics_collector.lock().unwrap().take_sums() {
-                if histogram.is_empty() {
-                    continue;
-                }
-
-                let metric_kind = METRIC_KIND_SUM;
-
-                let histogram = histogram.compute();
-                let x = histogram.timestamp_range();
-                let y = histogram.value_range();
-
-                let bucket_size = friendly_duration(histogram.bucket_size());
-                let metric_value = histogram.buckets();
-                let metric_value = &metric_value;
-
-                with_shared_buf(&self.writer, |writer, buf| {
-                    print_event(
-                        writer,
-                        buf,
-                        &Event::new(
-                            x,
-                            emit::tpl!("{metric_kind} of {metric_name} by {bucket_size}{bucket_size_unit} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
-                            emit::props! {
-                                metric_kind,
-                                metric_name,
-                                #[emit::as_sval]
-                                metric_value,
-                                min: y.start,
-                                max: y.end,
-                                bucket_size: bucket_size.value,
-                                bucket_size_unit: bucket_size.unit,
-                            },
-                        ),
-                    );
-                });
-            }
-        }
-    }
+    fn blocking_flush(&self, _: Duration) {}
 }
 
 impl emit::runtime::InternalEmitter for Stdout {}

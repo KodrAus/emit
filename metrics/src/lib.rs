@@ -1,22 +1,24 @@
+#![feature(proc_macro_hygiene, stmt_expr_attributes)]
+
 use std::{
     borrow::Cow,
     cmp,
     collections::HashMap,
     mem,
     ops::{ControlFlow, Range},
+    sync::Mutex,
     time::Duration,
 };
 
-use emit_core::{
-    event::Event,
+use emit::{
     props::{FromProps, Props},
     str::{Str, ToStr},
-    timestamp::Timestamp,
     value::{FromValue, ToValue, Value},
     well_known::{
         METRIC_KIND_KEY, METRIC_KIND_MAX, METRIC_KIND_MIN, METRIC_KIND_SUM, METRIC_NAME_KEY,
         METRIC_VALUE_KEY,
     },
+    Event, Timestamp,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,6 +94,73 @@ impl<'m, V: ToValue> Props for Metric<'m, V> {
         for_each(METRIC_KIND_KEY.to_str(), self.kind.to_value())?;
 
         ControlFlow::Continue(())
+    }
+}
+
+pub struct MetricsEmitter<E> {
+    collector: Mutex<MetricsCollector>,
+    inner: E,
+}
+
+impl<E> MetricsEmitter<E> {
+    pub fn new(collector: MetricsCollector, emitter: E) -> Self {
+        MetricsEmitter {
+            collector: Mutex::new(collector),
+            inner: emitter,
+        }
+    }
+}
+
+pub fn plot_metrics_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(MetricsCollector::new(Bucketing::ByCount(count)), emitter)
+}
+
+pub fn plot_metrics_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(
+        MetricsCollector::new(Bucketing::ByTime(bucket_size)),
+        emitter,
+    )
+}
+
+impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
+    fn emit<P: Props>(&self, evt: &Event<P>) {
+        if self.collector.lock().unwrap().record_metric(evt) {
+            return;
+        }
+
+        self.inner.emit(evt)
+    }
+
+    fn blocking_flush(&self, timeout: Duration) {
+        for (metric_name, histogram) in self.collector.lock().unwrap().take_sums() {
+            if histogram.is_empty() {
+                continue;
+            }
+
+            let metric_kind = METRIC_KIND_SUM;
+
+            let histogram = histogram.compute();
+            let x = histogram.timestamp_range();
+            let y = histogram.value_range();
+
+            let metric_value = histogram.buckets();
+            let metric_value = &metric_value;
+
+            self.inner.emit(&emit::Event::new(
+                x,
+                emit::tpl!("{metric_kind} of {metric_name} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
+                emit::props! {
+                    metric_kind,
+                    metric_name,
+                    #[emit::as_sval]
+                    metric_value,
+                    min: y.start,
+                    max: y.end,
+                },
+            ))
+        }
+
+        self.inner.blocking_flush(timeout)
     }
 }
 

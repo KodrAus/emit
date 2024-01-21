@@ -3,6 +3,7 @@ name = "emit_metrics"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies.emit_core]
-path = "../core"
+[dependencies.emit]
+path = "../"
+default-features = false
 features = ["sval"]
