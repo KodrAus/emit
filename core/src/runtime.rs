@@ -223,6 +223,10 @@ pub trait InternalEmitter: Emitter {}
 
 impl InternalEmitter for Empty {}
 
+impl<T: InternalEmitter, U: InternalEmitter> InternalEmitter for crate::emitter::And<T, U> {}
+
+impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::emitter::ByRef<'a, T> {}
+
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::boxed::Box<T> {}
 
@@ -230,12 +234,20 @@ pub trait InternalFilter: Filter {}
 
 impl InternalFilter for Empty {}
 
+impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::And<T, U> {}
+
+impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::Or<T, U> {}
+
+impl<'a, T: InternalFilter + ?Sized> InternalFilter for crate::filter::ByRef<'a, T> {}
+
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}
 
 pub trait InternalCtxt: Ctxt {}
 
 impl InternalCtxt for Empty {}
+
+impl<'a, T: InternalCtxt + ?Sized> InternalCtxt for crate::ctxt::ByRef<'a, T> {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::boxed::Box<T> {}

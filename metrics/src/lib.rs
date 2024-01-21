@@ -21,6 +21,17 @@ use emit::{
     Event, Timestamp,
 };
 
+pub fn plot_metrics_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(MetricsCollector::new(Bucketing::ByCount(count)), emitter)
+}
+
+pub fn plot_metrics_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(
+        MetricsCollector::new(Bucketing::ByTime(bucket_size)),
+        emitter,
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Metric<'m, T> {
     name: Str<'m>,
@@ -111,17 +122,6 @@ impl<E> MetricsEmitter<E> {
     }
 }
 
-pub fn plot_metrics_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
-    MetricsEmitter::new(MetricsCollector::new(Bucketing::ByCount(count)), emitter)
-}
-
-pub fn plot_metrics_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
-    MetricsEmitter::new(
-        MetricsCollector::new(Bucketing::ByTime(bucket_size)),
-        emitter,
-    )
-}
-
 impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
     fn emit<P: Props>(&self, evt: &Event<P>) {
         if self.collector.lock().unwrap().record_metric(evt) {
@@ -163,6 +163,8 @@ impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
         self.inner.blocking_flush(timeout)
     }
 }
+
+impl<E: emit::runtime::InternalEmitter> emit::runtime::InternalEmitter for MetricsEmitter<E> {}
 
 pub struct MetricsCollector {
     bucketing: Bucketing,

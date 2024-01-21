@@ -11,70 +11,94 @@ use emit::well_known::{MSG_KEY, TPL_KEY, TS_KEY, TS_START_KEY};
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
-pub fn set(file_set: impl AsRef<Path>) -> Result<FileSetBuilder, Error> {
-    let file_set = file_set.as_ref();
-
-    let dir = if let Some(parent) = file_set.parent() {
-        parent
-            .to_str()
-            .ok_or_else(|| "paths must be valid UTF8")?
-            .to_owned()
-    } else {
-        String::new()
-    };
-
-    let prefix = file_set
-        .file_stem()
-        .ok_or_else(|| "paths must include a file name")?
-        .to_str()
-        .ok_or_else(|| "paths must be valid UTF8")?
-        .to_owned();
-
-    let ext = if let Some(ext) = file_set.extension() {
-        ext.to_str()
-            .ok_or_else(|| "paths must be valid UTF8")?
-            .to_owned()
-    } else {
-        String::from("log")
-    };
-
-    Ok(FileSetBuilder::new(dir, prefix, ext))
+pub fn set(file_set: impl AsRef<Path>) -> FileSetBuilder {
+    FileSetBuilder::new(file_set.as_ref())
 }
 
 pub struct FileSetBuilder {
-    dir: String,
-    prefix: String,
-    ext: String,
+    file_set: PathBuf,
 }
 
 impl FileSetBuilder {
-    pub fn new(dir: impl Into<String>, prefix: impl Into<String>, ext: impl Into<String>) -> Self {
+    pub fn new(file_set: impl Into<PathBuf>) -> Self {
         FileSetBuilder {
-            dir: dir.into(),
-            prefix: prefix.into(),
-            ext: ext.into(),
+            file_set: file_set.into(),
         }
     }
 
-    pub fn spawn(self) -> FileSet {
+    pub fn spawn(self) -> Result<FileSet, Error> {
+        let (dir, prefix, ext) = dir_prefix_ext(self.file_set)?;
+
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
         let handle = thread::spawn(move || {
             let mut active_file = None;
 
             let _ = receiver.blocking_exec(|mut batch: Buffer| {
+                let now = std::time::UNIX_EPOCH.elapsed().unwrap();
+                let (secs, nanos) = (now.as_secs(), now.subsec_nanos());
+                let ts = emit::Timestamp::new(now).unwrap().to_parts();
+
                 let mut file = match active_file.take() {
                     Some(file) => file,
                     None => {
-                        let id = uuid::Uuid::now_v7();
+                        let id = uuid::Uuid::new_v7(uuid::Timestamp::from_unix(
+                            uuid::NoContext,
+                            secs,
+                            nanos,
+                        ));
 
-                        let mut path = PathBuf::from(self.dir.clone());
+                        let mut path = PathBuf::from(dir.clone());
 
                         if let Err(e) = fs::create_dir_all(&path) {
                             return Err(emit_batcher::BatchError::retry(e, batch));
                         }
 
-                        path.push(format!("{}.{}.{}", self.prefix, id.simple(), self.ext));
+                        // TODO: Should probably cache this
+                        let read_dir = match fs::read_dir(&path) {
+                            Ok(read_dir) => read_dir,
+                            Err(e) => return Err(emit_batcher::BatchError::retry(e, batch)),
+                        };
+
+                        let mut file_set = Vec::new();
+                        for entry in read_dir {
+                            let Ok(entry) = entry else {
+                                continue;
+                            };
+
+                            if let Ok(file_type) = entry.file_type() {
+                                if !file_type.is_file() {
+                                    continue;
+                                }
+                            }
+
+                            let file_name = entry.file_name();
+                            let Some(file_name) = file_name.to_str() else {
+                                continue;
+                            };
+
+                            if file_name.starts_with(&prefix) && file_name.ends_with(&ext) {
+                                file_set.push(file_name.to_owned());
+                            }
+                        }
+                        file_set.sort_by(|a, b| a.cmp(b).reverse());
+
+                        while file_set.len() >= 4 {
+                            let mut path = path.clone();
+                            path.push(file_set.pop().unwrap());
+
+                            let _ = fs::remove_file(path);
+                        }
+
+                        path.push(format!(
+                            "{}.{:>04}-{:>02}-{:>02}.{}.{}",
+                            prefix,
+                            ts.years,
+                            ts.months,
+                            ts.days,
+                            id.simple(),
+                            ext
+                        ));
 
                         match fs::OpenOptions::new()
                             .create_new(true)
@@ -109,8 +133,38 @@ impl FileSetBuilder {
             });
         });
 
-        FileSet { sender, handle }
+        Ok(FileSet { sender, handle })
     }
+}
+
+fn dir_prefix_ext(file_set: impl AsRef<Path>) -> Result<(String, String, String), Error> {
+    let file_set = file_set.as_ref();
+
+    let dir = if let Some(parent) = file_set.parent() {
+        parent
+            .to_str()
+            .ok_or_else(|| "paths must be valid UTF8")?
+            .to_owned()
+    } else {
+        String::new()
+    };
+
+    let prefix = file_set
+        .file_stem()
+        .ok_or_else(|| "paths must include a file name")?
+        .to_str()
+        .ok_or_else(|| "paths must be valid UTF8")?
+        .to_owned();
+
+    let ext = if let Some(ext) = file_set.extension() {
+        ext.to_str()
+            .ok_or_else(|| "paths must be valid UTF8")?
+            .to_owned()
+    } else {
+        String::from("log")
+    };
+
+    Ok((dir, prefix, ext))
 }
 
 struct Buffer {
