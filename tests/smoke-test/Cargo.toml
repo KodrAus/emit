@@ -17,6 +17,7 @@ path = "../../metrics"
 
 [dependencies.emit_otlp]
 path = "../../targets/otlp"
+features = ["decode_responses"]
 
 [dependencies.emit_term]
 path = "../../targets/term"

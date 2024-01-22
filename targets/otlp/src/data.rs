@@ -11,7 +11,7 @@ mod any_value;
 mod instrumentation_scope;
 mod resource;
 
-#[cfg(feature = "grpc")]
+#[cfg(any(feature = "grpc", feature = "decode_responses"))]
 pub(crate) mod generated;
 
 pub use self::{any_value::*, instrumentation_scope::*, resource::*};

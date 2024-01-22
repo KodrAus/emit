@@ -228,7 +228,20 @@ impl OtlpClientBuilder {
 
                 if let Some(client) = client.logs {
                     if let Err(e) = client
-                        .send(logs, logs::encode_request, logs::decode_response)
+                        .send(logs, logs::encode_request, {
+                            #[cfg(feature = "decode_responses")]
+                            {
+                                if emit::runtime::internal_slot().is_enabled() {
+                                    Some(logs::decode_response)
+                                } else {
+                                    None
+                                }
+                            }
+                            #[cfg(not(feature = "decode_responses"))]
+                            {
+                                None::<fn(Result<&[u8], &[u8]>)>
+                            }
+                        })
                         .await
                     {
                         r = Err(e.map(|logs| Channel {
@@ -240,7 +253,20 @@ impl OtlpClientBuilder {
 
                 if let Some(client) = client.traces {
                     if let Err(e) = client
-                        .send(traces, traces::encode_request, traces::decode_response)
+                        .send(traces, traces::encode_request, {
+                            #[cfg(feature = "decode_responses")]
+                            {
+                                if emit::runtime::internal_slot().is_enabled() {
+                                    Some(traces::decode_response)
+                                } else {
+                                    None
+                                }
+                            }
+                            #[cfg(not(feature = "decode_responses"))]
+                            {
+                                None::<fn(Result<&[u8], &[u8]>)>
+                            }
+                        })
                         .await
                     {
                         r = if let Err(re) = r {
@@ -325,7 +351,7 @@ impl RawClient {
             Option<&PreEncoded>,
             &[PreEncoded],
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
-        decode: impl FnOnce(Result<&[u8], &[u8]>),
+        decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
         match self {
             RawClient::Http {
@@ -333,21 +359,33 @@ impl RawClient {
                 ref resource,
                 ref scope,
             } => {
+                emit::debug!(rt: emit::runtime::internal(), "sending OTLP batch of {batch_size: batch.len()} events");
+
                 let res = http
                     .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                     .await
-                    .map_err(|e| BatchError::no_retry(e))?;
+                    .map_err(|err| {
+                        emit::warn!(rt: emit::runtime::internal(), "failed to send OTLP request: {err}");
 
-                let status = res.status();
-                let body = res
-                    .read_to_vec()
-                    .await
-                    .map_err(|e| BatchError::no_retry(e))?;
+                        BatchError::no_retry(err)
+                    })?;
 
-                if status >= 200 && status < 300 {
-                    decode(Ok(&body));
-                } else {
-                    decode(Err(&body));
+                if let Some(decode) = decode {
+                    let status = res.status();
+                    let body = res
+                        .read_to_vec()
+                        .await
+                        .map_err(|err| {
+                            emit::warn!(rt: emit::runtime::internal(), "failed to read OTLP response: {err}");
+
+                            BatchError::no_retry(err)
+                        })?;
+
+                    if status >= 200 && status < 300 {
+                        decode(Ok(&body));
+                    } else {
+                        decode(Err(&body));
+                    }
                 }
             }
         }

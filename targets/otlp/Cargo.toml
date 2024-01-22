@@ -4,9 +4,10 @@ version = "0.0.0"
 edition = "2021"
 
 [features]
-default = ["http", "grpc"]
+default = ["http"]
 http = ["dep:hyper", "dep:hyper-util"]
 grpc = ["dep:prost", "dep:serde", "emit/serde"]
+decode_responses = ["dep:prost"]
 
 [dependencies.emit]
 path = "../../"

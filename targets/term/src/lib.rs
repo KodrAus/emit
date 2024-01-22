@@ -194,7 +194,7 @@ fn print_event(
         if let Some(trace_id) = evt.props().get(TRACE_ID_KEY).and_then(|id| id.pull()) {
             let trace_id_color = trace_id_color(&trace_id);
 
-            write_fg(buf, "▒", Color::Ansi256(trace_id_color));
+            write_fg(buf, "▓", Color::Ansi256(trace_id_color));
             write_plain(buf, " ");
             write_plain(buf, hex_slice(&trace_id.to_hex()));
             write_plain(buf, " ");

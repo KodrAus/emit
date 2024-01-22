@@ -394,6 +394,10 @@ mod std_support {
             AmbientSlot(OnceLock::new())
         }
 
+        pub fn is_enabled(&self) -> bool {
+            self.0.get().is_some()
+        }
+
         pub fn init<TEmitter, TFilter, TCtxt, TClock, TRng>(
             &self,
             pipeline: Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>,
@@ -465,6 +469,10 @@ mod std_support {
             AmbientInternalSlot(AmbientSlot(OnceLock::new()))
         }
 
+        pub fn is_enabled(&self) -> bool {
+            self.0.is_enabled()
+        }
+
         pub fn init<TEmitter, TFilter, TCtxt, TClock, TRng>(
             &self,
             pipeline: Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>,
@@ -502,6 +510,10 @@ mod no_std_support {
             AmbientSlot {}
         }
 
+        pub fn is_enabled(&self) -> bool {
+            false
+        }
+
         pub fn get(&self) -> &Runtime {
             const EMPTY_AMBIENT_RUNTIME: Runtime = Runtime::new();
 
@@ -512,6 +524,10 @@ mod no_std_support {
     impl AmbientInternalSlot {
         pub(in crate::runtime) const fn new() -> Self {
             AmbientInternalSlot(AmbientSlot::new())
+        }
+
+        pub fn is_enabled(&self) -> bool {
+            false
         }
 
         pub fn get(&self) -> &Runtime {

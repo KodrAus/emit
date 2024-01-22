@@ -65,6 +65,7 @@ pub(crate) fn encode_request(
     )))
 }
 
+#[cfg(feature = "decode_responses")]
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
     use prost::Message;
 

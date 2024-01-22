@@ -159,7 +159,10 @@ impl FileSetBuilder {
             });
         });
 
-        Ok(FileSet { sender, handle })
+        Ok(FileSet {
+            sender,
+            _handle: handle,
+        })
     }
 }
 
@@ -273,10 +276,6 @@ fn read_file_ts(file_name: &str) -> Option<&str> {
     file_name.split('.').skip(1).next()
 }
 
-fn read_file_id(file_name: &str) -> Option<&str> {
-    file_name.split('.').skip(2).next()
-}
-
 fn file_name(file_prefix: &str, file_ext: &str, ts: &str, id: &str) -> String {
     format!("{}.{}.{}.{}", file_prefix, ts, id, file_ext)
 }
@@ -356,7 +355,7 @@ impl emit_batcher::Channel for Buffer {
 
 pub struct FileSet {
     sender: emit_batcher::Sender<Buffer>,
-    handle: thread::JoinHandle<()>,
+    _handle: thread::JoinHandle<()>,
 }
 
 impl emit::Emitter for FileSet {
@@ -436,8 +435,4 @@ impl<'a, P: emit::Props> sval::Value for EventValue<'a, P> {
 
         stream.record_end(None, None, None)
     }
-}
-
-struct FileWriter {
-    receiver: emit_batcher::Receiver<Buffer>,
 }
