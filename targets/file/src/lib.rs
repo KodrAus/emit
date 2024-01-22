@@ -33,7 +33,7 @@ impl FileSetBuilder {
     pub fn new(file_set: impl Into<PathBuf>) -> Self {
         FileSetBuilder {
             file_set: file_set.into(),
-            roll_by: RollBy::Day,
+            roll_by: RollBy::Hour,
             max_files: 32,
             reuse_files: false,
         }
@@ -114,7 +114,7 @@ impl FileSetBuilder {
                             let mut path = path.clone();
                             path.push(file_name);
 
-                            try_open(&path).ok()
+                            try_open_reuse(&path).ok()
                         } else {
                             None
                         };
@@ -127,15 +127,9 @@ impl FileSetBuilder {
                             let file_id =
                                 file_id(rolling_millis(self.roll_by, ts, parts), rolling_id());
 
-                            // File format that sorts lexically; newer files sort earlier than older ones
                             path.push(file_name(&file_prefix, &file_ext, &file_ts, &file_id));
 
-                            match fs::OpenOptions::new()
-                                .create_new(true)
-                                .read(false)
-                                .append(true)
-                                .open(path)
-                            {
+                            match try_open_create(path) {
                                 Ok(file) => file,
                                 Err(e) => return Err(emit_batcher::BatchError::retry(e, batch)),
                             }
@@ -168,7 +162,7 @@ impl FileSetBuilder {
     }
 }
 
-fn try_open(path: impl AsRef<Path>) -> Result<fs::File, io::Error> {
+fn try_open_reuse(path: impl AsRef<Path>) -> Result<fs::File, io::Error> {
     let mut file = fs::OpenOptions::new().read(false).append(true).open(path)?;
 
     // Defensive newline to ensure any incomplete event is terminated
@@ -178,6 +172,14 @@ fn try_open(path: impl AsRef<Path>) -> Result<fs::File, io::Error> {
     file.write_all(b"\n")?;
 
     Ok(file)
+}
+
+fn try_open_create(path: impl AsRef<Path>) -> Result<fs::File, io::Error> {
+    fs::OpenOptions::new()
+        .create_new(true)
+        .read(false)
+        .append(true)
+        .open(path)
 }
 
 fn dir_prefix_ext(file_set: impl AsRef<Path>) -> Result<(String, String, String), Error> {
