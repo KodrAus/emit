@@ -296,95 +296,101 @@ impl OtlpClientBuilder {
 
                 let mut r = Ok(());
 
-                if let Some(client) = client.logs {
-                    if let Err(e) = client
-                        .send(logs, logs::encode_request, {
-                            #[cfg(feature = "decode_responses")]
-                            {
-                                if emit::runtime::internal_slot().is_enabled() {
-                                    Some(logs::decode_response)
-                                } else {
-                                    None
+                if logs.len() > 0 {
+                    if let Some(client) = client.logs {
+                        if let Err(e) = client
+                            .send(logs, logs::encode_request, {
+                                #[cfg(feature = "decode_responses")]
+                                {
+                                    if emit::runtime::internal_slot().is_enabled() {
+                                        Some(logs::decode_response)
+                                    } else {
+                                        None
+                                    }
                                 }
-                            }
-                            #[cfg(not(feature = "decode_responses"))]
-                            {
-                                None::<fn(Result<&[u8], &[u8]>)>
-                            }
-                        })
-                        .await
-                    {
-                        r = Err(e.map(|logs| Channel {
-                            logs,
-                            traces: Vec::new(),
-                            metrics: Vec::new(),
-                        }));
-                    }
-                }
-
-                if let Some(client) = client.traces {
-                    if let Err(e) = client
-                        .send(traces, traces::encode_request, {
-                            #[cfg(feature = "decode_responses")]
-                            {
-                                if emit::runtime::internal_slot().is_enabled() {
-                                    Some(traces::decode_response)
-                                } else {
-                                    None
+                                #[cfg(not(feature = "decode_responses"))]
+                                {
+                                    None::<fn(Result<&[u8], &[u8]>)>
                                 }
-                            }
-                            #[cfg(not(feature = "decode_responses"))]
-                            {
-                                None::<fn(Result<&[u8], &[u8]>)>
-                            }
-                        })
-                        .await
-                    {
-                        r = if let Err(re) = r {
-                            Err(re.map(|mut channel| {
-                                channel.traces = e.into_retryable();
-                                channel
-                            }))
-                        } else {
-                            Err(e.map(|traces| Channel {
-                                traces,
-                                logs: Vec::new(),
-                                metrics: Vec::new(),
-                            }))
-                        };
-                    }
-                }
-
-                if let Some(client) = client.metrics {
-                    if let Err(e) = client
-                        .send(metrics, metrics::encode_request, {
-                            #[cfg(feature = "decode_responses")]
-                            {
-                                if emit::runtime::internal_slot().is_enabled() {
-                                    Some(metrics::decode_response)
-                                } else {
-                                    None
-                                }
-                            }
-                            #[cfg(not(feature = "decode_responses"))]
-                            {
-                                None::<fn(Result<&[u8], &[u8]>)>
-                            }
-                        })
-                        .await
-                    {
-                        r = if let Err(re) = r {
-                            Err(re.map(|mut channel| {
-                                channel.metrics = e.into_retryable();
-                                channel
-                            }))
-                        } else {
-                            Err(e.map(|metrics| Channel {
-                                metrics,
-                                logs: Vec::new(),
+                            })
+                            .await
+                        {
+                            r = Err(e.map(|logs| Channel {
+                                logs,
                                 traces: Vec::new(),
-                            }))
-                        };
+                                metrics: Vec::new(),
+                            }));
+                        }
+                    }
+                }
+
+                if traces.len() > 0 {
+                    if let Some(client) = client.traces {
+                        if let Err(e) = client
+                            .send(traces, traces::encode_request, {
+                                #[cfg(feature = "decode_responses")]
+                                {
+                                    if emit::runtime::internal_slot().is_enabled() {
+                                        Some(traces::decode_response)
+                                    } else {
+                                        None
+                                    }
+                                }
+                                #[cfg(not(feature = "decode_responses"))]
+                                {
+                                    None::<fn(Result<&[u8], &[u8]>)>
+                                }
+                            })
+                            .await
+                        {
+                            r = if let Err(re) = r {
+                                Err(re.map(|mut channel| {
+                                    channel.traces = e.into_retryable();
+                                    channel
+                                }))
+                            } else {
+                                Err(e.map(|traces| Channel {
+                                    traces,
+                                    logs: Vec::new(),
+                                    metrics: Vec::new(),
+                                }))
+                            };
+                        }
+                    }
+                }
+
+                if metrics.len() > 0 {
+                    if let Some(client) = client.metrics {
+                        if let Err(e) = client
+                            .send(metrics, metrics::encode_request, {
+                                #[cfg(feature = "decode_responses")]
+                                {
+                                    if emit::runtime::internal_slot().is_enabled() {
+                                        Some(metrics::decode_response)
+                                    } else {
+                                        None
+                                    }
+                                }
+                                #[cfg(not(feature = "decode_responses"))]
+                                {
+                                    None::<fn(Result<&[u8], &[u8]>)>
+                                }
+                            })
+                            .await
+                        {
+                            r = if let Err(re) = r {
+                                Err(re.map(|mut channel| {
+                                    channel.metrics = e.into_retryable();
+                                    channel
+                                }))
+                            } else {
+                                Err(e.map(|metrics| Channel {
+                                    metrics,
+                                    logs: Vec::new(),
+                                    traces: Vec::new(),
+                                }))
+                            };
+                        }
                     }
                 }
 
