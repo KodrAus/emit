@@ -18,6 +18,7 @@ const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(Duration);
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Parts {
     pub years: u16,
     pub months: u8,
@@ -48,6 +49,100 @@ impl Timestamp {
     #[cfg(feature = "std")]
     pub fn to_system_time(&self) -> std::time::SystemTime {
         std::time::SystemTime::UNIX_EPOCH + self.0
+    }
+
+    pub fn from_parts(parts: Parts) -> Option<Self> {
+        let is_leap;
+        let start_of_year;
+        let year = (parts.years as i64) - 1900;
+
+        // Fast path for years 1900 - 2038.
+        if year as u64 <= 138 {
+            let mut leaps: i64 = (year - 68) >> 2;
+            if (year - 68).trailing_zeros() >= 2 {
+                leaps -= 1;
+                is_leap = true;
+            } else {
+                is_leap = false;
+            }
+
+            start_of_year = i128::from(31_536_000 * (year - 70) + 86400 * leaps);
+        } else {
+            let centuries: i64;
+            let mut leaps: i64;
+
+            let mut cycles: i64 = (year - 100) / 400;
+            let mut rem: i64 = (year - 100) % 400;
+
+            if rem < 0 {
+                cycles -= 1;
+                rem += 400
+            }
+            if rem == 0 {
+                is_leap = true;
+                centuries = 0;
+                leaps = 0;
+            } else {
+                if rem >= 200 {
+                    if rem >= 300 {
+                        centuries = 3;
+                        rem -= 300;
+                    } else {
+                        centuries = 2;
+                        rem -= 200;
+                    }
+                } else if rem >= 100 {
+                    centuries = 1;
+                    rem -= 100;
+                } else {
+                    centuries = 0;
+                }
+                if rem == 0 {
+                    is_leap = false;
+                    leaps = 0;
+                } else {
+                    leaps = rem / 4;
+                    rem %= 4;
+                    is_leap = rem == 0;
+                }
+            }
+            leaps += 97 * cycles + 24 * centuries - i64::from(is_leap);
+
+            start_of_year = i128::from((year - 100) * 31_536_000)
+                + i128::from(leaps * 86400 + 946_684_800 + 86400);
+        }
+
+        let seconds_within_month = 86400 * u32::from(parts.days - 1)
+            + 3600 * u32::from(parts.hours)
+            + 60 * u32::from(parts.minutes)
+            + u32::from(parts.seconds);
+
+        let mut seconds_within_year = [
+            0,           // Jan
+            31 * 86400,  // Feb
+            59 * 86400,  // Mar
+            90 * 86400,  // Apr
+            120 * 86400, // May
+            151 * 86400, // Jun
+            181 * 86400, // Jul
+            212 * 86400, // Aug
+            243 * 86400, // Sep
+            273 * 86400, // Oct
+            304 * 86400, // Nov
+            334 * 86400, // Dec
+        ][usize::from(parts.months - 1)]
+            + seconds_within_month;
+
+        if is_leap && parts.months > 2 {
+            seconds_within_year += 86400
+        }
+
+        Timestamp::new(Duration::new(
+            (start_of_year + i128::from(seconds_within_year))
+                .try_into()
+                .ok()?,
+            parts.nanos,
+        ))
     }
 
     pub fn to_parts(&self) -> Parts {
@@ -199,7 +294,7 @@ fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
         unimplemented!("non-UTC")
     }
 
-    let years = i64::from_str_radix(&fmt[0..4], 10).unwrap();
+    let years = u16::from_str_radix(&fmt[0..4], 10).unwrap();
     let months = u8::from_str_radix(&fmt[5..7], 10).unwrap();
     let days = u8::from_str_radix(&fmt[8..10], 10).unwrap();
     let hours = u8::from_str_radix(&fmt[11..13], 10).unwrap();
@@ -212,97 +307,15 @@ fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
         0
     };
 
-    let is_leap;
-    let start_of_year;
-    let year = years - 1900;
-
-    // Fast path for years 1900 - 2038.
-    if year as u64 <= 138 {
-        let mut leaps: i64 = (year - 68) >> 2;
-        if (year - 68).trailing_zeros() >= 2 {
-            leaps -= 1;
-            is_leap = true;
-        } else {
-            is_leap = false;
-        }
-
-        start_of_year = i128::from(31_536_000 * (year - 70) + 86400 * leaps);
-    } else {
-        let centuries: i64;
-        let mut leaps: i64;
-
-        let mut cycles: i64 = (year - 100) / 400;
-        let mut rem: i64 = (year - 100) % 400;
-
-        if rem < 0 {
-            cycles -= 1;
-            rem += 400
-        }
-        if rem == 0 {
-            is_leap = true;
-            centuries = 0;
-            leaps = 0;
-        } else {
-            if rem >= 200 {
-                if rem >= 300 {
-                    centuries = 3;
-                    rem -= 300;
-                } else {
-                    centuries = 2;
-                    rem -= 200;
-                }
-            } else if rem >= 100 {
-                centuries = 1;
-                rem -= 100;
-            } else {
-                centuries = 0;
-            }
-            if rem == 0 {
-                is_leap = false;
-                leaps = 0;
-            } else {
-                leaps = rem / 4;
-                rem %= 4;
-                is_leap = rem == 0;
-            }
-        }
-        leaps += 97 * cycles + 24 * centuries - i64::from(is_leap);
-
-        start_of_year =
-            i128::from((year - 100) * 31_536_000) + i128::from(leaps * 86400 + 946_684_800 + 86400);
-    }
-
-    let seconds_within_month = 86400 * u32::from(days - 1)
-        + 3600 * u32::from(hours)
-        + 60 * u32::from(minutes)
-        + u32::from(seconds);
-
-    let mut seconds_within_year = [
-        0,           // Jan
-        31 * 86400,  // Feb
-        59 * 86400,  // Mar
-        90 * 86400,  // Apr
-        120 * 86400, // May
-        151 * 86400, // Jun
-        181 * 86400, // Jul
-        212 * 86400, // Aug
-        243 * 86400, // Sep
-        273 * 86400, // Oct
-        304 * 86400, // Nov
-        334 * 86400, // Dec
-    ][usize::from(months - 1)]
-        + seconds_within_month;
-
-    if is_leap && months > 2 {
-        seconds_within_year += 86400
-    }
-
-    Timestamp::new(Duration::new(
-        (start_of_year + i128::from(seconds_within_year))
-            .try_into()
-            .map_err(|_| ParseTimestampError {})?,
+    Timestamp::from_parts(Parts {
+        years,
+        months,
+        days,
+        hours,
+        minutes,
+        seconds,
         nanos,
-    ))
+    })
     .ok_or_else(|| ParseTimestampError {})
 }
 

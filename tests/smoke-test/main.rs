@@ -36,11 +36,18 @@ async fn main() {
             .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        //.and_to(emit_metrics::plot_metrics_by_count(30, emit_term::stdout()))
-        .and_to(emit_file::set("./target/logs/log.txt").spawn().unwrap())
+        .and_to(emit_metrics::plot_metrics_by_count(30, emit_term::stdout()))
+        .and_to(
+            emit_file::set("./target/logs/log.txt")
+                .reuse_files(true)
+                .roll_by_minute()
+                .max_files(6)
+                .spawn()
+                .unwrap(),
+        )
         .init();
 
-    //emit::setup().to(emit_term::stdout()).init_internal();
+    emit::setup().to(emit_term::stdout()).init_internal();
 
     sample_metrics();
 

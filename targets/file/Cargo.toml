@@ -17,10 +17,5 @@ features = ["std"]
 [dependencies.emit_batcher]
 path = "../../batcher"
 
-[dependencies.uuid]
-version = "1"
-features = ["v7"]
-
-[dependencies.time]
-version = "0.3"
-features = ["local-offset"]
+[dependencies.rand]
+version = "0.8"
