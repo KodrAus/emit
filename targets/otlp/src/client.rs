@@ -482,7 +482,7 @@ impl RawClient {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        use emit::IdRng as _;
+        use emit::{Emit as _, IdRng as _};
 
         let rt = emit::runtime::internal();
 
@@ -503,29 +503,46 @@ impl RawClient {
                 } => {
                     let batch_size = batch.len();
 
-                    let timer = emit::clock::Timer::start(rt.clock());
+                    let timer = rt.start_timer();
 
                     let res = http
                         .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                         .await
                         .map_err(|err| {
-                            emit::warn!(rt, extent: timer, "OTLP batch of {batch_size} failed to send: {err}");
+                            rt.warn(
+                                emit::tpl!(
+                                    "OTLP batch of {batch_size} events failed to send: {err}"
+                                ),
+                                emit::props! {
+                                    batch_size,
+                                    err,
+                                },
+                            );
 
                             BatchError::retry(err, batch)
                         })?;
 
-                    emit::debug!(rt, extent: timer, "OTLP batch of {batch_size} responded {status_code: res.status()}");
+                    rt.debug_at(
+                        timer,
+                        emit::tpl!("OTLP batch of {batch_size} events responded {status_code}"),
+                        emit::props! {
+                            batch_size,
+                            status_code: res.status(),
+                        },
+                    );
 
                     if let Some(decode) = decode {
                         let status = res.status();
-                        let body = res
-                            .read_to_vec()
-                            .await
-                            .map_err(|err| {
-                                emit::warn!(rt, "failed to read OTLP response: {err}");
+                        let body = res.read_to_vec().await.map_err(|err| {
+                            rt.warn(
+                                emit::tpl!("failed to read OTLP response: {err}"),
+                                emit::props! {
+                                    err,
+                                },
+                            );
 
-                                BatchError::no_retry(err)
-                            })?;
+                            BatchError::no_retry(err)
+                        })?;
 
                         if status >= 200 && status < 300 {
                             decode(Ok(&body));
@@ -537,6 +554,7 @@ impl RawClient {
             }
 
             Ok(())
-        }).await
+        })
+        .await
     }
 }

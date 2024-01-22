@@ -61,7 +61,7 @@ async fn main() {
     internal.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::in_ctxt(trace_id: emit::new_trace_id())]
+#[emit::in_ctxt(trace_id: emit::gen_trace_id())]
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
@@ -78,7 +78,7 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::in_ctxt(span_id: emit::new_span_id(), span_parent: emit::current_span_id(), a)]
+#[emit::in_ctxt(span_id: emit::gen_span_id(), span_parent: emit::current_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     increment(&COUNT);
 

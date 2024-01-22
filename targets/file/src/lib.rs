@@ -76,7 +76,10 @@ impl FileSetBuilder {
             let mut active_file = None;
 
             let _ = receiver.blocking_exec(|mut batch: Buffer| {
+                use emit::Emit as _;
                 use emit_batcher::Channel as _;
+
+                let rt = emit::runtime::internal();
 
                 let batch_size = batch.remaining();
 
@@ -90,7 +93,13 @@ impl FileSetBuilder {
                         let mut path = PathBuf::from(dir.clone());
 
                         if let Err(err) = fs::create_dir_all(&path) {
-                            emit::warn!(rt: emit::runtime::internal(), "failed to create root directory {#[emit::as_debug] path}: {err}");
+                            rt.warn(
+                                emit::tpl!("failed to create root directory {path}: {err}"),
+                                emit::props! {
+                                    #[emit::as_debug] path,
+                                    err,
+                                },
+                            );
 
                             return Err(emit_batcher::BatchError::retry(err, batch));
                         }
@@ -125,7 +134,13 @@ impl FileSetBuilder {
 
                             try_open_reuse(&path)
                                 .map_err(|err| {
-                                    emit::warn!(rt: emit::runtime::internal(), "failed to open {#[emit::as_debug] path}: {err}");
+                                    rt.warn(
+                                        emit::tpl!("failed to open {path}: {err}"),
+                                        emit::props! {
+                                            #[emit::as_debug] path,
+                                            err,
+                                        },
+                                    );
 
                                     err
                                 })
@@ -136,7 +151,12 @@ impl FileSetBuilder {
                         };
 
                         if let Some((file, path)) = reuse_file {
-                            emit::debug!(rt: emit::runtime::internal(), "reusing {#[emit::as_debug] path}");
+                            rt.debug(
+                                emit::tpl!("reusing {path}"),
+                                emit::props! {
+                                    #[emit::as_debug] path,
+                                },
+                            );
 
                             (file, path)
                         }
@@ -149,15 +169,26 @@ impl FileSetBuilder {
 
                             match try_open_create(&path) {
                                 Ok(file) => {
-                                    emit::debug!(rt: emit::runtime::internal(), "created {#[emit::as_debug] path}");
+                                    rt.debug(
+                                        emit::tpl!("created {path}"),
+                                        emit::props! {
+                                            #[emit::as_debug] path,
+                                        },
+                                    );
 
                                     (file, path)
-                                },
+                                }
                                 Err(err) => {
-                                    emit::warn!(rt: emit::runtime::internal(), "failed to create {#[emit::as_debug] path}: {err}");
+                                    rt.warn(
+                                        emit::tpl!("failed to create {path}: {err}"),
+                                        emit::props! {
+                                            #[emit::as_debug] path,
+                                            err,
+                                        },
+                                    );
 
-                                    return Err(emit_batcher::BatchError::retry(err, batch))
-                                },
+                                    return Err(emit_batcher::BatchError::retry(err, batch));
+                                }
                             }
                         }
                     }
@@ -165,7 +196,13 @@ impl FileSetBuilder {
 
                 while batch.index < batch.bufs.len() {
                     if let Err(err) = file.write_all(batch.bufs[batch.index].as_bytes()) {
-                        emit::warn!(rt: emit::runtime::internal(), "failed to write event to {#[emit::as_debug] path}: {err}");
+                        rt.warn(
+                            emit::tpl!("failed to write event to {path}: {err}"),
+                            emit::props! {
+                                #[emit::as_debug] path,
+                                err,
+                            },
+                        );
 
                         return Err(emit_batcher::BatchError::retry(err, batch));
                     }
@@ -182,7 +219,12 @@ impl FileSetBuilder {
 
                 active_file = Some((file, path));
 
-                emit::debug!(rt: emit::runtime::internal(), "wrote file batch of {batch_size} events");
+                rt.debug(
+                    emit::tpl!("wrote file batch of {batch_size} events"),
+                    emit::props! {
+                        batch_size,
+                    },
+                );
 
                 Ok(())
             });

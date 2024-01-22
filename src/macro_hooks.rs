@@ -2,12 +2,10 @@ use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
     clock::Clock,
-    ctxt::{Ctxt, ErasedCtxt},
+    ctxt::ErasedCtxt,
     emitter::Emitter,
     filter::Filter,
     props::Props,
-    rng::Rng,
-    runtime::Runtime,
     str::ToStr,
     template::Template,
     value::{ToValue, Value},
@@ -458,33 +456,6 @@ pub fn __private_emit(
         tpl,
         props,
     );
-}
-
-#[track_caller]
-pub fn __private_emit_rt(
-    rt: &Runtime<impl Emitter, impl Filter, impl Ctxt, impl Clock, impl Rng>,
-    to: impl Emitter,
-    when: impl Filter,
-    extent: impl ToExtent,
-    tpl: Template,
-    props: impl Props,
-) {
-    base_emit(
-        rt.emitter().and(to),
-        rt.filter().and(when),
-        rt.ctxt(),
-        extent.to_extent().or_else(|| rt.now().to_extent()),
-        tpl,
-        props,
-    );
-}
-
-#[track_caller]
-pub fn __private_in_ctxt_rt<C: Ctxt>(
-    rt: &Runtime<impl Emitter, impl Filter, C, impl Clock, impl Rng>,
-    props: impl Props,
-) -> Frame<&C> {
-    base_push_ctxt(rt.ctxt(), props)
 }
 
 #[track_caller]

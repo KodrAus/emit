@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use emit_core::extent::ToExtent;
+use emit_core::{extent::ToExtent, well_known::LVL_KEY};
 
 use crate::frame::Frame;
 
@@ -19,9 +19,10 @@ pub use emit_core::{
 pub mod frame;
 pub mod id;
 pub mod level;
+pub mod timer;
 
 pub use self::{
-    clock::{Clock, Timer},
+    clock::Clock,
     ctxt::Ctxt,
     emitter::Emitter,
     event::Event,
@@ -33,6 +34,7 @@ pub use self::{
     rng::Rng,
     str::Str,
     template::Template,
+    timer::Timer,
     timestamp::Timestamp,
     value::Value,
 };
@@ -79,10 +81,6 @@ pub fn emit(evt: &Event<impl Props>) {
     base_emit(ambient, ambient, ambient, extent, tpl, props);
 }
 
-pub type PushCtxt = Frame<&'static emit_core::runtime::AmbientRuntime<'static>>;
-
-pub type StartTimer = Timer<&'static emit_core::runtime::AmbientRuntime<'static>>;
-
 #[track_caller]
 pub fn now() -> Option<Timestamp> {
     emit_core::runtime::shared().now()
@@ -90,50 +88,166 @@ pub fn now() -> Option<Timestamp> {
 
 #[track_caller]
 pub fn push_ctxt(props: impl Props) -> PushCtxt {
-    base_push_ctxt(emit_core::runtime::shared(), props)
+    emit_core::runtime::shared().push_ctxt(props)
 }
 
 #[track_caller]
 pub fn current_ctxt() -> PushCtxt {
-    base_push_ctxt(emit_core::runtime::shared(), empty::Empty)
+    emit_core::runtime::shared().current_ctxt()
 }
 
 #[track_caller]
 pub fn start_timer() -> StartTimer {
-    Timer::start(emit_core::runtime::shared())
+    emit_core::runtime::shared().start_timer()
 }
 
 #[track_caller]
-pub fn new_span_id() -> Option<SpanId> {
+pub fn gen_span_id() -> Option<SpanId> {
     emit_core::runtime::shared().gen_span_id()
 }
 
 #[track_caller]
 pub fn current_span_id() -> Option<SpanId> {
-    let mut span_id = None;
-
-    emit_core::runtime::shared().with_current(|ctxt| {
-        span_id = ctxt.pull();
-    });
-
-    span_id
+    emit_core::runtime::shared().current_span_id()
 }
 
 #[track_caller]
-pub fn new_trace_id() -> Option<TraceId> {
+pub fn gen_trace_id() -> Option<TraceId> {
     emit_core::runtime::shared().gen_trace_id()
 }
 
 #[track_caller]
 pub fn current_trace_id() -> Option<TraceId> {
-    let mut trace_id = None;
-
-    emit_core::runtime::shared().with_current(|ctxt| {
-        trace_id = ctxt.pull();
-    });
-
-    trace_id
+    emit_core::runtime::shared().current_trace_id()
 }
+
+pub type PushCtxt = Frame<&'static emit_core::runtime::AmbientRuntime<'static>>;
+
+pub type StartTimer = Timer<&'static emit_core::runtime::AmbientRuntime<'static>>;
+
+pub trait Emit: Emitter + Filter + Ctxt + Clock + Rng {
+    fn debug<P: Props>(&self, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            self.now(),
+            tpl,
+            props.chain((LVL_KEY, Level::Debug)),
+        )
+    }
+
+    fn info<P: Props>(&self, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            self.now(),
+            tpl,
+            props.chain((LVL_KEY, Level::Info)),
+        )
+    }
+
+    fn warn<P: Props>(&self, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            self.now(),
+            tpl,
+            props.chain((LVL_KEY, Level::Warn)),
+        )
+    }
+
+    fn error<P: Props>(&self, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            self.now(),
+            tpl,
+            props.chain((LVL_KEY, Level::Error)),
+        )
+    }
+
+    fn debug_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            extent,
+            tpl,
+            props.chain((LVL_KEY, Level::Debug)),
+        )
+    }
+
+    fn info_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            extent,
+            tpl,
+            props.chain((LVL_KEY, Level::Info)),
+        )
+    }
+
+    fn warn_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            extent,
+            tpl,
+            props.chain((LVL_KEY, Level::Warn)),
+        )
+    }
+
+    fn error_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
+        base_emit(
+            self,
+            self,
+            self,
+            extent,
+            tpl,
+            props.chain((LVL_KEY, Level::Error)),
+        )
+    }
+
+    fn push_ctxt<P: Props>(&self, props: P) -> Frame<&Self> {
+        Frame::new(self, props)
+    }
+
+    fn current_ctxt(&self) -> Frame<&Self> {
+        Frame::new(self, empty::Empty)
+    }
+
+    fn current_trace_id(&self) -> Option<TraceId> {
+        let mut trace_id = None;
+
+        self.with_current(|ctxt| {
+            trace_id = ctxt.pull();
+        });
+
+        trace_id
+    }
+
+    fn current_span_id(&self) -> Option<SpanId> {
+        let mut span_id = None;
+
+        self.with_current(|ctxt| {
+            span_id = ctxt.pull();
+        });
+
+        span_id
+    }
+
+    fn start_timer(&self) -> Timer<&Self> {
+        Timer::start(self)
+    }
+}
+
+impl<E: Emitter + Filter + Ctxt + Clock + Rng + ?Sized> Emit for E {}
 
 #[doc(hidden)]
 pub mod __private {
