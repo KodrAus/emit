@@ -1,3 +1,5 @@
+#![feature(stmt_expr_attributes, proc_macro_hygiene)]
+
 use std::{
     fs,
     io::{self, Write},
@@ -74,7 +76,11 @@ impl FileSetBuilder {
             let mut active_file = None;
 
             let _ = receiver.blocking_exec(|mut batch: Buffer| {
-                let mut file = match active_file.take() {
+                use emit_batcher::Channel as _;
+
+                emit::debug!(rt: emit::runtime::internal(), "writing file batch of {batch_size: batch.remaining()} events");
+
+                let (mut file, path) = match active_file.take() {
                     Some(file) => file,
                     None => {
                         let now = std::time::UNIX_EPOCH.elapsed().unwrap();
@@ -115,13 +121,22 @@ impl FileSetBuilder {
                             let mut path = path.clone();
                             path.push(file_name);
 
-                            try_open_reuse(&path).ok()
+                            try_open_reuse(&path)
+                                .map_err(|err| {
+                                    emit::warn!(rt: emit::runtime::internal(), "failed to open {#[emit::as_debug] path}: {err}");
+
+                                    err
+                                })
+                                .ok()
+                                .map(|file| (file, path))
                         } else {
                             None
                         };
 
-                        if let Some(file) = reuse_file {
-                            file
+                        if let Some((file, path)) = reuse_file {
+                            emit::debug!(rt: emit::runtime::internal(), "reusing {#[emit::as_debug] path}");
+
+                            (file, path)
                         }
                         // If there's no file to reuse then create a new one
                         else {
@@ -130,17 +145,27 @@ impl FileSetBuilder {
 
                             path.push(file_name(&file_prefix, &file_ext, &file_ts, &file_id));
 
-                            match try_open_create(path) {
-                                Ok(file) => file,
-                                Err(e) => return Err(emit_batcher::BatchError::retry(e, batch)),
+                            match try_open_create(&path) {
+                                Ok(file) => {
+                                    emit::debug!(rt: emit::runtime::internal(), "created {#[emit::as_debug] path}");
+
+                                    (file, path)
+                                },
+                                Err(err) => {
+                                    emit::warn!(rt: emit::runtime::internal(), "failed to create {#[emit::as_debug] path}: {err}");
+
+                                    return Err(emit_batcher::BatchError::retry(err, batch))
+                                },
                             }
                         }
                     }
                 };
 
                 while batch.index < batch.bufs.len() {
-                    if let Err(e) = file.write_all(batch.bufs[batch.index].as_bytes()) {
-                        return Err(emit_batcher::BatchError::retry(e, batch));
+                    if let Err(err) = file.write_all(batch.bufs[batch.index].as_bytes()) {
+                        emit::warn!(rt: emit::runtime::internal(), "failed to write event to {#[emit::as_debug] path}: {err}");
+
+                        return Err(emit_batcher::BatchError::retry(err, batch));
                     }
 
                     // Drop the buffer at this point to free some memory
@@ -153,7 +178,7 @@ impl FileSetBuilder {
                 file.sync_all()
                     .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
-                active_file = Some(file);
+                active_file = Some((file, path));
 
                 Ok(())
             });
