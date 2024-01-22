@@ -2,7 +2,7 @@ use emit_batcher::BatchError;
 use std::{fmt, sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, default_message_formatter, logs, traces, PreEncoded},
+    data::{self, default_message_formatter, logs, metrics, traces, PreEncoded},
     Error,
 };
 
@@ -13,11 +13,18 @@ mod http;
 pub struct OtlpClient {
     logs: Option<logs::EventEncoder>,
     traces: Option<traces::EventEncoder>,
+    metrics: Option<metrics::EventEncoder>,
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
 impl emit::emitter::Emitter for OtlpClient {
     fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
+        if let Some(ref encoder) = self.metrics {
+            if let Some(encoded) = encoder.encode_event(evt) {
+                return self.sender.send(ChannelItem::Metric(encoded));
+            }
+        }
+
         if let Some(ref encoder) = self.traces {
             if let Some(encoded) = encoder.encode_event(evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
@@ -38,11 +45,13 @@ impl emit::emitter::Emitter for OtlpClient {
 struct Channel<T> {
     logs: Vec<T>,
     traces: Vec<T>,
+    metrics: Vec<T>,
 }
 
 enum ChannelItem<T> {
     LogRecord(T),
     Span(T),
+    Metric(T),
 }
 
 impl<T> emit_batcher::Channel for Channel<T> {
@@ -52,6 +61,7 @@ impl<T> emit_batcher::Channel for Channel<T> {
         Channel {
             logs: Vec::new(),
             traces: Vec::new(),
+            metrics: Vec::new(),
         }
     }
 
@@ -59,16 +69,30 @@ impl<T> emit_batcher::Channel for Channel<T> {
         match item {
             ChannelItem::LogRecord(item) => self.logs.push(item),
             ChannelItem::Span(item) => self.traces.push(item),
+            ChannelItem::Metric(item) => self.metrics.push(item),
         }
     }
 
     fn remaining(&self) -> usize {
-        self.logs.len() + self.traces.len()
+        let Channel {
+            logs,
+            traces,
+            metrics,
+        } = self;
+
+        logs.len() + traces.len() + metrics.len()
     }
 
     fn clear(&mut self) {
-        self.logs.clear();
-        self.traces.clear();
+        let Channel {
+            logs,
+            traces,
+            metrics,
+        } = self;
+
+        logs.clear();
+        traces.clear();
+        metrics.clear();
     }
 }
 
@@ -78,6 +102,7 @@ pub struct OtlpClientBuilder {
     encoding: Encoding,
     logs: Option<OtlpLogsBuilder>,
     traces: Option<OtlpTracesBuilder>,
+    metrics: Option<OtlpMetricsBuilder>,
 }
 
 pub struct OtlpLogsBuilder {
@@ -112,6 +137,22 @@ impl OtlpTracesBuilder {
     }
 }
 
+pub struct OtlpMetricsBuilder {
+    encoder: metrics::EventEncoder,
+    transport: Transport,
+}
+
+impl OtlpMetricsBuilder {
+    pub fn http(dst: impl Into<String>) -> Self {
+        OtlpMetricsBuilder {
+            encoder: metrics::EventEncoder {
+                name: default_message_formatter(),
+            },
+            transport: Transport::Http { url: dst.into() },
+        }
+    }
+}
+
 enum Encoding {
     Proto,
 }
@@ -128,6 +169,7 @@ impl OtlpClientBuilder {
             scope: None,
             logs: None,
             traces: None,
+            metrics: None,
         }
     }
 
@@ -146,6 +188,15 @@ impl OtlpClientBuilder {
 
     pub fn traces(mut self, builder: OtlpTracesBuilder) -> Self {
         self.traces = Some(builder);
+        self
+    }
+
+    pub fn metrics_http(self, dst: impl Into<String>) -> Self {
+        self.metrics(OtlpMetricsBuilder::http(dst))
+    }
+
+    pub fn metrics(mut self, builder: OtlpMetricsBuilder) -> Self {
+        self.metrics = Some(builder);
         self
     }
 
@@ -186,6 +237,7 @@ impl OtlpClientBuilder {
 
         let mut logs = None;
         let mut traces = None;
+        let mut metrics = None;
 
         let client = OtlpSender {
             logs: match self.logs {
@@ -216,13 +268,31 @@ impl OtlpClientBuilder {
                 }
                 None => None,
             },
+            metrics: match self.metrics {
+                Some(OtlpMetricsBuilder {
+                    encoder,
+                    transport: Transport::Http { url },
+                }) => {
+                    metrics = Some(encoder);
+                    Some(Arc::new(RawClient::Http {
+                        http: HttpConnection::new(&url)?,
+                        resource: self.resource.clone(),
+                        scope: self.scope.clone(),
+                    }))
+                }
+                None => None,
+            },
         };
 
         emit_batcher::tokio::spawn(receiver, move |batch: Channel<PreEncoded>| {
             let client = client.clone();
 
             async move {
-                let Channel { logs, traces } = batch;
+                let Channel {
+                    logs,
+                    traces,
+                    metrics,
+                } = batch;
 
                 let mut r = Ok(());
 
@@ -247,6 +317,7 @@ impl OtlpClientBuilder {
                         r = Err(e.map(|logs| Channel {
                             logs,
                             traces: Vec::new(),
+                            metrics: Vec::new(),
                         }));
                     }
                 }
@@ -278,6 +349,40 @@ impl OtlpClientBuilder {
                             Err(e.map(|traces| Channel {
                                 traces,
                                 logs: Vec::new(),
+                                metrics: Vec::new(),
+                            }))
+                        };
+                    }
+                }
+
+                if let Some(client) = client.metrics {
+                    if let Err(e) = client
+                        .send(metrics, metrics::encode_request, {
+                            #[cfg(feature = "decode_responses")]
+                            {
+                                if emit::runtime::internal_slot().is_enabled() {
+                                    Some(metrics::decode_response)
+                                } else {
+                                    None
+                                }
+                            }
+                            #[cfg(not(feature = "decode_responses"))]
+                            {
+                                None::<fn(Result<&[u8], &[u8]>)>
+                            }
+                        })
+                        .await
+                    {
+                        r = if let Err(re) = r {
+                            Err(re.map(|mut channel| {
+                                channel.metrics = e.into_retryable();
+                                channel
+                            }))
+                        } else {
+                            Err(e.map(|metrics| Channel {
+                                metrics,
+                                logs: Vec::new(),
+                                traces: Vec::new(),
                             }))
                         };
                     }
@@ -290,6 +395,7 @@ impl OtlpClientBuilder {
         Ok(OtlpClient {
             logs,
             traces,
+            metrics,
             sender,
         })
     }
@@ -327,11 +433,28 @@ impl OtlpTracesBuilder {
     }
 }
 
+impl OtlpMetricsBuilder {
+    pub fn name(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.name = Box::new(writer);
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct OtlpSender {
     // TODO: Share the client
     logs: Option<Arc<RawClient>>,
     traces: Option<Arc<RawClient>>,
+    metrics: Option<Arc<RawClient>>,
 }
 
 enum RawClient {

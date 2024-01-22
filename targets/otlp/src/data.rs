@@ -5,6 +5,7 @@ use sval_derive::Value;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
 
 pub mod logs;
+pub mod metrics;
 pub mod traces;
 
 mod any_value;

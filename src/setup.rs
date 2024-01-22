@@ -119,7 +119,7 @@ impl<
 where
     TCtxt::Frame: Send + 'static,
 {
-    #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
+    #[must_use = "call `blocking_flush` at the end of `main` (after flushing the main runtime) to ensure events are flushed."]
     pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
         let ambient = emit_core::runtime::internal_slot()
             .init(

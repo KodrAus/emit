@@ -17,3 +17,7 @@ pub fn logs_http(dst: impl Into<String>) -> OtlpLogsBuilder {
 pub fn traces_http(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http(dst)
 }
+
+pub fn metrics_http(dst: impl Into<String>) -> OtlpMetricsBuilder {
+    OtlpMetricsBuilder::http(dst)
+}

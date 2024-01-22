@@ -25,6 +25,10 @@ async fn main() {
                 emit_otlp::traces_http("http://localhost:4318/v1/traces")
                     .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
+            .metrics(
+                emit_otlp::metrics_http("http://localhost:4318/v1/metrics")
+                    .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
+            )
             .resource(emit::props! {
                 #[emit::key("service.name")]
                 service_name: "smoke-test-rs",
@@ -53,8 +57,8 @@ async fn main() {
 
     let _ = in_trace().await;
 
-    internal.blocking_flush(Duration::from_secs(5));
     emitter.blocking_flush(Duration::from_secs(30));
+    internal.blocking_flush(Duration::from_secs(5));
 }
 
 #[emit::in_ctxt(trace_id: emit::new_trace_id())]

@@ -7,9 +7,8 @@ pub struct ExportMetricsServiceRequest {
     /// data from multiple origins typically batch the data before forwarding further and
     /// in that case this array will contain multiple elements.
     #[prost(message, repeated, tag = "1")]
-    pub resource_metrics: ::prost::alloc::vec::Vec<
-        super::super::super::metrics::v1::ResourceMetrics,
-    >,
+    pub resource_metrics:
+        ::prost::alloc::vec::Vec<super::super::super::metrics::v1::ResourceMetrics>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
