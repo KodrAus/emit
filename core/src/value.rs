@@ -83,6 +83,10 @@ impl<'v> Value<'v> {
     pub fn to_usize(&self) -> Option<usize> {
         self.0.to_u64()?.try_into().ok()
     }
+
+    pub fn to_i64(&self) -> Option<i64> {
+        self.0.to_i64()
+    }
 }
 
 pub trait Visitor<'v> {
@@ -235,6 +239,24 @@ impl<'v> From<f64> for Value<'v> {
 impl<'v> FromValue<'v> for f64 {
     fn from_value(value: Value<'v>) -> Option<Self> {
         value.to_f64()
+    }
+}
+
+impl ToValue for i64 {
+    fn to_value(&self) -> Value {
+        Value::from(*self)
+    }
+}
+
+impl<'v> From<i64> for Value<'v> {
+    fn from(value: i64) -> Self {
+        Value(value.into())
+    }
+}
+
+impl<'v> FromValue<'v> for i64 {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        value.to_i64()
     }
 }
 

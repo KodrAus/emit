@@ -29,6 +29,12 @@ impl PreEncoded {
             PreEncoded::Proto(buf) => PreEncodedCursor::Proto(buf.into_cursor()),
         }
     }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        match self {
+            PreEncoded::Proto(buf) => buf.to_vec().into_owned(),
+        }
+    }
 }
 
 pub(crate) enum PreEncodedCursor {

@@ -119,9 +119,13 @@ async fn send_request(
     uri: &Uri,
     body: PreEncoded,
 ) -> Result<hyper::Response<body::Incoming>, Error> {
+    let rt = emit::runtime::internal();
+
     let res = sender
-        .send_request(
-            Request::builder()
+        .send_request({
+            use emit::{Ctxt as _, Props as _};
+
+            let req = Request::builder()
                 .uri(uri)
                 .method(Method::POST)
                 .header("host", uri.authority().unwrap().as_str())
@@ -130,10 +134,26 @@ async fn send_request(
                     match body {
                         PreEncoded::Proto(_) => "application/x-protobuf",
                     },
-                )
-                .body(HttpBody(Some(body.into_cursor())))
-                .map_err(Error::new)?,
-        )
+                );
+
+            // Propagate traceparent for the batch
+            let mut trace_id = None;
+            let mut span_id = None;
+
+            rt.ctxt().with_current(|props| {
+                trace_id = props.pull::<emit::TraceId>();
+                span_id = props.pull::<emit::SpanId>();
+            });
+
+            let req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
+                req.header("traceparent", format!("00-{trace_id}-{span_id}-00"))
+            } else {
+                req
+            };
+
+            req.body(HttpBody(Some(body.into_cursor())))
+                .map_err(Error::new)?
+        })
         .await
         .map_err(Error::new)?;
 

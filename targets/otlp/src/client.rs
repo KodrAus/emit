@@ -476,43 +476,61 @@ impl RawClient {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        match self {
-            RawClient::Http {
-                ref http,
-                ref resource,
-                ref scope,
-            } => {
-                emit::debug!(rt: emit::runtime::internal(), "sending OTLP batch of {batch_size: batch.len()} events");
+        use emit::IdRng as _;
 
-                let res = http
-                    .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
-                    .await
-                    .map_err(|err| {
-                        emit::warn!(rt: emit::runtime::internal(), "failed to send OTLP request: {err}");
+        let rt = emit::runtime::internal();
 
-                        BatchError::no_retry(err)
-                    })?;
+        let ctxt = emit::frame::Frame::new(
+            rt.ctxt(),
+            emit::props! {
+                trace_id: rt.gen_trace_id(),
+                span_id: rt.gen_span_id(),
+            },
+        );
 
-                if let Some(decode) = decode {
-                    let status = res.status();
-                    let body = res
-                        .read_to_vec()
+        ctxt.with_future(async move {
+            match self {
+                RawClient::Http {
+                    ref http,
+                    ref resource,
+                    ref scope,
+                } => {
+                    let batch_size = batch.len();
+
+                    let timer = emit::clock::Timer::start(rt.clock());
+
+                    let res = http
+                        .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                         .await
                         .map_err(|err| {
-                            emit::warn!(rt: emit::runtime::internal(), "failed to read OTLP response: {err}");
+                            emit::warn!(rt, extent: timer, "OTLP batch of {batch_size} failed to send: {err}");
 
-                            BatchError::no_retry(err)
+                            BatchError::retry(err, batch)
                         })?;
 
-                    if status >= 200 && status < 300 {
-                        decode(Ok(&body));
-                    } else {
-                        decode(Err(&body));
+                    emit::debug!(rt, extent: timer, "OTLP batch of {batch_size} responded {status_code: res.status()}");
+
+                    if let Some(decode) = decode {
+                        let status = res.status();
+                        let body = res
+                            .read_to_vec()
+                            .await
+                            .map_err(|err| {
+                                emit::warn!(rt, "failed to read OTLP response: {err}");
+
+                                BatchError::no_retry(err)
+                            })?;
+
+                        if status >= 200 && status < 300 {
+                            decode(Ok(&body));
+                        } else {
+                            decode(Err(&body));
+                        }
                     }
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        }).await
     }
 }

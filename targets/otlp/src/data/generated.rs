@@ -49,7 +49,6 @@ pub(crate) mod collector {
     }
 }
 
-#[cfg(feature = "grpc")]
 pub(crate) mod any_value {
     use std::fmt;
 

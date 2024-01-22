@@ -78,7 +78,7 @@ impl FileSetBuilder {
             let _ = receiver.blocking_exec(|mut batch: Buffer| {
                 use emit_batcher::Channel as _;
 
-                emit::debug!(rt: emit::runtime::internal(), "writing file batch of {batch_size: batch.remaining()} events");
+                let batch_size = batch.remaining();
 
                 let (mut file, path) = match active_file.take() {
                     Some(file) => file,
@@ -89,8 +89,10 @@ impl FileSetBuilder {
 
                         let mut path = PathBuf::from(dir.clone());
 
-                        if let Err(e) = fs::create_dir_all(&path) {
-                            return Err(emit_batcher::BatchError::retry(e, batch));
+                        if let Err(err) = fs::create_dir_all(&path) {
+                            emit::warn!(rt: emit::runtime::internal(), "failed to create root directory {#[emit::as_debug] path}: {err}");
+
+                            return Err(emit_batcher::BatchError::retry(err, batch));
                         }
 
                         let file_ts = file_ts(self.roll_by, parts);
@@ -179,6 +181,8 @@ impl FileSetBuilder {
                     .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
                 active_file = Some((file, path));
+
+                emit::debug!(rt: emit::runtime::internal(), "wrote file batch of {batch_size} events");
 
                 Ok(())
             });

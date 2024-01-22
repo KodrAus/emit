@@ -1,22 +1,11 @@
 use proc_macro2::TokenStream;
-use syn::{
-    parse::Parse, spanned::Spanned, Block, Expr, ExprAsync, ExprBlock, Item, ItemFn, Signature,
-    Stmt,
-};
+use syn::{spanned::Spanned, Block, Expr, ExprAsync, ExprBlock, Item, ItemFn, Signature, Stmt};
 
 use crate::props::Props;
 
 pub struct ExpandTokens {
     pub item: TokenStream,
     pub input: TokenStream,
-}
-
-struct Args {}
-
-impl Parse for Args {
-    fn parse(_: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Args {})
-    }
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
