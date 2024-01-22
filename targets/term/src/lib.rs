@@ -89,16 +89,16 @@ fn level_color(level: &emit::Level) -> Option<u8> {
     }
 }
 
-fn hex_slice<'a>(hex: &'a [u8]) -> impl fmt::Display + 'a {
-    struct HexSlice<'a>(&'a [u8]);
+fn hex_slice<'a>(hex: &'a [u8], len: usize) -> impl fmt::Display + 'a {
+    struct HexSlice<'a>(&'a [u8], usize);
 
     impl<'a> fmt::Display for HexSlice<'a> {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str(str::from_utf8(&self.0[..4]).unwrap())
+            f.write_str(str::from_utf8(&self.0[..self.1]).unwrap())
         }
     }
 
-    HexSlice(hex)
+    HexSlice(hex, len)
 }
 
 struct LocalTime {
@@ -196,7 +196,7 @@ fn print_event(
 
             write_fg(buf, "▓", Color::Ansi256(trace_id_color));
             write_plain(buf, " ");
-            write_plain(buf, hex_slice(&trace_id.to_hex()));
+            write_plain(buf, hex_slice(&trace_id.to_hex(), 6));
             write_plain(buf, " ");
         } else {
             write_plain(buf, "░      ");
@@ -206,7 +206,7 @@ fn print_event(
 
         write_fg(buf, "▓", Color::Ansi256(span_id_color));
         write_plain(buf, " ");
-        write_plain(buf, hex_slice(&span_id.to_hex()));
+        write_plain(buf, hex_slice(&span_id.to_hex(), 4));
         write_plain(buf, " ");
     }
 
