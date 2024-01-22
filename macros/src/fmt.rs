@@ -29,6 +29,7 @@ pub fn template_hole_with_hook(
 
     quote_spanned!(hole.span()=>
         #(#attrs)*
+        #[allow(unused_imports)]
         {
             use emit::__private::{__PrivateFmtHook as _, __PrivateInterpolatedHook as _};
             emit::template::Part::hole(#hole).__private_fmt_as_default()#interpolated_expr #captured_expr

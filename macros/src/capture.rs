@@ -68,7 +68,7 @@ pub fn key_value_with_hook(
     };
 
     let key_tokens = key::key_with_hook(&[], &key_expr);
-    let value_tokens = quote_spanned!(fv.span()=> {
+    let value_tokens = quote_spanned!(fv.span()=> #[allow(unused_imports)] {
         use emit::__private::{__PrivateCaptureHook as _, __PrivateOptionalCaptureHook as _, __PrivateOptionalMapHook as _, __PrivateInterpolatedHook as _};
         (#expr).__private_optional_capture_some().__private_optional_map_some(|v| v.#fn_name()) #interpolated_expr #captured_expr
     });

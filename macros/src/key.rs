@@ -12,6 +12,7 @@ use crate::{
 pub fn key_with_hook(attrs: &[Attribute], key_expr: &ExprLit) -> TokenStream {
     quote_spanned!(key_expr.span()=>
         #(#attrs)*
+        #[allow(unused_imports)]
         {
             use emit::__private::__PrivateKeyHook as _;
             emit::Str::new(#key_expr).__private_key_as_default()
