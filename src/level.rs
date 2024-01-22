@@ -1,5 +1,8 @@
 use emit_core::{
+    event::Event,
+    filter::Filter,
     props::{FromProps, Props},
+    runtime::InternalFilter,
     value::FromValue,
     well_known::LVL_KEY,
 };
@@ -24,10 +27,10 @@ impl fmt::Debug for Level {
 impl fmt::Display for Level {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Level::Info => "INFO",
-            Level::Error => "ERROR",
-            Level::Warn => "WARN",
-            Level::Debug => "DEBUG",
+            Level::Info => "info",
+            Level::Error => "error",
+            Level::Warn => "warn",
+            Level::Debug => "debug",
         })
     }
 }
@@ -40,9 +43,13 @@ impl FromStr for Level {
 
         match lvl.get(0) {
             Some(b'I') | Some(b'i') => parse(lvl, b"INFORMATION", Level::Info),
-            Some(b'D') | Some(b'd') => parse(lvl, b"DEBUG", Level::Debug),
+            Some(b'D') | Some(b'd') => {
+                parse(lvl, b"DEBUG", Level::Debug).or_else(|_| parse(lvl, b"DBG", Level::Debug))
+            }
             Some(b'E') | Some(b'e') => parse(lvl, b"ERROR", Level::Error),
-            Some(b'W') | Some(b'w') => parse(lvl, b"WARNING", Level::Warn),
+            Some(b'W') | Some(b'w') => {
+                parse(lvl, b"WARNING", Level::Warn).or_else(|_| parse(lvl, b"WRN", Level::Warn))
+            }
             Some(_) => Err(ParseLevelError {}),
             None => Err(ParseLevelError {}),
         }
@@ -105,6 +112,37 @@ impl<'v> FromProps<'v> for Level {
         props.get(LVL_KEY)?.pull()
     }
 }
+
+pub fn min_level(min: Level) -> MinLevel {
+    MinLevel::new(min)
+}
+
+pub struct MinLevel {
+    min: Level,
+    default: Level,
+}
+
+impl MinLevel {
+    pub fn new(min: Level) -> MinLevel {
+        MinLevel {
+            min,
+            default: Level::Debug,
+        }
+    }
+
+    pub fn treat_unleveled_as(mut self, default: Level) -> Self {
+        self.default = default;
+        self
+    }
+}
+
+impl Filter for MinLevel {
+    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+        evt.props().pull::<Level>().unwrap_or(self.default) >= self.min
+    }
+}
+
+impl InternalFilter for MinLevel {}
 
 #[cfg(test)]
 mod tests {

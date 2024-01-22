@@ -3,7 +3,7 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write};
 
-use emit::well_known::{LOCATION_KEY, METRIC_VALUE_KEY, TRACE_ID_KEY};
+use emit::well_known::{METRIC_VALUE_KEY, MODULE_KEY, TRACE_ID_KEY};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -228,8 +228,8 @@ fn print_event(
         }
     }
 
-    if let Some(loc) = evt.props().get(LOCATION_KEY) {
-        write_fg(buf, format_args!("{} ", loc), LOCATION);
+    if let Some(module) = evt.props().get(MODULE_KEY) {
+        write_fg(buf, format_args!("{} ", module), MODULE);
     }
 
     let _ = evt.msg().write(Writer { buf });
@@ -336,7 +336,7 @@ impl<'a> emit::template::Write for Writer<'a> {
     }
 }
 
-const LOCATION: Color = Color::Ansi256(244);
+const MODULE: Color = Color::Ansi256(244);
 
 const TEXT: Color = Color::Ansi256(69);
 const NUMBER: Color = Color::Ansi256(135);

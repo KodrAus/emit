@@ -21,6 +21,7 @@ use crate::{
 
 pub(crate) struct HttpConnection {
     uri: Uri,
+    headers: Vec<(String, String)>,
     sender: Mutex<Option<SendRequest<HttpBody>>>,
 }
 
@@ -68,9 +69,13 @@ impl HttpResponse {
 }
 
 impl HttpConnection {
-    pub fn new(url: &str) -> Result<Self, Error> {
+    pub fn new(
+        url: impl AsRef<str>,
+        headers: impl Into<Vec<(String, String)>>,
+    ) -> Result<Self, Error> {
         Ok(HttpConnection {
-            uri: url.parse().map_err(Error::new)?,
+            uri: url.as_ref().parse().map_err(Error::new)?,
+            headers: headers.into(),
             sender: Mutex::new(None),
         })
     }
@@ -106,7 +111,13 @@ impl HttpConnection {
             }
         };
 
-        let res = send_request(&mut sender, &self.uri, body).await?;
+        let res = send_request(
+            &mut sender,
+            &self.uri,
+            self.headers.iter().map(|(k, v)| (&**k, &**v)),
+            body,
+        )
+        .await?;
 
         self.unpoison(sender);
 
@@ -117,6 +128,7 @@ impl HttpConnection {
 async fn send_request(
     sender: &mut SendRequest<HttpBody>,
     uri: &Uri,
+    headers: impl Iterator<Item = (&str, &str)>,
     body: PreEncoded,
 ) -> Result<hyper::Response<body::Incoming>, Error> {
     let rt = emit::runtime::internal();
@@ -125,7 +137,7 @@ async fn send_request(
         .send_request({
             use emit::{Ctxt as _, Props as _};
 
-            let req = Request::builder()
+            let mut req = Request::builder()
                 .uri(uri)
                 .method(Method::POST)
                 .header("host", uri.authority().unwrap().as_str())
@@ -136,6 +148,10 @@ async fn send_request(
                     },
                 );
 
+            for (k, v) in headers {
+                req = req.header(k, v);
+            }
+
             // Propagate traceparent for the batch
             let mut trace_id = None;
             let mut span_id = None;
@@ -145,7 +161,7 @@ async fn send_request(
                 span_id = props.pull::<emit::SpanId>();
             });
 
-            let req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
+            req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
                 req.header("traceparent", format!("00-{trace_id}-{span_id}-00"))
             } else {
                 req

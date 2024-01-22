@@ -51,7 +51,7 @@ fn inject_sync(props: &Props, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        let mut __ctxt = emit::__private::__private_in_ctxt(#props_tokens);
+        let mut __ctxt = emit::__private::__private_push_ctxt(#props_tokens);
         let __ctxt_guard = __ctxt.enter();
 
         #body
@@ -62,7 +62,7 @@ fn inject_async(props: &Props, body: TokenStream) -> TokenStream {
     let props_tokens = props.props_tokens();
 
     quote!({
-        let __ctxt = emit::__private::__private_in_ctxt(#props_tokens);
+        let __ctxt = emit::__private::__private_push_ctxt(#props_tokens);
         __ctxt.with_future(async #body).await
     })
 }

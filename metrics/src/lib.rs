@@ -21,15 +21,12 @@ use emit::{
     Event, Timestamp,
 };
 
-pub fn plot_metrics_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
-    MetricsEmitter::new(MetricsCollector::new(Bucketing::ByCount(count)), emitter)
+pub fn aggregate_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(Aggregator::new(Bucketing::ByCount(count)), emitter)
 }
 
-pub fn plot_metrics_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
-    MetricsEmitter::new(
-        MetricsCollector::new(Bucketing::ByTime(bucket_size)),
-        emitter,
-    )
+pub fn aggregate_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
+    MetricsEmitter::new(Aggregator::new(Bucketing::ByTime(bucket_size)), emitter)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -109,12 +106,12 @@ impl<'m, V: ToValue> Props for Metric<'m, V> {
 }
 
 pub struct MetricsEmitter<E> {
-    collector: Mutex<MetricsCollector>,
+    collector: Mutex<Aggregator>,
     inner: E,
 }
 
 impl<E> MetricsEmitter<E> {
-    pub fn new(collector: MetricsCollector, emitter: E) -> Self {
+    pub fn new(collector: Aggregator, emitter: E) -> Self {
         MetricsEmitter {
             collector: Mutex::new(collector),
             inner: emitter,
@@ -166,7 +163,7 @@ impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
 
 impl<E: emit::runtime::InternalEmitter> emit::runtime::InternalEmitter for MetricsEmitter<E> {}
 
-pub struct MetricsCollector {
+pub struct Aggregator {
     bucketing: Bucketing,
     sums: HashMap<Cow<'static, str>, SumHistogram>,
 }
@@ -217,9 +214,9 @@ struct SumHistogramDelta {
     value: f64,
 }
 
-impl MetricsCollector {
+impl Aggregator {
     pub fn new(bucketing: Bucketing) -> Self {
-        MetricsCollector {
+        Aggregator {
             bucketing,
             sums: HashMap::new(),
         }

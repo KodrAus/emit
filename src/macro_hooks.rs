@@ -459,13 +459,13 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_in_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
+pub fn __private_push_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
     let rt = crate::runtime::shared();
 
     base_push_ctxt(rt.ctxt(), props)
 }
 
-pub use core::module_path as loc;
+pub use core::module_path as __private_module;
 
 #[repr(transparent)]
 pub struct __PrivateMacroProps<'a>([(Str<'a>, Option<Value<'a>>)]);

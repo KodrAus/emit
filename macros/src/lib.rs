@@ -22,10 +22,10 @@ mod filter;
 mod fmt;
 mod format;
 mod hook;
-mod in_ctxt;
 mod key;
 mod optional;
 mod props;
+mod push_ctxt;
 mod template;
 mod util;
 
@@ -43,35 +43,43 @@ pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Emit a debug record.
+Emit an event.
+*/
+#[proc_macro]
+pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    base_emit(None, TokenStream::from(item))
+}
+
+/**
+Emit a debug event.
 */
 #[proc_macro]
 pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(Debug), TokenStream::from(item))
+    base_emit(Some(quote!(Debug)), TokenStream::from(item))
 }
 
 /**
-Emit a info record.
+Emit a info event.
 */
 #[proc_macro]
 pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(Info), TokenStream::from(item))
+    base_emit(Some(quote!(Info)), TokenStream::from(item))
 }
 
 /**
-Emit a warn record.
+Emit a warn event.
 */
 #[proc_macro]
 pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(Warn), TokenStream::from(item))
+    base_emit(Some(quote!(Warn)), TokenStream::from(item))
 }
 
 /**
-Emit an error record.
+Emit an error event.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    emit(quote!(Error), TokenStream::from(item))
+    base_emit(Some(quote!(Error)), TokenStream::from(item))
 }
 
 /**
@@ -121,11 +129,11 @@ pub fn optional(
 }
 
 #[proc_macro_attribute]
-pub fn in_ctxt(
+pub fn push_ctxt(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    in_ctxt::expand_tokens(in_ctxt::ExpandTokens {
+    push_ctxt::expand_tokens(push_ctxt::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })
@@ -265,7 +273,7 @@ pub fn as_error(
     }
 }
 
-fn emit(level: TokenStream, item: TokenStream) -> proc_macro::TokenStream {
+fn base_emit(level: Option<TokenStream>, item: TokenStream) -> proc_macro::TokenStream {
     if filter::matches_build_filter() {
         emit::expand_tokens(emit::ExpandTokens { level, input: item }).unwrap_or_compile_error()
     } else {

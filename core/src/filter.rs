@@ -1,4 +1,7 @@
+use core::time::Duration;
+
 use crate::{
+    emitter::Emitter,
     empty::Empty,
     event::Event,
     props::{ErasedProps, Props},
@@ -24,6 +27,16 @@ pub trait Filter {
         Or {
             left: self,
             right: other,
+        }
+    }
+
+    fn wrap<E>(self, emitter: E) -> Wrap<Self, E>
+    where
+        Self: Sized,
+    {
+        Wrap {
+            filter: self,
+            emitter,
         }
     }
 
@@ -76,6 +89,23 @@ impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
 
 pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
     FromFn(f)
+}
+
+pub struct Wrap<F, E> {
+    filter: F,
+    emitter: E,
+}
+
+impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
+    fn emit<P: Props>(&self, evt: &Event<P>) {
+        if self.filter.matches(evt) {
+            self.emitter.emit(evt);
+        }
+    }
+
+    fn blocking_flush(&self, timeout: Duration) {
+        self.emitter.blocking_flush(timeout)
+    }
 }
 
 pub struct And<T, U> {

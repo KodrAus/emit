@@ -41,10 +41,10 @@ impl Props for ThreadLocalSpan {
 }
 
 impl Ctxt for ThreadLocalCtxt {
-    type Props = ThreadLocalSpan;
+    type Current = ThreadLocalSpan;
     type Frame = ThreadLocalSpan;
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         ACTIVE.with(|span| with(&*span.borrow()))
     }
 

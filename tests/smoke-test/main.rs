@@ -6,6 +6,8 @@ use std::{
     time::Duration,
 };
 
+use emit::Filter as _;
+
 #[macro_use]
 extern crate serde_derive;
 
@@ -25,10 +27,7 @@ async fn main() {
                 emit_otlp::traces_http("http://localhost:4318/v1/traces")
                     .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
-            .metrics(
-                emit_otlp::metrics_http("http://localhost:4318/v1/metrics")
-                    .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
-            )
+            .metrics(emit_otlp::metrics_http("http://localhost:4318/v1/metrics"))
             .resource(emit::props! {
                 #[emit::key("service.name")]
                 service_name: "smoke-test-rs",
@@ -42,14 +41,16 @@ async fn main() {
             .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        .and_to(emit_metrics::plot_metrics_by_count(30, emit_term::stdout()))
+        .and_to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
         .and_to(
-            emit_file::set("./target/logs/log.txt")
-                .reuse_files(true)
-                .roll_by_minute()
-                .max_files(6)
-                .spawn()
-                .unwrap(),
+            emit::level::min_level(emit::Level::Warn).wrap(
+                emit_file::set("./target/logs/log.txt")
+                    .reuse_files(true)
+                    .roll_by_minute()
+                    .max_files(6)
+                    .spawn()
+                    .unwrap(),
+            ),
         )
         .init();
 
@@ -61,7 +62,7 @@ async fn main() {
     internal.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::in_ctxt(trace_id: emit::gen_trace_id())]
+#[emit::push_ctxt(trace_id: emit::gen_trace_id())]
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
@@ -78,7 +79,7 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::in_ctxt(span_id: emit::gen_span_id(), span_parent: emit::current_span_id(), a)]
+#[emit::push_ctxt(span_id: emit::gen_span_id(), span_parent: emit::current_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     increment(&COUNT);
 
@@ -112,7 +113,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     r
 }
 
-#[emit::in_ctxt(b, bx: 90)]
+#[emit::push_ctxt(b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     emit::warn!(
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
@@ -137,15 +138,13 @@ fn sample_metrics() {
         emit::well_known::METRIC_KIND_SUM,
         "smoke_test::count",
     )] {
-        emit::emit(&emit::Event::new(
-            now,
-            emit::tpl!("{metric_kind} of {metric_name} is {metric_value}"),
-            emit::props! {
-                metric_kind,
-                metric_name,
-                metric_value: metric_value.load(Ordering::Relaxed),
-            },
-        ));
+        emit::emit!(
+            extent: now,
+            "{metric_kind} of {metric_name} is {metric_value}",
+            metric_kind,
+            metric_name,
+            metric_value: metric_value.load(Ordering::Relaxed),
+        );
     }
 }
 

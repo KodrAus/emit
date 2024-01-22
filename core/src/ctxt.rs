@@ -1,14 +1,14 @@
 use crate::{empty::Empty, props::Props};
 
 pub trait Ctxt {
-    type Props: Props + ?Sized;
+    type Current: Props + ?Sized;
     type Frame;
 
     fn open<P: Props>(&self, props: P) -> Self::Frame;
 
     fn enter(&self, local: &mut Self::Frame);
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F);
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F);
 
     fn exit(&self, local: &mut Self::Frame);
 
@@ -20,7 +20,7 @@ pub trait Ctxt {
 }
 
 impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
-    type Props = C::Props;
+    type Current = C::Current;
     type Frame = C::Frame;
 
     fn open<P: Props>(&self, props: P) -> Self::Frame {
@@ -31,7 +31,7 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
         (**self).enter(frame)
     }
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         (**self).with_current(with)
     }
 
@@ -45,10 +45,10 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
 }
 
 impl<C: Ctxt> Ctxt for Option<C> {
-    type Props = Option<internal::Slot<C::Props>>;
+    type Current = Option<internal::Slot<C::Current>>;
     type Frame = Option<C::Frame>;
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         match self {
             Some(ctxt) => {
                 ctxt.with_current(|props| unsafe { with(&Some(internal::Slot::new(props))) })
@@ -82,10 +82,10 @@ impl<C: Ctxt> Ctxt for Option<C> {
 
 #[cfg(feature = "alloc")]
 impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
-    type Props = C::Props;
+    type Current = C::Current;
     type Frame = C::Frame;
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         (**self).with_current(with)
     }
 
@@ -109,7 +109,7 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
-    type Props = T::Props;
+    type Current = T::Current;
 
     type Frame = T::Frame;
 
@@ -121,7 +121,7 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
         self.0.enter(frame)
     }
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         self.0.with_current(with)
     }
 
@@ -135,10 +135,10 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
 }
 
 impl Ctxt for Empty {
-    type Props = Empty;
+    type Current = Empty;
     type Frame = Empty;
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         with(&Empty)
     }
 
@@ -198,33 +198,33 @@ mod alloc_support {
             value::Value,
         };
 
-        use super::ErasedLocalFrame;
+        use super::ErasedFrame;
 
         pub trait DispatchCtxt {
-            fn dispatch_with_current(&self, with: &mut dyn FnMut(ErasedCurrentProps));
+            fn dispatch_with_current(&self, with: &mut dyn FnMut(ErasedCurrent));
 
-            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedLocalFrame;
-            fn dispatch_enter(&self, frame: &mut ErasedLocalFrame);
-            fn dispatch_exit(&self, frame: &mut ErasedLocalFrame);
-            fn dispatch_close(&self, frame: ErasedLocalFrame);
+            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedFrame;
+            fn dispatch_enter(&self, frame: &mut ErasedFrame);
+            fn dispatch_exit(&self, frame: &mut ErasedFrame);
+            fn dispatch_close(&self, frame: ErasedFrame);
         }
 
         pub trait SealedCtxt {
             fn erase_ctxt(&self) -> crate::internal::Erased<&dyn DispatchCtxt>;
         }
 
-        pub struct ErasedCurrentProps(
+        pub struct ErasedCurrent(
             *const dyn ErasedProps,
             PhantomData<fn(&mut dyn ErasedProps)>,
         );
 
-        impl ErasedCurrentProps {
+        impl ErasedCurrent {
             pub(super) unsafe fn new<'a>(v: &'a impl Props) -> Self {
                 let v: &'a dyn ErasedProps = v;
                 let v: &'a (dyn ErasedProps + 'static) =
                     mem::transmute::<&'a dyn ErasedProps, &'a (dyn ErasedProps + 'static)>(v);
 
-                ErasedCurrentProps(v as *const dyn ErasedProps, PhantomData)
+                ErasedCurrent(v as *const dyn ErasedProps, PhantomData)
             }
 
             pub(super) fn get<'a>(&'a self) -> &'a (dyn ErasedProps + 'a) {
@@ -232,7 +232,7 @@ mod alloc_support {
             }
         }
 
-        impl Props for ErasedCurrentProps {
+        impl Props for ErasedCurrent {
             fn for_each<'a, F: FnMut(Str<'a>, Value<'a>) -> ControlFlow<()>>(
                 &'a self,
                 for_each: F,
@@ -242,7 +242,7 @@ mod alloc_support {
         }
     }
 
-    pub struct ErasedLocalFrame(Box<dyn Any + Send>);
+    pub struct ErasedFrame(Box<dyn Any + Send>);
 
     pub trait ErasedCtxt: internal::SealedCtxt {}
 
@@ -261,29 +261,29 @@ mod alloc_support {
     where
         C::Frame: Send + 'static,
     {
-        fn dispatch_with_current(&self, with: &mut dyn FnMut(internal::ErasedCurrentProps)) {
-            self.with_current(move |props| {
-                with(unsafe { internal::ErasedCurrentProps::new(&props) })
-            })
+        fn dispatch_with_current(&self, with: &mut dyn FnMut(internal::ErasedCurrent)) {
+            self.with_current(move |props| with(unsafe { internal::ErasedCurrent::new(&props) }))
         }
 
-        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedLocalFrame {
-            ErasedLocalFrame(Box::new(self.open(props)))
+        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedFrame {
+            // TODO: For pointer-sized frames we could consider inlining
+            // to avoid boxing
+            ErasedFrame(Box::new(self.open(props)))
         }
 
-        fn dispatch_enter(&self, span: &mut ErasedLocalFrame) {
+        fn dispatch_enter(&self, span: &mut ErasedFrame) {
             if let Some(span) = span.0.downcast_mut() {
                 self.enter(span)
             }
         }
 
-        fn dispatch_exit(&self, span: &mut ErasedLocalFrame) {
+        fn dispatch_exit(&self, span: &mut ErasedFrame) {
             if let Some(span) = span.0.downcast_mut() {
                 self.exit(span)
             }
         }
 
-        fn dispatch_close(&self, span: ErasedLocalFrame) {
+        fn dispatch_close(&self, span: ErasedFrame) {
             if let Ok(span) = span.0.downcast() {
                 self.close(*span)
             }
@@ -291,10 +291,10 @@ mod alloc_support {
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + 'a {
-        type Props = internal::ErasedCurrentProps;
-        type Frame = ErasedLocalFrame;
+        type Current = internal::ErasedCurrent;
+        type Frame = ErasedFrame;
 
-        fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+        fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
             let mut f = Some(with);
 
             self.erase_ctxt().0.dispatch_with_current(&mut |props| {
@@ -320,10 +320,10 @@ mod alloc_support {
     }
 
     impl<'a> Ctxt for dyn ErasedCtxt + Send + Sync + 'a {
-        type Props = <dyn ErasedCtxt + 'a as Ctxt>::Props;
+        type Current = <dyn ErasedCtxt + 'a as Ctxt>::Current;
         type Frame = <dyn ErasedCtxt + 'a as Ctxt>::Frame;
 
-        fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+        fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
             (self as &(dyn ErasedCtxt + 'a)).with_current(with)
         }
 

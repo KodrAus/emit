@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct ExpandTokens {
-    pub level: TokenStream,
+    pub level: Option<TokenStream>,
     pub input: TokenStream,
 }
 
@@ -52,19 +52,20 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let (args, template, mut props) = template::parse2::<Args>(opts.input, true)?;
 
     // Add the level as a property
-    let level_ident = Ident::new(emit_core::well_known::LVL_KEY, Span::call_site());
-    let level_value = opts.level;
+    if let Some(level_value) = opts.level {
+        let level_ident = Ident::new(emit_core::well_known::LVL_KEY, Span::call_site());
 
-    props.push(
-        &syn::parse2::<FieldValue>(quote!(#level_ident: emit::Level::#level_value))?,
-        false,
-        true,
-    )?;
+        props.push(
+            &syn::parse2::<FieldValue>(quote!(#level_ident: emit::Level::#level_value))?,
+            false,
+            true,
+        )?;
+    }
 
     // Add the location as a property
-    let loc_ident = Ident::new(emit_core::well_known::LOCATION_KEY, Span::call_site());
+    let loc_ident = Ident::new(emit_core::well_known::MODULE_KEY, Span::call_site());
     props.push(
-        &syn::parse2::<FieldValue>(quote!(#loc_ident: emit::__private::loc!()))?,
+        &syn::parse2::<FieldValue>(quote!(#loc_ident: emit::__private::__private_module!()))?,
         false,
         true,
     )?;

@@ -71,17 +71,6 @@ fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
 }
 
 #[track_caller]
-pub fn emit(evt: &Event<impl Props>) {
-    let ambient = emit_core::runtime::shared();
-
-    let tpl = evt.tpl();
-    let props = evt.props();
-    let extent = evt.extent().cloned().or_else(|| ambient.now().to_extent());
-
-    base_emit(ambient, ambient, ambient, extent, tpl, props);
-}
-
-#[track_caller]
 pub fn now() -> Option<Timestamp> {
     emit_core::runtime::shared().now()
 }

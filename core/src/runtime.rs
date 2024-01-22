@@ -50,6 +50,22 @@ impl Runtime {
 }
 
 impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, TClock, TRng> {
+    pub const fn build(
+        emitter: TEmitter,
+        filter: TFilter,
+        ctxt: TCtxt,
+        clock: TClock,
+        rng: TRng,
+    ) -> Self {
+        Runtime {
+            emitter,
+            filter,
+            ctxt,
+            clock,
+            rng,
+        }
+    }
+
     pub const fn emitter(&self) -> &TEmitter {
         &self.emitter
     }
@@ -179,7 +195,7 @@ impl<TEmitter, TFilter: Filter, TCtxt, TClock, TRng> Filter
 impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TRng> Ctxt
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
-    type Props = TCtxt::Props;
+    type Current = TCtxt::Current;
     type Frame = TCtxt::Frame;
 
     fn open<P: Props>(&self, props: P) -> Self::Frame {
@@ -190,7 +206,7 @@ impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TRng> Ctxt
         self.ctxt.enter(scope)
     }
 
-    fn with_current<F: FnOnce(&Self::Props)>(&self, with: F) {
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
         self.ctxt.with_current(with)
     }
 
@@ -237,6 +253,8 @@ impl InternalFilter for Empty {}
 impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::And<T, U> {}
 
 impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::Or<T, U> {}
+
+impl<T: InternalFilter, U: InternalEmitter> InternalEmitter for crate::filter::Wrap<T, U> {}
 
 impl<'a, T: InternalFilter + ?Sized> InternalFilter for crate::filter::ByRef<'a, T> {}
 
@@ -423,12 +441,13 @@ mod std_support {
                         .map_clock(|clock| Box::new(clock) as Box<dyn AmbientClock + Send + Sync>)
                         .map_rng(|id_gen| Box::new(id_gen) as Box<dyn AmbientGenId + Send + Sync>);
 
-                    let runtime = Runtime::default()
-                        .with_emitter(value.emitter().as_super() as *const _)
-                        .with_filter(value.filter().as_super() as *const _)
-                        .with_ctxt(value.ctxt().as_super() as *const _)
-                        .with_clock(value.clock().as_super() as *const _)
-                        .with_rng(value.rng().as_super() as *const _);
+                    let runtime = Runtime::build(
+                        value.emitter().as_super() as *const _,
+                        value.filter().as_super() as *const _,
+                        value.ctxt().as_super() as *const _,
+                        value.clock().as_super() as *const _,
+                        value.rng().as_super() as *const _,
+                    );
 
                     AmbientSync { value, runtime }
                 })
@@ -436,24 +455,23 @@ mod std_support {
 
             let rt = self.0.get()?;
 
-            Some(
-                Runtime::default()
-                    .with_emitter(rt.value.emitter().as_any().downcast_ref()?)
-                    .with_filter(rt.value.filter().as_any().downcast_ref()?)
-                    .with_ctxt(rt.value.ctxt().as_any().downcast_ref()?)
-                    .with_clock(rt.value.clock().as_any().downcast_ref()?)
-                    .with_rng(rt.value.rng().as_any().downcast_ref()?),
-            )
+            Some(Runtime::build(
+                rt.value.emitter().as_any().downcast_ref()?,
+                rt.value.filter().as_any().downcast_ref()?,
+                rt.value.ctxt().as_any().downcast_ref()?,
+                rt.value.clock().as_any().downcast_ref()?,
+                rt.value.rng().as_any().downcast_ref()?,
+            ))
         }
 
         pub fn get(&self) -> &AmbientRuntime {
-            const EMPTY_AMBIENT_RUNTIME: AmbientRuntime = Runtime {
-                emitter: &Empty as &(dyn ErasedEmitter + Send + Sync + 'static),
-                filter: &Empty as &(dyn ErasedFilter + Send + Sync + 'static),
-                ctxt: &Empty as &(dyn ErasedCtxt + Send + Sync + 'static),
-                clock: &Empty as &(dyn ErasedClock + Send + Sync + 'static),
-                rng: &Empty as &(dyn ErasedRng + Send + Sync + 'static),
-            };
+            const EMPTY_AMBIENT_RUNTIME: AmbientRuntime = Runtime::build(
+                &Empty as &(dyn ErasedEmitter + Send + Sync + 'static),
+                &Empty as &(dyn ErasedFilter + Send + Sync + 'static),
+                &Empty as &(dyn ErasedCtxt + Send + Sync + 'static),
+                &Empty as &(dyn ErasedClock + Send + Sync + 'static),
+                &Empty as &(dyn ErasedRng + Send + Sync + 'static),
+            );
 
             self.0
                 .get()

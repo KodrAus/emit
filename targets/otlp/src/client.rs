@@ -116,8 +116,43 @@ impl OtlpLogsBuilder {
             encoder: logs::EventEncoder {
                 body: default_message_formatter(),
             },
-            transport: Transport::Http { url: dst.into() },
+            transport: Transport::Http {
+                url: dst.into(),
+                headers: Vec::new(),
+            },
         }
+    }
+
+    pub fn body(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.body = Box::new(writer);
+        self
+    }
+
+    pub fn http_headers<K: Into<String>, V: Into<String>>(
+        mut self,
+        http_headers: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        match self.transport {
+            Transport::Http {
+                ref mut headers, ..
+            } => {
+                *headers = http_headers
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect();
+            }
+        }
+
+        self
     }
 }
 
@@ -132,8 +167,43 @@ impl OtlpTracesBuilder {
             encoder: traces::EventEncoder {
                 name: default_message_formatter(),
             },
-            transport: Transport::Http { url: dst.into() },
+            transport: Transport::Http {
+                url: dst.into(),
+                headers: Vec::new(),
+            },
         }
+    }
+
+    pub fn name(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.name = Box::new(writer);
+        self
+    }
+
+    pub fn http_headers<K: Into<String>, V: Into<String>>(
+        mut self,
+        http_headers: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        match self.transport {
+            Transport::Http {
+                ref mut headers, ..
+            } => {
+                *headers = http_headers
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect();
+            }
+        }
+
+        self
     }
 }
 
@@ -148,8 +218,29 @@ impl OtlpMetricsBuilder {
             encoder: metrics::EventEncoder {
                 name: default_message_formatter(),
             },
-            transport: Transport::Http { url: dst.into() },
+            transport: Transport::Http {
+                url: dst.into(),
+                headers: Vec::new(),
+            },
         }
+    }
+
+    pub fn http_headers<K: Into<String>, V: Into<String>>(
+        mut self,
+        http_headers: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        match self.transport {
+            Transport::Http {
+                ref mut headers, ..
+            } => {
+                *headers = http_headers
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect();
+            }
+        }
+
+        self
     }
 }
 
@@ -158,7 +249,10 @@ enum Encoding {
 }
 
 enum Transport {
-    Http { url: String },
+    Http {
+        url: String,
+        headers: Vec<(String, String)>,
+    },
 }
 
 impl OtlpClientBuilder {
@@ -243,11 +337,11 @@ impl OtlpClientBuilder {
             logs: match self.logs {
                 Some(OtlpLogsBuilder {
                     encoder,
-                    transport: Transport::Http { url },
+                    transport: Transport::Http { url, headers },
                 }) => {
                     logs = Some(encoder);
                     Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(&url)?,
+                        http: HttpConnection::new(url, headers)?,
                         resource: self.resource.clone(),
                         scope: self.scope.clone(),
                     }))
@@ -257,11 +351,11 @@ impl OtlpClientBuilder {
             traces: match self.traces {
                 Some(OtlpTracesBuilder {
                     encoder,
-                    transport: Transport::Http { url },
+                    transport: Transport::Http { url, headers },
                 }) => {
                     traces = Some(encoder);
                     Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(&url)?,
+                        http: HttpConnection::new(url, headers)?,
                         resource: self.resource.clone(),
                         scope: self.scope.clone(),
                     }))
@@ -271,11 +365,11 @@ impl OtlpClientBuilder {
             metrics: match self.metrics {
                 Some(OtlpMetricsBuilder {
                     encoder,
-                    transport: Transport::Http { url },
+                    transport: Transport::Http { url, headers },
                 }) => {
                     metrics = Some(encoder);
                     Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(&url)?,
+                        http: HttpConnection::new(url, headers)?,
                         resource: self.resource.clone(),
                         scope: self.scope.clone(),
                     }))
@@ -404,54 +498,6 @@ impl OtlpClientBuilder {
             metrics,
             sender,
         })
-    }
-}
-
-impl OtlpLogsBuilder {
-    pub fn body(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.encoder.body = Box::new(writer);
-        self
-    }
-}
-
-impl OtlpTracesBuilder {
-    pub fn name(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.encoder.name = Box::new(writer);
-        self
-    }
-}
-
-impl OtlpMetricsBuilder {
-    pub fn name(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.encoder.name = Box::new(writer);
-        self
     }
 }
 
