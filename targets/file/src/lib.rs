@@ -1,6 +1,7 @@
 use std::{
     fs,
     io::{self, Write},
+    mem,
     ops::ControlFlow,
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
@@ -322,7 +323,7 @@ fn apply_retention(
         let _ = fs::remove_file(path);
     }
 
-    Ok(file_set.pop())
+    Ok(file_set.first_mut().map(mem::take))
 }
 
 struct Buffer {
