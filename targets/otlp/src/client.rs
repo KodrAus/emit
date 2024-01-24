@@ -555,12 +555,16 @@ impl RawClient {
                         .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                         .await
                         .map_err(|err| {
-                            rt.warn(
+                            rt.warn_at(
+                                timer,
                                 emit::tpl!(
-                                    "OTLP batch of {batch_size} events failed to send: {err}"
+                                    "OTLP batch of {metric_value} {metric_unit} failed to send: {err}"
                                 ),
                                 emit::props! {
-                                    batch_size,
+                                    metric_name: "emit_otlp::send_event_err",
+                                    metric_kind: "sum",
+                                    metric_value: batch_size,
+                                    metric_unit: "events",
                                     err,
                                 },
                             );
@@ -570,9 +574,12 @@ impl RawClient {
 
                     rt.debug_at(
                         timer,
-                        emit::tpl!("OTLP batch of {batch_size} events responded {status_code}"),
+                        emit::tpl!("OTLP batch of {metric_value} {metric_unit} responded {status_code}"),
                         emit::props! {
-                            batch_size,
+                            metric_name: "emit_otlp::send_event_ok",
+                            metric_kind: "sum",
+                            metric_value: batch_size,
+                            metric_unit: "events",
                             status_code: res.status(),
                         },
                     );

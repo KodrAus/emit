@@ -15,7 +15,9 @@ extern crate serde_derive;
 async fn main() {
     println!("{}", emit::format!("Hello, {x}", x: "world"));
 
-    let internal = emit::setup().to(emit_term::stdout()).init_internal();
+    let internal = emit::setup()
+        .to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
+        .init_internal();
 
     let emitter = emit::setup()
         .to(emit_otlp::proto()
