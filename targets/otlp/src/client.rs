@@ -1,5 +1,5 @@
 use emit_batcher::BatchError;
-use std::{fmt, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use crate::{
     data::{self, default_message_formatter, logs, metrics, traces, PreEncoded},
@@ -10,14 +10,14 @@ use self::http::HttpConnection;
 
 mod http;
 
-pub struct OtlpClient {
+pub struct Otlp {
     logs: Option<logs::EventEncoder>,
     traces: Option<traces::EventEncoder>,
     metrics: Option<metrics::EventEncoder>,
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
-impl emit::emitter::Emitter for OtlpClient {
+impl emit::emitter::Emitter for Otlp {
     fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
         if let Some(ref encoder) = self.metrics {
             if let Some(encoded) = encoder.encode_event(evt) {
@@ -96,31 +96,43 @@ impl<T> emit_batcher::Channel for Channel<T> {
     }
 }
 
-pub struct OtlpClientBuilder {
-    resource: Option<PreEncoded>,
-    scope: Option<PreEncoded>,
-    encoding: Encoding,
+pub struct OtlpBuilder {
+    resource: Option<Resource>,
+    scope: Option<Scope>,
     logs: Option<OtlpLogsBuilder>,
     traces: Option<OtlpTracesBuilder>,
     metrics: Option<OtlpMetricsBuilder>,
 }
 
+struct Resource {
+    attributes: HashMap<emit::Str<'static>, emit::value::OwnedValue>,
+}
+
+struct Scope {
+    name: String,
+    version: String,
+    attributes: HashMap<emit::Str<'static>, emit::value::OwnedValue>,
+}
+
 pub struct OtlpLogsBuilder {
     encoder: logs::EventEncoder,
-    transport: Transport,
+    encoding: Encoding,
+    transport: OtlpTransportBuilder,
 }
 
 impl OtlpLogsBuilder {
-    pub fn http(dst: impl Into<String>) -> Self {
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpLogsBuilder {
             encoder: logs::EventEncoder {
                 body: default_message_formatter(),
             },
-            transport: Transport::Http {
-                url: dst.into(),
-                headers: Vec::new(),
-            },
+            encoding: Encoding::Proto,
+            transport,
         }
+    }
+
+    pub fn http_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::http(dst))
     }
 
     pub fn body(
@@ -136,42 +148,27 @@ impl OtlpLogsBuilder {
         self.encoder.body = Box::new(writer);
         self
     }
-
-    pub fn http_headers<K: Into<String>, V: Into<String>>(
-        mut self,
-        http_headers: impl IntoIterator<Item = (K, V)>,
-    ) -> Self {
-        match self.transport {
-            Transport::Http {
-                ref mut headers, ..
-            } => {
-                *headers = http_headers
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect();
-            }
-        }
-
-        self
-    }
 }
 
 pub struct OtlpTracesBuilder {
     encoder: traces::EventEncoder,
-    transport: Transport,
+    encoding: Encoding,
+    transport: OtlpTransportBuilder,
 }
 
 impl OtlpTracesBuilder {
-    pub fn http(dst: impl Into<String>) -> Self {
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpTracesBuilder {
             encoder: traces::EventEncoder {
                 name: default_message_formatter(),
             },
-            transport: Transport::Http {
-                url: dst.into(),
-                headers: Vec::new(),
-            },
+            encoding: Encoding::Proto,
+            transport,
         }
+    }
+
+    pub fn http_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::http(dst))
     }
 
     pub fn name(
@@ -187,60 +184,27 @@ impl OtlpTracesBuilder {
         self.encoder.name = Box::new(writer);
         self
     }
-
-    pub fn http_headers<K: Into<String>, V: Into<String>>(
-        mut self,
-        http_headers: impl IntoIterator<Item = (K, V)>,
-    ) -> Self {
-        match self.transport {
-            Transport::Http {
-                ref mut headers, ..
-            } => {
-                *headers = http_headers
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect();
-            }
-        }
-
-        self
-    }
 }
 
 pub struct OtlpMetricsBuilder {
     encoder: metrics::EventEncoder,
-    transport: Transport,
+    encoding: Encoding,
+    transport: OtlpTransportBuilder,
 }
 
 impl OtlpMetricsBuilder {
-    pub fn http(dst: impl Into<String>) -> Self {
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpMetricsBuilder {
             encoder: metrics::EventEncoder {
                 name: default_message_formatter(),
             },
-            transport: Transport::Http {
-                url: dst.into(),
-                headers: Vec::new(),
-            },
+            encoding: Encoding::Proto,
+            transport,
         }
     }
 
-    pub fn http_headers<K: Into<String>, V: Into<String>>(
-        mut self,
-        http_headers: impl IntoIterator<Item = (K, V)>,
-    ) -> Self {
-        match self.transport {
-            Transport::Http {
-                ref mut headers, ..
-            } => {
-                *headers = http_headers
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v.into()))
-                    .collect();
-            }
-        }
-
-        self
+    pub fn http_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::http(dst))
     }
 }
 
@@ -248,17 +212,55 @@ enum Encoding {
     Proto,
 }
 
-enum Transport {
-    Http {
-        url: String,
-        headers: Vec<(String, String)>,
-    },
+enum Protocol {
+    Http,
 }
 
-impl OtlpClientBuilder {
-    pub fn proto() -> Self {
-        OtlpClientBuilder {
-            encoding: Encoding::Proto,
+pub struct OtlpTransportBuilder {
+    protocol: Protocol,
+    url: String,
+    headers: Vec<(String, String)>,
+}
+
+impl OtlpTransportBuilder {
+    pub fn http(dst: impl Into<String>) -> Self {
+        OtlpTransportBuilder {
+            protocol: Protocol::Http,
+            url: dst.into(),
+            headers: Vec::new(),
+        }
+    }
+
+    pub fn headers<K: Into<String>, V: Into<String>>(
+        mut self,
+        headers: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        self.headers = headers
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+
+        self
+    }
+
+    fn build(
+        self,
+        resource: Option<PreEncoded>,
+        scope: Option<PreEncoded>,
+    ) -> Result<OtlpTransport, Error> {
+        Ok(match self.protocol {
+            Protocol::Http => OtlpTransport::Http {
+                http: HttpConnection::new(self.url, self.headers)?,
+                resource,
+                scope,
+            },
+        })
+    }
+}
+
+impl OtlpBuilder {
+    pub fn new() -> Self {
+        OtlpBuilder {
             resource: None,
             scope: None,
             logs: None,
@@ -267,8 +269,8 @@ impl OtlpClientBuilder {
         }
     }
 
-    pub fn logs_http(self, dst: impl Into<String>) -> Self {
-        self.logs(OtlpLogsBuilder::http(dst))
+    pub fn logs_http_proto(self, dst: impl Into<String>) -> Self {
+        self.logs(OtlpLogsBuilder::http_proto(dst))
     }
 
     pub fn logs(mut self, builder: OtlpLogsBuilder) -> Self {
@@ -276,8 +278,8 @@ impl OtlpClientBuilder {
         self
     }
 
-    pub fn traces_http(self, dst: impl Into<String>) -> Self {
-        self.traces(OtlpTracesBuilder::http(dst))
+    pub fn traces_http_proto(self, dst: impl Into<String>) -> Self {
+        self.traces(OtlpTracesBuilder::http_proto(dst))
     }
 
     pub fn traces(mut self, builder: OtlpTracesBuilder) -> Self {
@@ -285,8 +287,8 @@ impl OtlpClientBuilder {
         self
     }
 
-    pub fn metrics_http(self, dst: impl Into<String>) -> Self {
-        self.metrics(OtlpMetricsBuilder::http(dst))
+    pub fn metrics_http_proto(self, dst: impl Into<String>) -> Self {
+        self.metrics(OtlpMetricsBuilder::http_proto(dst))
     }
 
     pub fn metrics(mut self, builder: OtlpMetricsBuilder) -> Self {
@@ -295,84 +297,91 @@ impl OtlpClientBuilder {
     }
 
     pub fn resource(mut self, attributes: impl emit::props::Props) -> Self {
-        match self.encoding {
-            Encoding::Proto => {
-                let protobuf = sval_protobuf::stream_to_protobuf(data::Resource {
-                    attributes: &data::PropsResourceAttributes(attributes),
-                    dropped_attribute_count: 0,
-                });
+        let mut resource = Resource {
+            attributes: HashMap::new(),
+        };
 
-                self.resource = Some(PreEncoded::Proto(protobuf));
-            }
-        }
+        attributes.for_each(|k, v| {
+            resource.attributes.insert(k.to_owned(), v.to_owned());
 
-        self
-    }
+            std::ops::ControlFlow::Continue(())
+        });
 
-    pub fn scope(mut self, name: &str, version: &str, attributes: impl emit::props::Props) -> Self {
-        match self.encoding {
-            Encoding::Proto => {
-                let protobuf = sval_protobuf::stream_to_protobuf(data::InstrumentationScope {
-                    name,
-                    version,
-                    attributes: &data::PropsInstrumentationScopeAttributes(attributes),
-                    dropped_attribute_count: 0,
-                });
-
-                self.scope = Some(PreEncoded::Proto(protobuf));
-            }
-        }
+        self.resource = Some(resource);
 
         self
     }
 
-    pub fn spawn(self) -> Result<OtlpClient, Error> {
+    pub fn scope(
+        mut self,
+        name: impl Into<String>,
+        version: impl Into<String>,
+        attributes: impl emit::props::Props,
+    ) -> Self {
+        let mut scope = Scope {
+            name: name.into(),
+            version: version.into(),
+            attributes: HashMap::new(),
+        };
+
+        attributes.for_each(|k, v| {
+            scope.attributes.insert(k.to_owned(), v.to_owned());
+
+            std::ops::ControlFlow::Continue(())
+        });
+
+        self.scope = Some(scope);
+
+        self
+    }
+
+    pub fn spawn(self) -> Result<Otlp, Error> {
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
         let mut logs = None;
         let mut traces = None;
         let mut metrics = None;
 
-        let client = OtlpSender {
+        let client = OtlpClient {
             logs: match self.logs {
                 Some(OtlpLogsBuilder {
                     encoder,
-                    transport: Transport::Http { url, headers },
+                    encoding: Encoding::Proto,
+                    transport,
                 }) => {
                     logs = Some(encoder);
-                    Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(url, headers)?,
-                        resource: self.resource.clone(),
-                        scope: self.scope.clone(),
-                    }))
+                    Some(Arc::new(transport.build(
+                        self.resource.as_ref().map(resource_proto),
+                        self.scope.as_ref().map(scope_proto),
+                    )?))
                 }
                 None => None,
             },
             traces: match self.traces {
                 Some(OtlpTracesBuilder {
                     encoder,
-                    transport: Transport::Http { url, headers },
+                    encoding: Encoding::Proto,
+                    transport,
                 }) => {
                     traces = Some(encoder);
-                    Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(url, headers)?,
-                        resource: self.resource.clone(),
-                        scope: self.scope.clone(),
-                    }))
+                    Some(Arc::new(transport.build(
+                        self.resource.as_ref().map(resource_proto),
+                        self.scope.as_ref().map(scope_proto),
+                    )?))
                 }
                 None => None,
             },
             metrics: match self.metrics {
                 Some(OtlpMetricsBuilder {
                     encoder,
-                    transport: Transport::Http { url, headers },
+                    encoding: Encoding::Proto,
+                    transport,
                 }) => {
                     metrics = Some(encoder);
-                    Some(Arc::new(RawClient::Http {
-                        http: HttpConnection::new(url, headers)?,
-                        resource: self.resource.clone(),
-                        scope: self.scope.clone(),
-                    }))
+                    Some(Arc::new(transport.build(
+                        self.resource.as_ref().map(resource_proto),
+                        self.scope.as_ref().map(scope_proto),
+                    )?))
                 }
                 None => None,
             },
@@ -492,7 +501,7 @@ impl OtlpClientBuilder {
             }
         });
 
-        Ok(OtlpClient {
+        Ok(Otlp {
             logs,
             traces,
             metrics,
@@ -501,15 +510,35 @@ impl OtlpClientBuilder {
     }
 }
 
-#[derive(Clone)]
-pub struct OtlpSender {
-    // TODO: Share the client
-    logs: Option<Arc<RawClient>>,
-    traces: Option<Arc<RawClient>>,
-    metrics: Option<Arc<RawClient>>,
+fn resource_proto(resource: &Resource) -> PreEncoded {
+    let protobuf = sval_protobuf::stream_to_protobuf(data::Resource {
+        attributes: &data::PropsResourceAttributes(&resource.attributes),
+        dropped_attribute_count: 0,
+    });
+
+    PreEncoded::Proto(protobuf)
 }
 
-enum RawClient {
+fn scope_proto(scope: &Scope) -> PreEncoded {
+    let protobuf = sval_protobuf::stream_to_protobuf(data::InstrumentationScope {
+        name: &scope.name,
+        version: &scope.version,
+        attributes: &data::PropsInstrumentationScopeAttributes(&scope.attributes),
+        dropped_attribute_count: 0,
+    });
+
+    PreEncoded::Proto(protobuf)
+}
+
+#[derive(Clone)]
+pub struct OtlpClient {
+    // TODO: Share the client when possible
+    logs: Option<Arc<OtlpTransport>>,
+    traces: Option<Arc<OtlpTransport>>,
+    metrics: Option<Arc<OtlpTransport>>,
+}
+
+enum OtlpTransport {
     Http {
         http: HttpConnection,
         resource: Option<PreEncoded>,
@@ -517,7 +546,7 @@ enum RawClient {
     },
 }
 
-impl RawClient {
+impl OtlpTransport {
     pub(crate) async fn send(
         &self,
         batch: Vec<PreEncoded>,
@@ -542,7 +571,7 @@ impl RawClient {
 
         ctxt.with_future(async move {
             match self {
-                RawClient::Http {
+                OtlpTransport::Http {
                     ref http,
                     ref resource,
                     ref scope,

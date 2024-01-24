@@ -20,16 +20,21 @@ async fn main() {
         .init_internal();
 
     let emitter = emit::setup()
-        .to(emit_otlp::proto()
+        .to(emit_otlp::new()
             .logs(
-                emit_otlp::logs_http("http://localhost:4318/v1/logs")
-                    .body(|evt, f| write!(f, "{}", evt.tpl().braced())),
+                emit_otlp::logs_proto(
+                    emit_otlp::http("http://localhost:4318/v1/logs")
+                        .headers([("X-ApiKey", "1234")]),
+                )
+                .body(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
             .traces(
-                emit_otlp::traces_http("http://localhost:4318/v1/traces")
+                emit_otlp::traces_http_proto("http://localhost:4318/v1/traces")
                     .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
             )
-            .metrics(emit_otlp::metrics_http("http://localhost:4318/v1/metrics"))
+            .metrics(emit_otlp::metrics_http_proto(
+                "http://localhost:4318/v1/metrics",
+            ))
             .resource(emit::props! {
                 #[emit::key("service.name")]
                 service_name: "smoke-test-rs",

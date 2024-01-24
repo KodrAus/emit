@@ -124,6 +124,50 @@ where
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<K, V> Props for alloc::collections::BTreeMap<K, V>
+where
+    K: Ord + ToStr + Borrow<str>,
+    V: ToValue,
+{
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for (k, v) in self {
+            for_each(k.to_str(), v.to_value())?;
+        }
+
+        ControlFlow::Continue(())
+    }
+
+    fn get<'v, Q: ToStr>(&'v self, key: Q) -> Option<Value<'v>> {
+        self.get(key.to_str().as_ref()).map(|v| v.to_value())
+    }
+}
+
+#[cfg(feature = "std")]
+impl<K, V> Props for std::collections::HashMap<K, V>
+where
+    K: Eq + std::hash::Hash + ToStr + Borrow<str>,
+    V: ToValue,
+{
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for (k, v) in self {
+            for_each(k.to_str(), v.to_value())?;
+        }
+
+        ControlFlow::Continue(())
+    }
+
+    fn get<'v, Q: ToStr>(&'v self, key: Q) -> Option<Value<'v>> {
+        self.get(key.to_str().as_ref()).map(|v| v.to_value())
+    }
+}
+
 impl Props for Empty {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
