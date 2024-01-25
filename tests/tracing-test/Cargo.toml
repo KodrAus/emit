@@ -1,0 +1,21 @@
+[package]
+name = "emit-tracing-test"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "emit-tracing-test"
+path = "main.rs"
+
+[dependencies.emit]
+path = "../../"
+
+[dependencies.emit_tracing]
+path = "../../targets/tracing"
+
+[dependencies.tracing]
+version = "0.1"
+
+[dependencies.tracing-subscriber]
+version = "0.3"

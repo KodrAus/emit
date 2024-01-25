@@ -10,7 +10,7 @@ members = [
     "targets/tracing",
     "targets/log",
     "macros",
-    "benchmark", "targets/tracing", "targets/log",
+    "benchmark", "targets/tracing", "targets/log", "tests/tracing-test",
 ]
 exclude = [
     "tests/smoke-test"

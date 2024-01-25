@@ -3,12 +3,13 @@ use emit_core::{
     filter::Filter,
     props::{FromProps, Props},
     runtime::InternalFilter,
+    str::Str,
     value::FromValue,
     well_known::LVL_KEY,
 };
 
 use crate::value::{ToValue, Value};
-use core::{fmt, str::FromStr};
+use core::{fmt, ops::ControlFlow, str::FromStr};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
@@ -104,6 +105,15 @@ impl<'v> FromValue<'v> for Level {
             .downcast_ref::<Level>()
             .copied()
             .or_else(|| value.parse())
+    }
+}
+
+impl Props for Level {
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for_each(Str::new(LVL_KEY), self.to_value())
     }
 }
 

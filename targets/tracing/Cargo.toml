@@ -8,3 +8,8 @@ path = "../../"
 
 [dependencies.tracing]
 version = "0.1"
+default-features = false
+
+[dependencies.tracing-core]
+version = "0.1"
+default-features = false

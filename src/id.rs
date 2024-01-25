@@ -1,14 +1,16 @@
 use emit_core::{
     props::{FromProps, Props},
     rng::Rng,
+    str::Str,
     value::FromValue,
-    well_known::{SPAN_ID_KEY, TRACE_ID_KEY},
+    well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
 };
 
 use crate::value::{ToValue, Value};
 use core::{
     fmt,
     num::{NonZeroU128, NonZeroU64},
+    ops::ControlFlow,
     str,
     str::FromStr,
 };
@@ -48,6 +50,15 @@ impl<'v> FromValue<'v> for TraceId {
             .downcast_ref::<TraceId>()
             .copied()
             .or_else(|| TraceId::try_from_hex(value).ok())
+    }
+}
+
+impl Props for TraceId {
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for_each(Str::new(TRACE_ID_KEY), self.to_value())
     }
 }
 
@@ -158,9 +169,82 @@ impl<'v> FromValue<'v> for SpanId {
     }
 }
 
+impl Props for SpanId {
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for_each(Str::new(SPAN_ID_KEY), self.to_value())
+    }
+}
+
 impl<'v> FromProps<'v> for SpanId {
     fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
         props.get(SPAN_ID_KEY)?.pull()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SpanParent(SpanId);
+
+impl SpanParent {
+    pub const fn new(id: SpanId) -> Self {
+        SpanParent(id)
+    }
+
+    pub const fn id(&self) -> SpanId {
+        self.0
+    }
+}
+
+impl fmt::Debug for SpanParent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for SpanParent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl From<SpanId> for SpanParent {
+    fn from(value: SpanId) -> Self {
+        SpanParent::new(value)
+    }
+}
+
+impl From<SpanParent> for SpanId {
+    fn from(value: SpanParent) -> Self {
+        value.id()
+    }
+}
+
+impl ToValue for SpanParent {
+    fn to_value(&self) -> Value {
+        self.0.to_value()
+    }
+}
+
+impl<'v> FromValue<'v> for SpanParent {
+    fn from_value(value: Value<'v>) -> Option<Self> {
+        Some(SpanParent(SpanId::from_value(value)?))
+    }
+}
+
+impl Props for SpanParent {
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        for_each(Str::new(SPAN_PARENT_KEY), self.to_value())
+    }
+}
+
+impl<'v> FromProps<'v> for SpanParent {
+    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
+        props.get(SPAN_PARENT_KEY)?.pull()
     }
 }
 

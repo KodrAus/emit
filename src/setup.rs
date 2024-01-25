@@ -42,6 +42,7 @@ impl Setup {
 }
 
 impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, TCtxt> {
+    #[must_use = "call `.init()` to finish setup"]
     pub fn to<UEmitter: Emitter>(self, emitter: UEmitter) -> Setup<UEmitter, TFilter, TCtxt> {
         Setup {
             emitter,
@@ -51,6 +52,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
         }
     }
 
+    #[must_use = "call `.init()` to finish setup"]
     pub fn and_to<UEmitter: Emitter>(
         self,
         emitter: UEmitter,
@@ -59,17 +61,42 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
             emitter: self.emitter.and(emitter),
             filter: self.filter,
             ctxt: self.ctxt,
-
             platform: self.platform,
         }
     }
 
+    #[must_use = "call `.init()` to finish setup"]
+    pub fn map_to<UEmitter: Emitter>(
+        self,
+        map: impl FnOnce(TEmitter) -> UEmitter,
+    ) -> Setup<UEmitter, TFilter, TCtxt> {
+        Setup {
+            emitter: map(self.emitter),
+            filter: self.filter,
+            ctxt: self.ctxt,
+            platform: self.platform,
+        }
+    }
+
+    #[must_use = "call `.init()` to finish setup"]
     pub fn with<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TEmitter, TFilter, UCtxt> {
         Setup {
             emitter: self.emitter,
             filter: self.filter,
             ctxt,
+            platform: self.platform,
+        }
+    }
 
+    #[must_use = "call `.init()` to finish setup"]
+    pub fn map_with<UCtxt: Ctxt>(
+        self,
+        map: impl FnOnce(TCtxt) -> UCtxt,
+    ) -> Setup<TEmitter, TFilter, UCtxt> {
+        Setup {
+            emitter: self.emitter,
+            filter: self.filter,
+            ctxt: map(self.ctxt),
             platform: self.platform,
         }
     }
