@@ -235,7 +235,64 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng: Rng> Rng
     }
 }
 
+pub struct AssertInternal<T>(pub T);
+
+impl<T: Emitter> Emitter for AssertInternal<T> {
+    fn emit<P: Props>(&self, evt: &Event<P>) {
+        self.0.emit(evt)
+    }
+
+    fn blocking_flush(&self, timeout: core::time::Duration) {
+        self.0.blocking_flush(timeout)
+    }
+}
+
+impl<T: Filter> Filter for AssertInternal<T> {
+    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+        self.0.matches(evt)
+    }
+}
+
+impl<T: Ctxt> Ctxt for AssertInternal<T> {
+    type Current = T::Current;
+    type Frame = T::Frame;
+
+    fn open<P: Props>(&self, props: P) -> Self::Frame {
+        self.0.open(props)
+    }
+
+    fn enter(&self, local: &mut Self::Frame) {
+        self.0.enter(local)
+    }
+
+    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+        self.0.with_current(with)
+    }
+
+    fn exit(&self, local: &mut Self::Frame) {
+        self.0.exit(local)
+    }
+
+    fn close(&self, frame: Self::Frame) {
+        self.0.close(frame)
+    }
+}
+
+impl<T: Clock> Clock for AssertInternal<T> {
+    fn now(&self) -> Option<Timestamp> {
+        self.0.now()
+    }
+}
+
+impl<T: Rng> Rng for AssertInternal<T> {
+    fn gen_u64(&self) -> Option<u64> {
+        self.0.gen_u64()
+    }
+}
+
 pub trait InternalEmitter: Emitter {}
+
+impl<T: Emitter> InternalEmitter for AssertInternal<T> {}
 
 impl InternalEmitter for Empty {}
 
@@ -247,6 +304,8 @@ impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::emitter::ByRef<
 impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::boxed::Box<T> {}
 
 pub trait InternalFilter: Filter {}
+
+impl<T: Filter> InternalFilter for AssertInternal<T> {}
 
 impl InternalFilter for Empty {}
 
@@ -263,6 +322,8 @@ impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}
 
 pub trait InternalCtxt: Ctxt {}
 
+impl<T: Ctxt> InternalCtxt for AssertInternal<T> {}
+
 impl InternalCtxt for Empty {}
 
 impl<'a, T: InternalCtxt + ?Sized> InternalCtxt for crate::ctxt::ByRef<'a, T> {}
@@ -272,12 +333,16 @@ impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::boxed::Box<T> {}
 
 pub trait InternalClock: Clock {}
 
+impl<T: Clock> InternalClock for AssertInternal<T> {}
+
 impl InternalClock for Empty {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalClock> InternalClock for alloc::boxed::Box<T> {}
 
 pub trait InternalRng: Rng {}
+
+impl<T: Rng> InternalRng for AssertInternal<T> {}
 
 impl InternalRng for Empty {}
 

@@ -7,8 +7,10 @@ members = [
     "targets/file",
     "targets/otlp",
     "targets/otlp/gen",
+    "targets/tracing",
+    "targets/log",
     "macros",
-    "benchmark",
+    "benchmark", "targets/tracing", "targets/log",
 ]
 exclude = [
     "tests/smoke-test"
