@@ -20,11 +20,15 @@ impl<'v> Value<'v> {
         Value(value_bag::ValueBag::from_debug(value))
     }
 
+    pub fn null() -> Self {
+        Value(value_bag::ValueBag::empty())
+    }
+
     pub fn by_ref<'b>(&'b self) -> Value<'b> {
         Value(self.0.by_ref())
     }
 
-    pub fn pull<'a, T: FromValue<'v>>(self) -> Option<T> {
+    pub fn cast<'a, T: FromValue<'v>>(self) -> Option<T> {
         T::from_value(self)
     }
 
@@ -161,6 +165,15 @@ pub trait FromValue<'v> {
 impl<'a, T: ToValue + ?Sized> ToValue for &'a T {
     fn to_value(&self) -> Value {
         (**self).to_value()
+    }
+}
+
+impl<T: ToValue> ToValue for Option<T> {
+    fn to_value(&self) -> Value {
+        match self {
+            Some(v) => v.to_value(),
+            None => Value::null(),
+        }
     }
 }
 

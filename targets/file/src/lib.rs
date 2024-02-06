@@ -242,7 +242,7 @@ impl Worker {
     }
 
     fn on_batch(&mut self, mut batch: EventBatch) -> Result<(), BatchError<EventBatch>> {
-        use emit::Emit as _;
+        use emit::{Emit as _, StartTimer as _};
 
         let rt = emit::runtime::internal();
 

@@ -1,11 +1,6 @@
 use emit_core::{
-    event::Event,
-    filter::Filter,
-    props::{FromProps, Props},
-    runtime::InternalFilter,
-    str::Str,
-    value::FromValue,
-    well_known::LVL_KEY,
+    event::Event, filter::Filter, props::Props, runtime::InternalFilter, str::Str,
+    value::FromValue, well_known::LVL_KEY,
 };
 
 use crate::value::{ToValue, Value};
@@ -117,12 +112,6 @@ impl Props for Level {
     }
 }
 
-impl<'v> FromProps<'v> for Level {
-    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
-        props.get(LVL_KEY)?.pull()
-    }
-}
-
 pub fn min_level(min: Level) -> MinLevel {
     MinLevel::new(min)
 }
@@ -148,7 +137,10 @@ impl MinLevel {
 
 impl Filter for MinLevel {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        evt.props().pull::<Level>().unwrap_or(self.default) >= self.min
+        evt.props()
+            .pull::<_, Level>(LVL_KEY)
+            .unwrap_or(self.default)
+            >= self.min
     }
 }
 

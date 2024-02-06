@@ -11,7 +11,7 @@ use std::{
 };
 
 use emit::{
-    props::{FromProps, Props},
+    props::Props,
     str::{Str, ToStr},
     value::{FromValue, ToValue, Value},
     well_known::{
@@ -27,82 +27,6 @@ pub fn aggregate_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
 
 pub fn aggregate_by_time<E>(bucket_size: Duration, emitter: E) -> MetricsEmitter<E> {
     MetricsEmitter::new(Aggregator::new(Bucketing::ByTime(bucket_size)), emitter)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Metric<'m, T> {
-    name: Str<'m>,
-    kind: Str<'m>,
-    value: T,
-}
-
-impl<'m, V: FromValue<'m>> FromProps<'m> for Metric<'m, V> {
-    fn from_props<P: Props + ?Sized>(props: &'m P) -> Option<Self> {
-        Some(Metric::new(
-            props.get(METRIC_KIND_KEY)?.pull()?,
-            props.get(METRIC_NAME_KEY)?.pull()?,
-            props.get(METRIC_VALUE_KEY)?.pull()?,
-        ))
-    }
-}
-
-impl<'m, T> Metric<'m, T> {
-    pub const fn new(kind: Str<'m>, name: Str<'m>, value: T) -> Self {
-        Metric { name, kind, value }
-    }
-
-    pub const fn sum(name: Str<'m>, value: T) -> Self {
-        Metric::new(Str::new(METRIC_KIND_SUM), name, value)
-    }
-
-    pub fn is_sum(&self) -> bool {
-        self.kind() == METRIC_KIND_SUM
-    }
-
-    pub const fn min(name: Str<'m>, value: T) -> Self {
-        Metric::new(Str::new(METRIC_KIND_MIN), name, value)
-    }
-
-    pub fn is_min(&self) -> bool {
-        self.kind() == METRIC_KIND_MIN
-    }
-
-    pub const fn max(name: Str<'m>, value: T) -> Self {
-        Metric::new(Str::new(METRIC_KIND_MAX), name, value)
-    }
-
-    pub fn is_max(&self) -> bool {
-        self.kind() == METRIC_KIND_MAX
-    }
-
-    pub const fn name(&self) -> &Str<'m> {
-        &self.name
-    }
-
-    pub const fn kind(&self) -> &Str<'m> {
-        &self.kind
-    }
-
-    pub const fn value(&self) -> &T {
-        &self.value
-    }
-
-    pub fn value_mut(&mut self) -> &mut T {
-        &mut self.value
-    }
-}
-
-impl<'m, V: ToValue> Props for Metric<'m, V> {
-    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        for_each(METRIC_NAME_KEY.to_str(), self.name.to_value())?;
-        for_each(METRIC_VALUE_KEY.to_str(), self.value.to_value())?;
-        for_each(METRIC_KIND_KEY.to_str(), self.kind.to_value())?;
-
-        ControlFlow::Continue(())
-    }
 }
 
 pub struct MetricsEmitter<E> {
@@ -223,16 +147,14 @@ impl Aggregator {
     }
 
     pub fn record_metric(&mut self, evt: &Event<impl Props>) -> bool {
-        if let (Some(extent), Some(metric)) = (
+        if let (Some(extent), Some(metric_name), Some(metric_kind), Some(metric_value)) = (
             evt.extent().and_then(|extent| extent.as_point()),
-            evt.props().pull::<Metric<Value>>(),
+            evt.props().pull::<_, Str>(METRIC_NAME_KEY),
+            evt.props().pull::<_, Str>(METRIC_KIND_KEY),
+            evt.props().get(METRIC_VALUE_KEY),
         ) {
-            if metric.is_sum() {
-                return self.record_sum_point(
-                    metric.name().to_cow(),
-                    *extent,
-                    metric.value().as_f64(),
-                );
+            if metric_kind == METRIC_KIND_SUM {
+                return self.record_sum_point(metric_name.to_cow(), *extent, metric_value.as_f64());
             }
         }
 

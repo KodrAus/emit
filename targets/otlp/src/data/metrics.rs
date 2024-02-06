@@ -28,7 +28,7 @@ impl EventEncoder {
         ) {
             use crate::data::generated::{common::v1::*, metrics::v1::*};
 
-            let metric_value = metric_value.pull::<MetricValue>()?;
+            let metric_value = metric_value.cast::<MetricValue>()?;
             let metric_name = metric_name
                 .to_cow_str()
                 .unwrap_or_else(|| Cow::Owned(metric_name.to_string()));

@@ -30,9 +30,36 @@ impl Parse for TemplateArgs {
     }
 }
 
+pub struct PartsArgs {}
+
+impl Parse for PartsArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        args::set_from_field_values(
+            input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
+            [],
+        )?;
+
+        Ok(PartsArgs {})
+    }
+}
+
+pub fn expand_template_parts_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
+    let (_, template, props) = template::parse2::<PartsArgs>(opts.input, false)?;
+
+    validate_props(&props)?;
+
+    Ok(template.template_parts_tokens())
+}
+
 pub fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
     let (_, template, props) = template::parse2::<TemplateArgs>(opts.input, false)?;
 
+    validate_props(&props)?;
+
+    Ok(template.template_tokens())
+}
+
+fn validate_props(props: &Props) -> Result<(), syn::Error> {
     // Ensure that a standalone template only specifies identifiers
     for key_value in props.iter() {
         if !key_value.interpolated {
@@ -43,5 +70,5 @@ pub fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream,
         }
     }
 
-    Ok(template.template_tokens())
+    Ok(())
 }

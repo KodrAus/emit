@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use emit::Filter as _;
+use emit::{Clock as _, Filter as _, FrameCtxt as _, IdCtxt as _, IdRng as _, StartTimer as _};
 
 #[macro_use]
 extern crate serde_derive;
@@ -69,12 +69,16 @@ async fn main() {
     internal.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::push_ctxt(trace_id: emit::gen_trace_id())]
+#[emit::push_ctxt(trace_id: emit::runtime::shared().gen_trace_id())]
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
     for i in 0..100 {
-        futures.push(tokio::spawn(emit::current_ctxt().with_future(in_ctxt(i))));
+        futures.push(tokio::spawn(
+            emit::runtime::shared()
+                .current_frame()
+                .with_future(in_ctxt(i)),
+        ));
     }
 
     for future in futures {
@@ -86,11 +90,13 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::push_ctxt(span_id: emit::gen_span_id(), span_parent: emit::current_span_id(), a)]
+#[emit::push_ctxt(span_id: emit::runtime::shared().gen_span_id(), span_parent: emit::runtime::shared().current_span_id(), a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     increment(&COUNT);
 
-    let extent = emit::start_timer();
+    let span = emit::runtime::shared().start_timer().on_drop(|extent| {
+        emit::info!(extent, "in_ctxt finished");
+    });
 
     let r = async {
         in_ctxt2(5).await;
@@ -112,9 +118,8 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     }
     .await;
 
-    match r {
-        Ok(_) => emit::info!(extent, "in_ctxt finished"),
-        Err(ref err) => emit::warn!(extent, "in_ctxt failed with {err}"),
+    if let Err(ref err) = r {
+        span.complete(|extent| emit::warn!(extent, "in_ctxt failed with {err}"));
     }
 
     r
@@ -138,7 +143,7 @@ fn increment(metric: &AtomicUsize) {
 }
 
 fn sample_metrics() {
-    let now = emit::now();
+    let now = emit::runtime::shared().now();
 
     for (metric_value, metric_kind, metric_name) in [(
         &COUNT,

@@ -198,8 +198,12 @@ impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TRng> Ctxt
     type Current = TCtxt::Current;
     type Frame = TCtxt::Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        self.ctxt.open(props)
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        self.ctxt.open_root(props)
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        self.ctxt.open_push(props)
     }
 
     fn enter(&self, scope: &mut Self::Frame) {
@@ -257,8 +261,12 @@ impl<T: Ctxt> Ctxt for AssertInternal<T> {
     type Current = T::Current;
     type Frame = T::Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        self.0.open(props)
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        self.0.open_root(props)
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        self.0.open_push(props)
     }
 
     fn enter(&self, local: &mut Self::Frame) {

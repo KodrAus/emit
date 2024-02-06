@@ -3,7 +3,7 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write};
 
-use emit::well_known::{METRIC_VALUE_KEY, MODULE_KEY, TRACE_ID_KEY};
+use emit::well_known::{LVL_KEY, METRIC_VALUE_KEY, MODULE_KEY, SPAN_ID_KEY, TRACE_ID_KEY};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -190,8 +190,8 @@ fn print_event(
     buf: &mut Buffer,
     evt: &emit::event::Event<impl emit::props::Props>,
 ) {
-    if let Some(span_id) = evt.props().pull::<emit::SpanId>() {
-        if let Some(trace_id) = evt.props().get(TRACE_ID_KEY).and_then(|id| id.pull()) {
+    if let Some(span_id) = evt.props().pull::<_, emit::SpanId>(SPAN_ID_KEY) {
+        if let Some(trace_id) = evt.props().pull::<_, emit::TraceId>(TRACE_ID_KEY) {
             let trace_id_color = trace_id_color(&trace_id);
 
             write_fg(buf, "▓", Color::Ansi256(trace_id_color));
@@ -221,7 +221,7 @@ fn print_event(
         }
     }
 
-    if let Some(level) = evt.props().pull::<emit::Level>() {
+    if let Some(level) = evt.props().pull::<_, emit::Level>(LVL_KEY) {
         if let Some(level_color) = level_color(&level) {
             write_fg(buf, level, Color::Ansi256(level_color));
             write_plain(buf, " ");

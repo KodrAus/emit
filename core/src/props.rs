@@ -3,7 +3,7 @@ use core::{borrow::Borrow, ops::ControlFlow};
 use crate::{
     empty::Empty,
     str::{Str, ToStr},
-    value::{ToValue, Value},
+    value::{FromValue, ToValue, Value},
 };
 
 pub trait Props {
@@ -50,8 +50,8 @@ pub trait Props {
         ByRef(self)
     }
 
-    fn pull<'kv, P: FromProps<'kv>>(&'kv self) -> Option<P> {
-        P::from_props(self)
+    fn pull<'kv, K: ToStr, V: FromValue<'kv>>(&'kv self, key: K) -> Option<V> {
+        self.get(key).and_then(|v| v.cast())
     }
 }
 
@@ -246,12 +246,6 @@ impl<T: Props, F: Fn(Str, Value) -> bool> Props for Filter<T, F> {
             _ => None,
         }
     }
-}
-
-pub trait FromProps<'kv> {
-    fn from_props<P: Props + ?Sized>(props: &'kv P) -> Option<Self>
-    where
-        Self: Sized;
 }
 
 mod internal {

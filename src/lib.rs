@@ -3,7 +3,10 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use emit_core::{extent::ToExtent, well_known::LVL_KEY};
+use emit_core::{
+    extent::ToExtent,
+    well_known::{LVL_KEY, SPAN_ID_KEY, TRACE_ID_KEY},
+};
 
 use crate::frame::Frame;
 
@@ -28,13 +31,14 @@ pub use self::{
     event::Event,
     extent::Extent,
     filter::Filter,
-    id::{IdRng, SpanId, TraceId},
+    frame::FrameCtxt,
+    id::{IdCtxt, IdRng, SpanId, TraceId},
     level::Level,
     props::Props,
     rng::Rng,
     str::Str,
     template::Template,
-    timer::Timer,
+    timer::{StartTimer, Timer},
     timestamp::Timestamp,
     value::Value,
 };
@@ -67,52 +71,8 @@ fn base_emit(
 
 #[track_caller]
 fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
-    Frame::new(ctxt, props)
+    Frame::new_push(ctxt, props)
 }
-
-#[track_caller]
-pub fn now() -> Option<Timestamp> {
-    emit_core::runtime::shared().now()
-}
-
-#[track_caller]
-pub fn push_ctxt(props: impl Props) -> PushCtxt {
-    emit_core::runtime::shared().push_ctxt(props)
-}
-
-#[track_caller]
-pub fn current_ctxt() -> PushCtxt {
-    emit_core::runtime::shared().current_ctxt()
-}
-
-#[track_caller]
-pub fn start_timer() -> StartTimer {
-    emit_core::runtime::shared().start_timer()
-}
-
-#[track_caller]
-pub fn gen_span_id() -> Option<SpanId> {
-    emit_core::runtime::shared().gen_span_id()
-}
-
-#[track_caller]
-pub fn current_span_id() -> Option<SpanId> {
-    emit_core::runtime::shared().current_span_id()
-}
-
-#[track_caller]
-pub fn gen_trace_id() -> Option<TraceId> {
-    emit_core::runtime::shared().gen_trace_id()
-}
-
-#[track_caller]
-pub fn current_trace_id() -> Option<TraceId> {
-    emit_core::runtime::shared().current_trace_id()
-}
-
-pub type PushCtxt = Frame<&'static emit_core::runtime::AmbientRuntime<'static>>;
-
-pub type StartTimer = Timer<&'static emit_core::runtime::AmbientRuntime<'static>>;
 
 pub trait Emit: Emitter + Filter + Ctxt + Clock + Rng {
     fn debug<P: Props>(&self, tpl: Template, props: P) {
@@ -201,38 +161,6 @@ pub trait Emit: Emitter + Filter + Ctxt + Clock + Rng {
             tpl,
             props.chain((LVL_KEY, Level::Error)),
         )
-    }
-
-    fn push_ctxt<P: Props>(&self, props: P) -> Frame<&Self> {
-        Frame::new(self, props)
-    }
-
-    fn current_ctxt(&self) -> Frame<&Self> {
-        Frame::new(self, empty::Empty)
-    }
-
-    fn current_trace_id(&self) -> Option<TraceId> {
-        let mut trace_id = None;
-
-        self.with_current(|ctxt| {
-            trace_id = ctxt.pull();
-        });
-
-        trace_id
-    }
-
-    fn current_span_id(&self) -> Option<SpanId> {
-        let mut span_id = None;
-
-        self.with_current(|ctxt| {
-            span_id = ctxt.pull();
-        });
-
-        span_id
-    }
-
-    fn start_timer(&self) -> Timer<&Self> {
-        Timer::start(self)
     }
 }
 

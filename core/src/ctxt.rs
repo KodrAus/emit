@@ -4,7 +4,16 @@ pub trait Ctxt {
     type Current: Props + ?Sized;
     type Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame;
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame;
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        let mut frame = None;
+        self.with_current(|current| {
+            frame = Some(self.open_root(props.chain(current)));
+        });
+
+        frame.expect("`with` closure not called")
+    }
 
     fn enter(&self, local: &mut Self::Frame);
 
@@ -23,8 +32,12 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
     type Current = C::Current;
     type Frame = C::Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        (**self).open(props)
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        (**self).open_root(props)
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        (**self).open_push(props)
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
@@ -57,8 +70,12 @@ impl<C: Ctxt> Ctxt for Option<C> {
         }
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        self.as_ref().map(|ctxt| ctxt.open(props))
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        self.as_ref().map(|ctxt| ctxt.open_root(props))
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        self.as_ref().map(|ctxt| ctxt.open_push(props))
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
@@ -89,8 +106,12 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
         (**self).with_current(with)
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        (**self).open(props)
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        (**self).open_root(props)
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        (**self).open_push(props)
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
@@ -113,8 +134,12 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
 
     type Frame = T::Frame;
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
-        self.0.open(props)
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        self.0.open_root(props)
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+        self.0.open_push(props)
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
@@ -142,7 +167,11 @@ impl Ctxt for Empty {
         with(&Empty)
     }
 
-    fn open<P: Props>(&self, _: P) -> Self::Frame {
+    fn open_root<P: Props>(&self, _: P) -> Self::Frame {
+        Empty
+    }
+
+    fn open_push<P: Props>(&self, _: P) -> Self::Frame {
         Empty
     }
 
@@ -203,7 +232,8 @@ mod alloc_support {
         pub trait DispatchCtxt {
             fn dispatch_with_current(&self, with: &mut dyn FnMut(ErasedCurrent));
 
-            fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedFrame;
+            fn dispatch_open_root(&self, props: &dyn ErasedProps) -> ErasedFrame;
+            fn dispatch_open_push(&self, props: &dyn ErasedProps) -> ErasedFrame;
             fn dispatch_enter(&self, frame: &mut ErasedFrame);
             fn dispatch_exit(&self, frame: &mut ErasedFrame);
             fn dispatch_close(&self, frame: ErasedFrame);
@@ -265,10 +295,14 @@ mod alloc_support {
             self.with_current(move |props| with(unsafe { internal::ErasedCurrent::new(&props) }))
         }
 
-        fn dispatch_open(&self, props: &dyn ErasedProps) -> ErasedFrame {
+        fn dispatch_open_root(&self, props: &dyn ErasedProps) -> ErasedFrame {
+            ErasedFrame(Box::new(self.open_root(props)))
+        }
+
+        fn dispatch_open_push(&self, props: &dyn ErasedProps) -> ErasedFrame {
             // TODO: For pointer-sized frames we could consider inlining
             // to avoid boxing
-            ErasedFrame(Box::new(self.open(props)))
+            ErasedFrame(Box::new(self.open_push(props)))
         }
 
         fn dispatch_enter(&self, span: &mut ErasedFrame) {
@@ -302,8 +336,12 @@ mod alloc_support {
             });
         }
 
-        fn open<P: Props>(&self, props: P) -> Self::Frame {
-            self.erase_ctxt().0.dispatch_open(&props)
+        fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+            self.erase_ctxt().0.dispatch_open_root(&props)
+        }
+
+        fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+            self.erase_ctxt().0.dispatch_open_push(&props)
         }
 
         fn enter(&self, span: &mut Self::Frame) {
@@ -327,8 +365,12 @@ mod alloc_support {
             (self as &(dyn ErasedCtxt + 'a)).with_current(with)
         }
 
-        fn open<P: Props>(&self, props: P) -> Self::Frame {
-            (self as &(dyn ErasedCtxt + 'a)).open(props)
+        fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+            (self as &(dyn ErasedCtxt + 'a)).open_root(props)
+        }
+
+        fn open_push<P: Props>(&self, props: P) -> Self::Frame {
+            (self as &(dyn ErasedCtxt + 'a)).open_push(props)
         }
 
         fn enter(&self, span: &mut Self::Frame) {

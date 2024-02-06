@@ -6,6 +6,7 @@ use std::{
 };
 
 use bytes::Buf;
+use emit::well_known::{SPAN_ID_KEY, TRACE_ID_KEY};
 use hyper::{
     body::{self, Body, Frame, SizeHint},
     client::conn::{http1, http1::SendRequest},
@@ -157,8 +158,8 @@ async fn send_request(
             let mut span_id = None;
 
             rt.ctxt().with_current(|props| {
-                trace_id = props.pull::<emit::TraceId>();
-                span_id = props.pull::<emit::SpanId>();
+                trace_id = props.pull::<_, emit::TraceId>(TRACE_ID_KEY);
+                span_id = props.pull::<_, emit::SpanId>(SPAN_ID_KEY);
             });
 
             req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {

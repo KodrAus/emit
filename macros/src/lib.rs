@@ -104,6 +104,17 @@ pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .unwrap_or_compile_error()
 }
 
+/**
+Get the parts of a template.
+*/
+#[proc_macro]
+pub fn tpl_parts(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    build::expand_template_parts_tokens(build::ExpandTemplateTokens {
+        input: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
 #[proc_macro_attribute]
 pub fn fmt(
     args: proc_macro::TokenStream,

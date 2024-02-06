@@ -7,6 +7,26 @@ use core::{
 };
 use emit_core::{ctxt::Ctxt, props::Props};
 
+pub trait FrameCtxt: Ctxt {
+    fn push_frame<P: Props>(&self, props: P) -> Frame<&Self>;
+    fn root_frame<P: Props>(&self, props: P) -> Frame<&Self>;
+    fn current_frame(&self) -> Frame<&Self>;
+}
+
+impl<C: Ctxt + ?Sized> FrameCtxt for C {
+    fn push_frame<P: Props>(&self, props: P) -> Frame<&Self> {
+        Frame::new_push(self, props)
+    }
+
+    fn root_frame<P: Props>(&self, props: P) -> Frame<&Self> {
+        Frame::new_root(self, props)
+    }
+
+    fn current_frame(&self) -> Frame<&Self> {
+        Frame::new_push(self, crate::empty::Empty)
+    }
+}
+
 pub struct Frame<C: Ctxt> {
     scope: mem::ManuallyDrop<C::Frame>,
     ctxt: C,
@@ -14,8 +34,15 @@ pub struct Frame<C: Ctxt> {
 
 impl<C: Ctxt> Frame<C> {
     #[track_caller]
-    pub fn new(ctxt: C, props: impl Props) -> Self {
-        let scope = mem::ManuallyDrop::new(ctxt.open(props));
+    pub fn new_push(ctxt: C, props: impl Props) -> Self {
+        let scope = mem::ManuallyDrop::new(ctxt.open_push(props));
+
+        Frame { ctxt, scope }
+    }
+
+    #[track_caller]
+    pub fn new_root(ctxt: C, props: impl Props) -> Self {
+        let scope = mem::ManuallyDrop::new(ctxt.open_root(props));
 
         Frame { ctxt, scope }
     }

@@ -2,6 +2,8 @@
 
 use core::{fmt, ops::ControlFlow, time::Duration};
 
+use emit::well_known::{SPAN_ID_KEY, TRACE_ID_KEY};
+
 pub fn ctxt<C: emit::Ctxt, S: tracing::Subscriber>(
     emit_ctxt: C,
     tracing_subscriber: S,
@@ -22,7 +24,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
 
     type Frame = TracingFrame<C::Frame>;
 
-    fn open<P: emit::Props>(&self, props: P) -> Self::Frame {
+    fn open_root<P: emit::Props>(&self, props: P) -> Self::Frame {
         static METADATA: tracing::Metadata = tracing::Metadata::new(
             "emit_tracing::span",
             "emit_tracing::span",
@@ -43,7 +45,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
         static CALLSITE: tracing::callsite::DefaultCallsite =
             tracing::callsite::DefaultCallsite::new(&METADATA);
 
-        let tracing_id = if let Some(span_id) = props.pull::<emit::SpanId>() {
+        let tracing_id = if let Some(span_id) = props.pull::<_, emit::SpanId>(SPAN_ID_KEY) {
             let fields = tracing::field::FieldSet::new(
                 &[
                     emit::well_known::TRACE_ID_KEY,
@@ -52,7 +54,9 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
                 tracing_core::identify_callsite!(&CALLSITE),
             );
 
-            let trace_id = props.pull::<emit::TraceId>().map(tracing::field::display);
+            let trace_id = props
+                .pull::<_, emit::TraceId>(TRACE_ID_KEY)
+                .map(tracing::field::display);
 
             let id = self.1.new_span(&tracing::span::Attributes::new(
                 &METADATA,
@@ -75,7 +79,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
             None
         };
 
-        TracingFrame(tracing_id, self.0.open(props))
+        TracingFrame(tracing_id, self.0.open_root(props))
     }
 
     fn enter(&self, frame: &mut Self::Frame) {

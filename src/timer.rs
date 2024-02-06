@@ -1,6 +1,18 @@
 use core::time::Duration;
 
+use emit_core::{emitter::Emitter, event::Event, props::Props, template::Template};
+
 use crate::{Clock, Extent, Timestamp, ToExtent};
+
+pub trait StartTimer: Clock {
+    fn start_timer(&self) -> Timer<&Self>;
+}
+
+impl<C: Clock + ?Sized> StartTimer for C {
+    fn start_timer(&self) -> Timer<&Self> {
+        Timer::start(self)
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Timer<C> {
@@ -28,10 +40,45 @@ impl<C: Clock> Timer<C> {
     pub fn elapsed(&self) -> Option<Duration> {
         self.extent().map(|extent| extent.len())
     }
+
+    pub fn on_drop<F: FnOnce(Option<Extent>)>(self, complete: F) -> TimerGuard<C, F> {
+        TimerGuard::new(self, complete)
+    }
 }
 
 impl<C: Clock> ToExtent for Timer<C> {
     fn to_extent(&self) -> Option<Extent> {
         self.extent()
+    }
+}
+
+pub struct TimerGuard<C: Clock, F: FnOnce(Option<Extent>)> {
+    timer: Timer<C>,
+    on_drop: Option<F>,
+}
+
+impl<C: Clock, F: FnOnce(Option<Extent>)> Drop for TimerGuard<C, F> {
+    fn drop(&mut self) {
+        if let Some(on_drop) = self.on_drop.take() {
+            (on_drop)(self.timer.extent());
+        }
+    }
+}
+
+impl<C: Clock, F: FnOnce(Option<Extent>)> TimerGuard<C, F> {
+    pub fn new(timer: Timer<C>, on_drop: F) -> Self {
+        TimerGuard {
+            timer,
+            on_drop: Some(on_drop),
+        }
+    }
+
+    pub fn timer(&self) -> &Timer<C> {
+        &self.timer
+    }
+
+    pub fn complete(mut self, complete: impl FnOnce(Option<Extent>)) {
+        let _ = self.on_drop.take();
+        complete(self.timer.extent());
     }
 }

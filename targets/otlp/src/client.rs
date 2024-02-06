@@ -557,11 +557,11 @@ impl OtlpTransport {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        use emit::{Emit as _, IdRng as _};
+        use emit::{Emit as _, IdRng as _, StartTimer as _};
 
         let rt = emit::runtime::internal();
 
-        let ctxt = emit::frame::Frame::new(
+        let ctxt = emit::frame::Frame::new_push(
             rt.ctxt(),
             emit::props! {
                 trace_id: rt.gen_trace_id(),

@@ -48,7 +48,20 @@ impl Ctxt for ThreadLocalCtxt {
         ACTIVE.with(|span| with(&*span.borrow()))
     }
 
-    fn open<P: Props>(&self, props: P) -> Self::Frame {
+    fn open_root<P: Props>(&self, props: P) -> Self::Frame {
+        let mut span = ThreadLocalSpan {
+            props: HashMap::new(),
+        };
+
+        props.for_each(|k, v| {
+            span.props.insert(k.to_owned(), v.to_owned());
+            Continue(())
+        });
+
+        span
+    }
+
+    fn open_push<P: Props>(&self, props: P) -> Self::Frame {
         let mut span = ACTIVE.with(|span| span.borrow().clone());
 
         props.for_each(|k, v| {

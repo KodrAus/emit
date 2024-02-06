@@ -1,5 +1,6 @@
 use emit_core::{
-    props::{FromProps, Props},
+    ctxt::Ctxt,
+    props::Props,
     rng::Rng,
     str::Str,
     value::FromValue,
@@ -59,12 +60,6 @@ impl Props for TraceId {
         mut for_each: F,
     ) -> ControlFlow<()> {
         for_each(Str::new(TRACE_ID_KEY), self.to_value())
-    }
-}
-
-impl<'v> FromProps<'v> for TraceId {
-    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
-        props.get(TRACE_ID_KEY)?.pull()
     }
 }
 
@@ -175,76 +170,6 @@ impl Props for SpanId {
         mut for_each: F,
     ) -> ControlFlow<()> {
         for_each(Str::new(SPAN_ID_KEY), self.to_value())
-    }
-}
-
-impl<'v> FromProps<'v> for SpanId {
-    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
-        props.get(SPAN_ID_KEY)?.pull()
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct SpanParent(SpanId);
-
-impl SpanParent {
-    pub const fn new(id: SpanId) -> Self {
-        SpanParent(id)
-    }
-
-    pub const fn id(&self) -> SpanId {
-        self.0
-    }
-}
-
-impl fmt::Debug for SpanParent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl fmt::Display for SpanParent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl From<SpanId> for SpanParent {
-    fn from(value: SpanId) -> Self {
-        SpanParent::new(value)
-    }
-}
-
-impl From<SpanParent> for SpanId {
-    fn from(value: SpanParent) -> Self {
-        value.id()
-    }
-}
-
-impl ToValue for SpanParent {
-    fn to_value(&self) -> Value {
-        self.0.to_value()
-    }
-}
-
-impl<'v> FromValue<'v> for SpanParent {
-    fn from_value(value: Value<'v>) -> Option<Self> {
-        Some(SpanParent(SpanId::from_value(value)?))
-    }
-}
-
-impl Props for SpanParent {
-    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        for_each(Str::new(SPAN_PARENT_KEY), self.to_value())
-    }
-}
-
-impl<'v> FromProps<'v> for SpanParent {
-    fn from_props<P: Props + ?Sized>(props: &'v P) -> Option<Self> {
-        props.get(SPAN_PARENT_KEY)?.pull()
     }
 }
 
@@ -417,6 +342,31 @@ impl<T: Rng + ?Sized> IdRng for T {
         let a = self.gen_u64()?;
 
         Some(SpanId::new(NonZeroU64::new(a)?))
+    }
+}
+
+pub trait IdCtxt: Ctxt {
+    fn current_trace_id(&self) -> Option<TraceId>;
+    fn current_span_id(&self) -> Option<SpanId>;
+}
+
+impl<C: Ctxt + ?Sized> IdCtxt for C {
+    fn current_span_id(&self) -> Option<SpanId> {
+        let mut span_id = None;
+        self.with_current(|current| {
+            span_id = current.pull(SPAN_ID_KEY);
+        });
+
+        span_id
+    }
+
+    fn current_trace_id(&self) -> Option<TraceId> {
+        let mut trace_id = None;
+        self.with_current(|current| {
+            trace_id = current.pull(TRACE_ID_KEY);
+        });
+
+        trace_id
     }
 }
 
