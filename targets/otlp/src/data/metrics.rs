@@ -171,7 +171,6 @@ pub(crate) fn encode_request(
 
 #[cfg(feature = "decode_responses")]
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
-    use emit::Emit as _;
     use prost::Message;
 
     match body {
@@ -182,24 +181,22 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
                 )
                 .unwrap();
 
-            emit::runtime::internal().debug(
-                emit::tpl!("received {response}"),
-                emit::props! {
-                    #[emit::as_debug] response,
-                },
-            );
+            emit::runtime::internal().emit(&emit::debug_event!(
+                "received {response}",
+                #[emit::as_debug]
+                response
+            ));
         }
         Err(body) => {
             let response =
                 crate::data::generated::collector::metrics::v1::ExportMetricsPartialSuccess::decode(body)
                     .unwrap();
 
-            emit::runtime::internal().warn(
-                emit::tpl!("received {response}"),
-                emit::props! {
-                    #[emit::as_debug] response,
-                },
-            );
+            emit::runtime::internal().emit(&emit::warn_event!(
+                "received {response}",
+                #[emit::as_debug]
+                response
+            ));
         }
     }
 }

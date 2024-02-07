@@ -1,6 +1,6 @@
 use crate::{
-    clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::Event, filter::Filter,
-    props::Props, rng::Rng, timestamp::Timestamp,
+    clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::Event, extent::ToExtent,
+    filter::Filter, props::Props, rng::Rng, timestamp::Timestamp,
 };
 
 static SHARED: AmbientSlot = AmbientSlot::new();
@@ -169,6 +169,26 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
             clock: self.clock,
             rng: id_gen(self.rng),
         }
+    }
+}
+
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
+    Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
+{
+    pub fn emit<P: Props>(&self, evt: &Event<P>) {
+        self.ctxt.with_current(|ctxt| {
+            let evt = Event::new(
+                evt.extent()
+                    .cloned()
+                    .or_else(|| self.clock.now().to_extent()),
+                evt.tpl(),
+                ctxt.chain(evt.props()),
+            );
+
+            if self.filter.matches(&evt) {
+                self.emitter.emit(&evt);
+            }
+        });
     }
 }
 

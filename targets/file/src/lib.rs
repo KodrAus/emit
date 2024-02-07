@@ -378,17 +378,13 @@ impl Worker {
             .sync_all()
             .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
-        rt.debug_at(
-            timer,
-            emit::tpl!("wrote {metric_value}{metric_unit} to {path}"),
-            emit::props! {
-                metric_name: "emit_file::written_bytes",
-                metric_kind: "sum",
-                metric_value: written_bytes,
-                metric_unit: "b",
-                #[emit::as_debug] path: file.file_path,
-            },
-        );
+        rt.emit(&emit::debug_event!(
+            extent: timer,
+            "wrote {written_bytes} bytes to {path}",
+            written_bytes,
+            #[emit::as_debug]
+            path: file.file_path,
+        ));
 
         // Set the active file so the next batch can attempt to use it
         // At this point the file is expected to be valid

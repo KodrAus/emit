@@ -19,6 +19,7 @@ mod build;
 mod capture;
 mod ctxt;
 mod emit;
+mod event;
 mod filter;
 mod fmt;
 mod format;
@@ -38,6 +39,159 @@ Format a template.
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     format::expand_tokens(format::ExpandTokens {
+        input: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Construct an event.
+*/
+#[proc_macro]
+pub fn event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event::expand_tokens(event::ExpandTokens {
+        level: None,
+        input: item.into(),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Construct an event.
+*/
+#[proc_macro]
+pub fn debug_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event::expand_tokens(event::ExpandTokens {
+        level: Some(quote!(Debug)),
+        input: item.into(),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Construct an event.
+*/
+#[proc_macro]
+pub fn info_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event::expand_tokens(event::ExpandTokens {
+        level: Some(quote!(Info)),
+        input: item.into(),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Construct an event.
+*/
+#[proc_macro]
+pub fn warn_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event::expand_tokens(event::ExpandTokens {
+        level: Some(quote!(Warn)),
+        input: item.into(),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Construct an event.
+*/
+#[proc_macro]
+pub fn error_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    event::expand_tokens(event::ExpandTokens {
+        level: Some(quote!(Error)),
+        input: item.into(),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Wrap an operation in a span.
+*/
+#[proc_macro_attribute]
+pub fn span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    base_span(None, TokenStream::from(args), TokenStream::from(item))
+}
+
+/**
+Wrap an operation in a span.
+*/
+#[proc_macro_attribute]
+pub fn debug_span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    base_span(
+        Some(quote!(Debug)),
+        TokenStream::from(args),
+        TokenStream::from(item),
+    )
+}
+
+/**
+Wrap an operation in a span.
+*/
+#[proc_macro_attribute]
+pub fn info_span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    base_span(
+        Some(quote!(Info)),
+        TokenStream::from(args),
+        TokenStream::from(item),
+    )
+}
+
+/**
+Wrap an operation in a span.
+*/
+#[proc_macro_attribute]
+pub fn warn_span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    base_span(
+        Some(quote!(Warn)),
+        TokenStream::from(args),
+        TokenStream::from(item),
+    )
+}
+
+/**
+Wrap an operation in a span.
+*/
+#[proc_macro_attribute]
+pub fn error_span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    base_span(
+        Some(quote!(Error)),
+        TokenStream::from(args),
+        TokenStream::from(item),
+    )
+}
+
+/**
+Construct a template.
+*/
+#[proc_macro]
+pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    build::expand_template_tokens(build::ExpandTemplateTokens {
+        input: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+/**
+Get the parts of a template.
+*/
+#[proc_macro]
+pub fn tpl_parts(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    build::expand_template_parts_tokens(build::ExpandTemplateTokens {
         input: TokenStream::from(item),
     })
     .unwrap_or_compile_error()
@@ -94,52 +248,6 @@ pub fn props(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .unwrap_or_compile_error()
 }
 
-/**
-Construct a template.
-*/
-#[proc_macro]
-pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    build::expand_template_tokens(build::ExpandTemplateTokens {
-        input: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
-/**
-Get the parts of a template.
-*/
-#[proc_macro]
-pub fn tpl_parts(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    build::expand_template_parts_tokens(build::ExpandTemplateTokens {
-        input: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
-#[proc_macro_attribute]
-pub fn fmt(
-    args: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    fmt::rename_hook_tokens(fmt::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
-#[proc_macro_attribute]
-pub fn optional(
-    args: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    optional::rename_hook_tokens(optional::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
 #[proc_macro_attribute]
 pub fn push_ctxt(
     args: proc_macro::TokenStream,
@@ -167,13 +275,13 @@ pub fn root_ctxt(
 }
 
 #[proc_macro_attribute]
-pub fn span(
+pub fn fmt(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    span::expand_tokens(span::ExpandTokens {
-        input: TokenStream::from(args),
-        item: TokenStream::from(item),
+    fmt::rename_hook_tokens(fmt::RenameHookTokens {
+        args: TokenStream::from(args),
+        expr: TokenStream::from(item),
     })
     .unwrap_or_compile_error()
 }
@@ -184,6 +292,18 @@ pub fn key(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     key::rename_hook_tokens(key::RenameHookTokens {
+        args: TokenStream::from(args),
+        expr: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+#[proc_macro_attribute]
+pub fn optional(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    optional::rename_hook_tokens(optional::RenameHookTokens {
         args: TokenStream::from(args),
         expr: TokenStream::from(item),
     })
@@ -319,6 +439,18 @@ fn base_emit(level: Option<TokenStream>, item: TokenStream) -> proc_macro::Token
     }
 }
 
+fn base_span(
+    level: Option<TokenStream>,
+    input: TokenStream,
+    item: TokenStream,
+) -> proc_macro::TokenStream {
+    if filter::matches_build_filter() {
+        span::expand_tokens(span::ExpandTokens { level, input, item }).unwrap_or_compile_error()
+    } else {
+        item.into()
+    }
+}
+
 fn capture_as(
     name: &'static str,
     args: TokenStream,
@@ -328,8 +460,8 @@ fn capture_as(
 ) -> proc_macro::TokenStream {
     capture::rename_hook_tokens(capture::RenameHookTokens {
         name,
-        args: TokenStream::from(args),
-        expr: TokenStream::from(expr),
+        args,
+        expr,
         to: |args: &capture::Args| {
             if args.inspect {
                 as_fn.clone()

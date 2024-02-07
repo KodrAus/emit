@@ -557,7 +557,7 @@ impl OtlpTransport {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        use emit::{Emit as _, IdRng as _, StartTimer as _};
+        use emit::{IdRng as _, StartTimer as _};
 
         let rt = emit::runtime::internal();
 
@@ -584,44 +584,30 @@ impl OtlpTransport {
                         .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
                         .await
                         .map_err(|err| {
-                            rt.warn_at(
-                                timer,
-                                emit::tpl!(
-                                    "OTLP batch of {metric_value} {metric_unit} failed to send: {err}"
-                                ),
-                                emit::props! {
-                                    metric_name: "emit_otlp::send_event_err",
-                                    metric_kind: "sum",
-                                    metric_value: batch_size,
-                                    metric_unit: "events",
-                                    err,
-                                },
-                            );
+                            rt.emit(&emit::warn_event!(
+                                extent: timer,
+                                "OTLP batch of {batch_size} events failed to send: {err}",
+                                batch_size,
+                                err,
+                            ));
 
                             BatchError::retry(err, batch)
                         })?;
 
-                    rt.debug_at(
-                        timer,
-                        emit::tpl!("OTLP batch of {metric_value} {metric_unit} responded {status_code}"),
-                        emit::props! {
-                            metric_name: "emit_otlp::send_event_ok",
-                            metric_kind: "sum",
-                            metric_value: batch_size,
-                            metric_unit: "events",
-                            status_code: res.status(),
-                        },
-                    );
+                    rt.emit(&emit::debug_event!(
+                        extent: timer,
+                        "OTLP batch of {batch_size} events responded {status_code}",
+                        batch_size,
+                        status_code: res.status(),
+                    ));
 
                     if let Some(decode) = decode {
                         let status = res.status();
                         let body = res.read_to_vec().await.map_err(|err| {
-                            rt.warn(
-                                emit::tpl!("failed to read OTLP response: {err}"),
-                                emit::props! {
-                                    err,
-                                },
-                            );
+                            rt.emit(&emit::warn_event!(
+                                "failed to read OTLP response: {err}",
+                                err,
+                            ));
 
                             BatchError::no_retry(err)
                         })?;
