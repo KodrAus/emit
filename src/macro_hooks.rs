@@ -1,14 +1,18 @@
 use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
-    clock::Clock,
-    ctxt::ErasedCtxt,
+    clock::{Clock, ErasedClock},
+    ctxt::{Ctxt, ErasedCtxt},
     emitter::Emitter,
+    empty::Empty,
+    event::Event,
+    extent::Extent,
     filter::Filter,
     props::Props,
     str::ToStr,
     template::Template,
     value::{ToValue, Value},
+    well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
 };
 
 use emit_core::extent::ToExtent;
@@ -16,11 +20,12 @@ use emit_core::extent::ToExtent;
 use std::error::Error;
 
 use crate::{
-    base_emit, base_push_ctxt,
+    base_emit,
     frame::Frame,
     id::{SpanId, TraceId},
     template::{Formatter, Part},
-    Level, Str,
+    timer::TimerGuard,
+    IdRng, Level, Str, Timer,
 };
 
 /**
@@ -462,7 +467,98 @@ pub fn __private_emit(
 pub fn __private_push_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
     let rt = crate::runtime::shared();
 
-    base_push_ctxt(rt.ctxt(), props)
+    Frame::new_push(rt.ctxt(), props)
+}
+
+#[track_caller]
+pub fn __private_root_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
+    let rt = crate::runtime::shared();
+
+    Frame::new_root(rt.ctxt(), props)
+}
+
+#[track_caller]
+pub fn __private_push_span_ctxt(
+    when: impl Filter,
+    tpl: Template,
+    ctxt_props: impl Props,
+    evt_props: impl Props,
+) -> (
+    Frame<Option<&'static (dyn ErasedCtxt + Send + Sync)>>,
+    Option<Timer<&'static (dyn ErasedClock + Send + Sync)>>,
+) {
+    struct TraceContext {
+        trace_id: Option<TraceId>,
+        span_parent: Option<SpanId>,
+        span_id: Option<SpanId>,
+    }
+
+    impl Props for TraceContext {
+        fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+            &'kv self,
+            mut for_each: F,
+        ) -> ControlFlow<()> {
+            if let Some(ref trace_id) = self.trace_id {
+                for_each(TRACE_ID_KEY.to_str(), trace_id.to_value())?;
+            }
+
+            if let Some(ref span_parent) = self.span_parent {
+                for_each(SPAN_PARENT_KEY.to_str(), span_parent.to_value())?;
+            }
+
+            if let Some(ref span_id) = self.span_id {
+                for_each(SPAN_ID_KEY.to_str(), span_id.to_value())?;
+            }
+
+            ControlFlow::Continue(())
+        }
+    }
+
+    let rt = crate::runtime::shared();
+
+    let mut trace_id = None;
+    let mut span_parent = None;
+
+    rt.with_current(|current| {
+        trace_id = current.pull::<_, TraceId>(TRACE_ID_KEY);
+        span_parent = current.pull::<_, SpanId>(SPAN_ID_KEY);
+    });
+
+    trace_id = trace_id.or_else(|| rt.gen_trace_id());
+    let span_id = rt.gen_span_id();
+
+    let trace_ctxt = TraceContext {
+        trace_id,
+        span_parent,
+        span_id,
+    };
+
+    let timer = Timer::start(*rt.clock());
+
+    if when.matches(&Event::new(
+        timer.extent().map(|extent| *extent.to_point()),
+        tpl.by_ref(),
+        ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),
+    )) {
+        (
+            Frame::new_push(Some(rt.ctxt()), trace_ctxt.chain(ctxt_props)),
+            Some(timer),
+        )
+    } else {
+        (Frame::new_push(None, Empty), None)
+    }
+}
+
+#[track_caller]
+pub fn __private_begin_span<C: Clock, F: FnOnce(Option<Extent>)>(
+    timer: Option<Timer<C>>,
+    default_complete: F,
+) -> TimerGuard<C, F> {
+    if let Some(timer) = timer {
+        TimerGuard::new(timer, default_complete)
+    } else {
+        TimerGuard::disabled()
+    }
 }
 
 pub use core::module_path as __private_module;

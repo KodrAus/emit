@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use emit::{Clock as _, Filter as _, FrameCtxt as _, IdCtxt as _, IdRng as _, StartTimer as _};
+use emit::{Clock as _, Filter as _, FrameCtxt as _};
 
 #[macro_use]
 extern crate serde_derive;
@@ -69,7 +69,7 @@ async fn main() {
     internal.blocking_flush(Duration::from_secs(5));
 }
 
-#[emit::push_ctxt(trace_id: emit::runtime::shared().gen_trace_id())]
+#[emit::span("in_trace")]
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
@@ -90,13 +90,9 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::push_ctxt(span_id: emit::runtime::shared().gen_span_id(), span_parent: emit::runtime::shared().current_span_id(), a)]
+#[emit::span(arg: span, "in_ctxt", a)]
 async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     increment(&COUNT);
-
-    let span = emit::runtime::shared().start_timer().on_drop(|extent| {
-        emit::info!(extent, "in_ctxt finished");
-    });
 
     let r = async {
         in_ctxt2(5).await;

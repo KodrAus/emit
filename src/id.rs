@@ -2,16 +2,14 @@ use emit_core::{
     ctxt::Ctxt,
     props::Props,
     rng::Rng,
-    str::Str,
     value::FromValue,
-    well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
+    well_known::{SPAN_ID_KEY, TRACE_ID_KEY},
 };
 
 use crate::value::{ToValue, Value};
 use core::{
     fmt,
     num::{NonZeroU128, NonZeroU64},
-    ops::ControlFlow,
     str,
     str::FromStr,
 };
@@ -51,15 +49,6 @@ impl<'v> FromValue<'v> for TraceId {
             .downcast_ref::<TraceId>()
             .copied()
             .or_else(|| TraceId::try_from_hex(value).ok())
-    }
-}
-
-impl Props for TraceId {
-    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        for_each(Str::new(TRACE_ID_KEY), self.to_value())
     }
 }
 
@@ -161,15 +150,6 @@ impl<'v> FromValue<'v> for SpanId {
             .downcast_ref::<SpanId>()
             .copied()
             .or_else(|| SpanId::try_from_hex(value).ok())
-    }
-}
-
-impl Props for SpanId {
-    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        for_each(Str::new(SPAN_ID_KEY), self.to_value())
     }
 }
 

@@ -1,5 +1,5 @@
-use proc_macro2::TokenStream;
-use syn::{spanned::Spanned, Expr, ExprLit, FieldValue, Lit};
+use proc_macro2::{Ident, TokenStream};
+use syn::{spanned::Spanned, Expr, ExprLit, ExprPath, FieldValue, Lit};
 
 use crate::util::{print_list, FieldValueKey};
 
@@ -42,6 +42,26 @@ impl Arg<String> {
             }) = fv.expr
             {
                 Ok(l.value())
+            } else {
+                Err(syn::Error::new(
+                    fv.expr.span(),
+                    format_args!("`{}` requires a string value", key),
+                ))
+            }
+        })
+    }
+}
+
+impl Arg<Ident> {
+    pub fn ident(key: &'static str) -> Self {
+        Arg::new(key, move |fv| {
+            if let Expr::Path(ExprPath { ref path, .. }) = fv.expr {
+                path.get_ident().cloned().ok_or_else(|| {
+                    syn::Error::new(
+                        fv.expr.span(),
+                        format_args!("`{}` requires an identifier value", key),
+                    )
+                })
             } else {
                 Err(syn::Error::new(
                     fv.expr.span(),

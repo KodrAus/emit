@@ -17,6 +17,7 @@ use proc_macro2::TokenStream;
 mod args;
 mod build;
 mod capture;
+mod ctxt;
 mod emit;
 mod filter;
 mod fmt;
@@ -25,7 +26,7 @@ mod hook;
 mod key;
 mod optional;
 mod props;
-mod push_ctxt;
+mod span;
 mod template;
 mod util;
 
@@ -144,7 +145,33 @@ pub fn push_ctxt(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    push_ctxt::expand_tokens(push_ctxt::ExpandTokens {
+    ctxt::expand_tokens(ctxt::ExpandTokens {
+        root: false,
+        input: TokenStream::from(args),
+        item: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+#[proc_macro_attribute]
+pub fn root_ctxt(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    ctxt::expand_tokens(ctxt::ExpandTokens {
+        root: true,
+        input: TokenStream::from(args),
+        item: TokenStream::from(item),
+    })
+    .unwrap_or_compile_error()
+}
+
+#[proc_macro_attribute]
+pub fn span(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    span::expand_tokens(span::ExpandTokens {
         input: TokenStream::from(args),
         item: TokenStream::from(item),
     })

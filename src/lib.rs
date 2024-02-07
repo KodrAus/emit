@@ -3,12 +3,7 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use emit_core::{
-    extent::ToExtent,
-    well_known::{LVL_KEY, SPAN_ID_KEY, TRACE_ID_KEY},
-};
-
-use crate::frame::Frame;
+use emit_core::{extent::ToExtent, well_known::LVL_KEY};
 
 #[doc(inline)]
 pub use emit_macros::*;
@@ -67,11 +62,6 @@ fn base_emit(
             to.emit(&evt);
         }
     });
-}
-
-#[track_caller]
-fn base_push_ctxt<C: Ctxt>(ctxt: C, props: impl Props) -> Frame<C> {
-    Frame::new_push(ctxt, props)
 }
 
 pub trait Emit: Emitter + Filter + Ctxt + Clock + Rng {

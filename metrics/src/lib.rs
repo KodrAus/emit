@@ -1,23 +1,11 @@
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
-use std::{
-    borrow::Cow,
-    cmp,
-    collections::HashMap,
-    mem,
-    ops::{ControlFlow, Range},
-    sync::Mutex,
-    time::Duration,
-};
+use std::{borrow::Cow, cmp, collections::HashMap, mem, ops::Range, sync::Mutex, time::Duration};
 
 use emit::{
     props::Props,
-    str::{Str, ToStr},
-    value::{FromValue, ToValue, Value},
-    well_known::{
-        METRIC_KIND_KEY, METRIC_KIND_MAX, METRIC_KIND_MIN, METRIC_KIND_SUM, METRIC_NAME_KEY,
-        METRIC_VALUE_KEY,
-    },
+    str::Str,
+    well_known::{METRIC_KIND_KEY, METRIC_KIND_SUM, METRIC_NAME_KEY, METRIC_VALUE_KEY},
     Event, Timestamp,
 };
 

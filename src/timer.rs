@@ -1,7 +1,5 @@
 use core::time::Duration;
 
-use emit_core::{emitter::Emitter, event::Event, props::Props, template::Template};
-
 use crate::{Clock, Extent, Timestamp, ToExtent};
 
 pub trait StartTimer: Clock {
@@ -53,14 +51,16 @@ impl<C: Clock> ToExtent for Timer<C> {
 }
 
 pub struct TimerGuard<C: Clock, F: FnOnce(Option<Extent>)> {
-    timer: Timer<C>,
+    timer: Option<Timer<C>>,
     on_drop: Option<F>,
 }
 
 impl<C: Clock, F: FnOnce(Option<Extent>)> Drop for TimerGuard<C, F> {
     fn drop(&mut self) {
         if let Some(on_drop) = self.on_drop.take() {
-            (on_drop)(self.timer.extent());
+            if let Some(ref timer) = self.timer {
+                (on_drop)(timer.extent());
+            }
         }
     }
 }
@@ -68,17 +68,34 @@ impl<C: Clock, F: FnOnce(Option<Extent>)> Drop for TimerGuard<C, F> {
 impl<C: Clock, F: FnOnce(Option<Extent>)> TimerGuard<C, F> {
     pub fn new(timer: Timer<C>, on_drop: F) -> Self {
         TimerGuard {
-            timer,
+            timer: Some(timer),
             on_drop: Some(on_drop),
         }
     }
 
-    pub fn timer(&self) -> &Timer<C> {
-        &self.timer
+    pub fn disabled() -> Self {
+        TimerGuard {
+            timer: None,
+            on_drop: None,
+        }
     }
 
-    pub fn complete(mut self, complete: impl FnOnce(Option<Extent>)) {
+    pub fn is_enabled(&self) -> bool {
+        self.timer.is_some()
+    }
+
+    pub fn timer(&self) -> Option<&Timer<C>> {
+        self.timer.as_ref()
+    }
+
+    pub fn complete(mut self, complete: impl FnOnce(Option<Extent>)) -> bool {
         let _ = self.on_drop.take();
-        complete(self.timer.extent());
+
+        if let Some(ref timer) = self.timer {
+            complete(timer.extent());
+            true
+        } else {
+            false
+        }
     }
 }
