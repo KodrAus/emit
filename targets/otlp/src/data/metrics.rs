@@ -2,7 +2,7 @@ use std::{borrow::Cow, ops::ControlFlow};
 
 use emit::{
     value::FromValue,
-    well_known::{METRIC_KIND_KEY, METRIC_KIND_SUM, METRIC_NAME_KEY, METRIC_VALUE_KEY},
+    well_known::{METRIC_AGG_KEY, METRIC_AGG_SUM, METRIC_NAME_KEY, METRIC_VALUE_KEY},
     Props,
 };
 use emit_batcher::BatchError;
@@ -21,10 +21,10 @@ impl EventEncoder {
     ) -> Option<PreEncoded> {
         use prost::Message;
 
-        if let (Some(metric_name), Some(metric_value), metric_kind) = (
+        if let (Some(metric_name), Some(metric_value), metric_agg) = (
             evt.props().get(METRIC_NAME_KEY),
             evt.props().get(METRIC_VALUE_KEY),
-            evt.props().get(METRIC_KIND_KEY),
+            evt.props().get(METRIC_AGG_KEY),
         ) {
             use crate::data::generated::{common::v1::*, metrics::v1::*};
 
@@ -75,8 +75,8 @@ impl EventEncoder {
                 }),
             };
 
-            let data = match metric_kind.and_then(|kind| kind.to_cow_str()).as_deref() {
-                Some(METRIC_KIND_SUM) => Some(metric::Data::Sum(Sum {
+            let data = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
+                Some(METRIC_AGG_SUM) => Some(metric::Data::Sum(Sum {
                     aggregation_temporality,
                     is_monotonic: false,
                     data_points: vec![data_point],

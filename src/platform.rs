@@ -3,6 +3,7 @@ use crate::{clock::Clock, rng::Rng, Timestamp};
 #[cfg(not(feature = "std"))]
 use emit_core::empty::Empty;
 
+#[cfg(feature = "std")]
 use emit_core::runtime::{InternalClock, InternalRng};
 
 #[cfg(feature = "std")]
@@ -26,8 +27,6 @@ type DefaultIdGen = Empty;
 
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
-#[cfg(not(feature = "std"))]
-pub(crate) type DefaultCtxt = Empty;
 
 pub(crate) struct Platform {
     #[cfg(not(feature = "std"))]
@@ -35,7 +34,7 @@ pub(crate) struct Platform {
     #[cfg(feature = "std")]
     pub(crate) clock: Box<dyn InternalClock + Send + Sync>,
     #[cfg(not(feature = "std"))]
-    pub(crate) id_gen: DefaultIdGen,
+    pub(crate) rng: DefaultIdGen,
     #[cfg(feature = "std")]
     pub(crate) rng: Box<dyn InternalRng + Send + Sync>,
 }

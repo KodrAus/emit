@@ -11,7 +11,7 @@ pub trait Emitter {
 
     fn blocking_flush(&self, timeout: Duration);
 
-    fn and<U>(self, other: U) -> And<Self, U>
+    fn and_emitter<U>(self, other: U) -> And<Self, U>
     where
         Self: Sized,
     {

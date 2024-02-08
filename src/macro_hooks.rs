@@ -1,31 +1,37 @@
 use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
-    clock::{Clock, ErasedClock},
-    ctxt::{Ctxt, ErasedCtxt},
+    clock::Clock,
     emitter::Emitter,
-    empty::Empty,
-    event::Event,
-    extent::Extent,
+    extent::{Extent, ToExtent},
     filter::Filter,
     props::Props,
     str::ToStr,
     template::Template,
     value::{ToValue, Value},
+};
+
+#[cfg(feature = "alloc")]
+use emit_core::{
+    ctxt::Ctxt,
+    empty::Empty,
+    event::Event,
+    runtime::{AmbientClock, AmbientCtxt},
     well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
 };
 
-use emit_core::extent::ToExtent;
+#[cfg(feature = "alloc")]
+use crate::{frame::Frame, IdRng};
+
 #[cfg(feature = "std")]
 use std::error::Error;
 
 use crate::{
     base_emit,
-    frame::Frame,
     id::{SpanId, TraceId},
     template::{Formatter, Part},
     timer::TimerGuard,
-    IdRng, Level, Str, Timer,
+    Level, Str, Timer,
 };
 
 /**
@@ -436,8 +442,9 @@ impl<'a> __PrivateKeyHook for Str<'a> {
 }
 
 #[track_caller]
-pub fn __private_format(tpl: Template, props: impl Props) -> String {
-    let mut s = String::new();
+#[cfg(feature = "alloc")]
+pub fn __private_format(tpl: Template, props: impl Props) -> alloc::string::String {
+    let mut s = alloc::string::String::new();
     tpl.render(props).write(&mut s).expect("infallible write");
 
     s
@@ -454,8 +461,8 @@ pub fn __private_emit(
     let rt = crate::runtime::shared();
 
     base_emit(
-        rt.emitter().and(to),
-        rt.filter().and(when),
+        rt.emitter().and_emitter(to),
+        rt.filter().and_filter(when),
         rt.ctxt(),
         extent.to_extent().or_else(|| rt.now().to_extent()),
         tpl,
@@ -464,28 +471,31 @@ pub fn __private_emit(
 }
 
 #[track_caller]
-pub fn __private_push_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
+#[cfg(feature = "alloc")]
+pub fn __private_push_ctxt(props: impl Props) -> Frame<AmbientCtxt<'static>> {
     let rt = crate::runtime::shared();
 
     Frame::new_push(rt.ctxt(), props)
 }
 
 #[track_caller]
-pub fn __private_root_ctxt(props: impl Props) -> Frame<&'static (dyn ErasedCtxt + Send + Sync)> {
+#[cfg(feature = "alloc")]
+pub fn __private_root_ctxt(props: impl Props) -> Frame<AmbientCtxt<'static>> {
     let rt = crate::runtime::shared();
 
     Frame::new_root(rt.ctxt(), props)
 }
 
 #[track_caller]
+#[cfg(feature = "alloc")]
 pub fn __private_push_span_ctxt(
     when: impl Filter,
     tpl: Template,
     ctxt_props: impl Props,
     evt_props: impl Props,
 ) -> (
-    Frame<Option<&'static (dyn ErasedCtxt + Send + Sync)>>,
-    Option<Timer<&'static (dyn ErasedClock + Send + Sync)>>,
+    Frame<Option<AmbientCtxt<'static>>>,
+    Option<Timer<AmbientClock<'static>>>,
 ) {
     struct TraceContext {
         trace_id: Option<TraceId>,

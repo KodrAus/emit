@@ -141,15 +141,15 @@ fn increment(metric: &AtomicUsize) {
 fn sample_metrics() {
     let now = emit::runtime::shared().now();
 
-    for (metric_value, metric_kind, metric_name) in [(
+    for (metric_value, metric_agg, metric_name) in [(
         &COUNT,
-        emit::well_known::METRIC_KIND_SUM,
+        emit::well_known::METRIC_AGG_SUM,
         "smoke_test::count",
     )] {
         emit::emit!(
             extent: now,
-            "{metric_kind} of {metric_name} is {metric_value}",
-            metric_kind,
+            "{metric_agg} of {metric_name} is {metric_value}",
+            metric_agg,
             metric_name,
             metric_value: metric_value.load(Ordering::Relaxed),
         );

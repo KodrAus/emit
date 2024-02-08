@@ -5,8 +5,8 @@ use std::{borrow::Cow, cmp, collections::HashMap, mem, ops::Range, sync::Mutex, 
 use emit::{
     props::Props,
     str::Str,
-    well_known::{METRIC_KIND_KEY, METRIC_KIND_SUM, METRIC_NAME_KEY, METRIC_VALUE_KEY},
-    Event, Timestamp,
+    well_known::{METRIC_AGG_KEY, METRIC_AGG_SUM, METRIC_NAME_KEY, METRIC_VALUE_KEY},
+    Event, Timestamp, Value,
 };
 
 pub fn aggregate_by_count<E>(count: usize, emitter: E) -> MetricsEmitter<E> {
@@ -46,7 +46,7 @@ impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
                 continue;
             }
 
-            let metric_kind = METRIC_KIND_SUM;
+            let metric_agg = METRIC_AGG_SUM;
 
             let histogram = histogram.compute();
             let x = histogram.timestamp_range();
@@ -57,9 +57,9 @@ impl<E: emit::Emitter> emit::Emitter for MetricsEmitter<E> {
 
             self.inner.emit(&emit::Event::new(
                 x,
-                emit::tpl!("{metric_kind} of {metric_name} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
+                emit::tpl!("{metric_agg} of {metric_name} is in the range {#[emit::fmt(\".3\")] min}..={#[emit::fmt(\".3\")] max}"),
                 emit::props! {
-                    metric_kind,
+                    metric_agg,
                     metric_name,
                     #[emit::as_sval]
                     metric_value,
@@ -135,15 +135,15 @@ impl Aggregator {
     }
 
     pub fn record_metric(&mut self, evt: &Event<impl Props>) -> bool {
-        if let (Some(extent), Some(metric_name), Some(metric_kind), Some(metric_value)) = (
+        if let (Some(extent), Some(metric_name), Some(metric_agg), Some(metric_value)) = (
             evt.extent()
                 .filter(|extent| extent.is_point())
                 .map(|extent| extent.as_point()),
             evt.props().pull::<_, Str>(METRIC_NAME_KEY),
-            evt.props().pull::<_, Str>(METRIC_KIND_KEY),
-            evt.props().get(METRIC_VALUE_KEY),
+            evt.props().pull::<_, Str>(METRIC_AGG_KEY),
+            evt.props().pull::<_, Value>(METRIC_VALUE_KEY),
         ) {
-            if metric_kind == METRIC_KIND_SUM {
+            if metric_agg == METRIC_AGG_SUM {
                 return self.record_sum_point(metric_name.to_cow(), *extent, metric_value.as_f64());
             }
         }

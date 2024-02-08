@@ -10,7 +10,7 @@ use crate::{
 pub trait Filter {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool;
 
-    fn and<U>(self, other: U) -> And<Self, U>
+    fn and_filter<U>(self, other: U) -> And<Self, U>
     where
         Self: Sized,
     {

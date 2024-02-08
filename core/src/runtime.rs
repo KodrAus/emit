@@ -389,12 +389,14 @@ mod std_support {
 
     use super::*;
 
-    trait AmbientTarget: Any + ErasedEmitter + Send + Sync + 'static {
+    pub type AmbientEmitter<'a> = &'a (dyn ErasedEmitter + Send + Sync + 'static);
+
+    trait AnyEmitter: Any + ErasedEmitter + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
         fn as_super(&self) -> &(dyn ErasedEmitter + Send + Sync + 'static);
     }
 
-    impl<T: ErasedEmitter + Send + Sync + 'static> AmbientTarget for T {
+    impl<T: ErasedEmitter + Send + Sync + 'static> AnyEmitter for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -404,12 +406,14 @@ mod std_support {
         }
     }
 
-    trait AmbientFilter: Any + ErasedFilter + Send + Sync + 'static {
+    pub type AmbientFilter<'a> = &'a (dyn ErasedFilter + Send + Sync + 'static);
+
+    trait AnyFilter: Any + ErasedFilter + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
         fn as_super(&self) -> &(dyn ErasedFilter + Send + Sync + 'static);
     }
 
-    impl<T: ErasedFilter + Send + Sync + 'static> AmbientFilter for T {
+    impl<T: ErasedFilter + Send + Sync + 'static> AnyFilter for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -419,12 +423,14 @@ mod std_support {
         }
     }
 
-    trait AmbientCtxt: Any + ErasedCtxt + Send + Sync + 'static {
+    pub type AmbientCtxt<'a> = &'a (dyn ErasedCtxt + Send + Sync + 'static);
+
+    trait AnyCtxt: Any + ErasedCtxt + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
         fn as_super(&self) -> &(dyn ErasedCtxt + Send + Sync + 'static);
     }
 
-    impl<T: ErasedCtxt + Send + Sync + 'static> AmbientCtxt for T {
+    impl<T: ErasedCtxt + Send + Sync + 'static> AnyCtxt for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -434,12 +440,14 @@ mod std_support {
         }
     }
 
-    trait AmbientClock: Any + ErasedClock + Send + Sync + 'static {
+    pub type AmbientClock<'a> = &'a (dyn ErasedClock + Send + Sync + 'static);
+
+    trait AnyClock: Any + ErasedClock + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
         fn as_super(&self) -> &(dyn ErasedClock + Send + Sync + 'static);
     }
 
-    impl<T: ErasedClock + Send + Sync + 'static> AmbientClock for T {
+    impl<T: ErasedClock + Send + Sync + 'static> AnyClock for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -449,12 +457,14 @@ mod std_support {
         }
     }
 
-    trait AmbientGenId: Any + ErasedRng + Send + Sync + 'static {
+    pub type AmbientRng<'a> = &'a (dyn ErasedRng + Send + Sync + 'static);
+
+    trait AnyRng: Any + ErasedRng + Send + Sync + 'static {
         fn as_any(&self) -> &dyn Any;
         fn as_super(&self) -> &(dyn ErasedRng + Send + Sync + 'static);
     }
 
-    impl<T: ErasedRng + Send + Sync + 'static> AmbientGenId for T {
+    impl<T: ErasedRng + Send + Sync + 'static> AnyRng for T {
         fn as_any(&self) -> &dyn Any {
             self
         }
@@ -474,11 +484,11 @@ mod std_support {
     }
 
     type AmbientSyncValue = Runtime<
-        Box<dyn AmbientTarget + Send + Sync>,
-        Box<dyn AmbientFilter + Send + Sync>,
-        Box<dyn AmbientCtxt + Send + Sync>,
-        Box<dyn AmbientClock + Send + Sync>,
-        Box<dyn AmbientGenId + Send + Sync>,
+        Box<dyn AnyEmitter + Send + Sync>,
+        Box<dyn AnyFilter + Send + Sync>,
+        Box<dyn AnyCtxt + Send + Sync>,
+        Box<dyn AnyClock + Send + Sync>,
+        Box<dyn AnyRng + Send + Sync>,
     >;
 
     type AmbientSyncRuntime = Runtime<
@@ -490,11 +500,11 @@ mod std_support {
     >;
 
     pub type AmbientRuntime<'a> = Runtime<
-        &'a (dyn ErasedEmitter + Send + Sync),
-        &'a (dyn ErasedFilter + Send + Sync),
-        &'a (dyn ErasedCtxt + Send + Sync),
-        &'a (dyn ErasedClock + Send + Sync),
-        &'a (dyn ErasedRng + Send + Sync),
+        AmbientEmitter<'a>,
+        AmbientFilter<'a>,
+        AmbientCtxt<'a>,
+        AmbientClock<'a>,
+        AmbientRng<'a>,
     >;
 
     unsafe impl Send for AmbientSync where AmbientSyncValue: Send {}
@@ -525,14 +535,12 @@ mod std_support {
                 .set({
                     let value = pipeline
                         .map_emitter(|emitter| {
-                            Box::new(emitter) as Box<dyn AmbientTarget + Send + Sync>
+                            Box::new(emitter) as Box<dyn AnyEmitter + Send + Sync>
                         })
-                        .map_filter(|filter| {
-                            Box::new(filter) as Box<dyn AmbientFilter + Send + Sync>
-                        })
-                        .map_ctxt(|ctxt| Box::new(ctxt) as Box<dyn AmbientCtxt + Send + Sync>)
-                        .map_clock(|clock| Box::new(clock) as Box<dyn AmbientClock + Send + Sync>)
-                        .map_rng(|id_gen| Box::new(id_gen) as Box<dyn AmbientGenId + Send + Sync>);
+                        .map_filter(|filter| Box::new(filter) as Box<dyn AnyFilter + Send + Sync>)
+                        .map_ctxt(|ctxt| Box::new(ctxt) as Box<dyn AnyCtxt + Send + Sync>)
+                        .map_clock(|clock| Box::new(clock) as Box<dyn AnyClock + Send + Sync>)
+                        .map_rng(|id_gen| Box::new(id_gen) as Box<dyn AnyRng + Send + Sync>);
 
                     let runtime = Runtime::build(
                         value.emitter().as_super() as *const _,
@@ -625,8 +633,9 @@ mod no_std_support {
             false
         }
 
-        pub fn get(&self) -> &Runtime {
-            const EMPTY_AMBIENT_RUNTIME: Runtime = Runtime::new();
+        pub fn get(&self) -> &AmbientRuntime {
+            const EMPTY_AMBIENT_RUNTIME: AmbientRuntime =
+                Runtime::build(&Empty, &Empty, &Empty, &Empty, &Empty);
 
             &EMPTY_AMBIENT_RUNTIME
         }
@@ -641,12 +650,24 @@ mod no_std_support {
             false
         }
 
-        pub fn get(&self) -> &Runtime {
+        pub fn get(&self) -> &AmbientRuntime {
             self.0.get()
         }
     }
 
-    pub type AmbientRuntime<'a> = Runtime;
+    pub type AmbientEmitter<'a> = &'a Empty;
+    pub type AmbientFilter<'a> = &'a Empty;
+    pub type AmbientCtxt<'a> = &'a Empty;
+    pub type AmbientClock<'a> = &'a Empty;
+    pub type AmbientRng<'a> = &'a Empty;
+
+    pub type AmbientRuntime<'a> = Runtime<
+        AmbientEmitter<'a>,
+        AmbientFilter<'a>,
+        AmbientCtxt<'a>,
+        AmbientClock<'a>,
+        AmbientRng<'a>,
+    >;
 }
 
 #[cfg(not(feature = "std"))]
