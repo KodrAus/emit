@@ -136,7 +136,9 @@ impl Aggregator {
 
     pub fn record_metric(&mut self, evt: &Event<impl Props>) -> bool {
         if let (Some(extent), Some(metric_name), Some(metric_kind), Some(metric_value)) = (
-            evt.extent().and_then(|extent| extent.as_point()),
+            evt.extent()
+                .filter(|extent| extent.is_point())
+                .map(|extent| extent.as_point()),
             evt.props().pull::<_, Str>(METRIC_NAME_KEY),
             evt.props().pull::<_, Str>(METRIC_KIND_KEY),
             evt.props().get(METRIC_VALUE_KEY),

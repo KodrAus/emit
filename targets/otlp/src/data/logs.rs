@@ -18,7 +18,7 @@ impl EventEncoder {
     ) -> PreEncoded {
         let time_unix_nano = evt
             .extent()
-            .map(|extent| extent.to_point().to_unix_time().as_nanos() as u64)
+            .map(|extent| extent.as_point().to_unix_time().as_nanos() as u64)
             .unwrap_or_default();
 
         let observed_time_unix_nano = time_unix_nano;

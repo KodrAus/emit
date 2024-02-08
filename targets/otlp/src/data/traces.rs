@@ -18,11 +18,11 @@ impl EventEncoder {
     ) -> Option<PreEncoded> {
         let (start_time_unix_nano, end_time_unix_nano) = evt
             .extent()
-            .and_then(|extent| extent.as_span())
-            .map(|span| {
+            .filter(|extent| extent.is_span())
+            .map(|extent| {
                 (
-                    span.start.to_unix_time().as_nanos() as u64,
-                    span.end.to_unix_time().as_nanos() as u64,
+                    extent.as_range().start.to_unix_time().as_nanos() as u64,
+                    extent.as_range().end.to_unix_time().as_nanos() as u64,
                 )
             })?;
 

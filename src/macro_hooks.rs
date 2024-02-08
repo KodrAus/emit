@@ -536,7 +536,7 @@ pub fn __private_push_span_ctxt(
     let timer = Timer::start(*rt.clock());
 
     if when.matches(&Event::new(
-        timer.extent().map(|extent| *extent.to_point()),
+        timer.extent().map(|extent| *extent.as_point()),
         tpl.by_ref(),
         ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),
     )) {

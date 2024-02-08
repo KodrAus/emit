@@ -15,7 +15,6 @@ const DAYS_PER_100Y: i32 = 365 * 100 + 24;
 const DAYS_PER_4Y: i32 = 365 * 4 + 1;
 const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
 
-// TODO: This needs an optional monotonic instant
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(Duration);
 

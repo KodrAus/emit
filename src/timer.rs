@@ -30,13 +30,13 @@ impl<C: Clock> Timer<C> {
         let end = self.clock.now();
 
         match (self.start, end) {
-            (Some(start), Some(end)) => Extent::span(start..end),
+            (Some(start), Some(end)) => Some(Extent::span(start..end)),
             _ => None,
         }
     }
 
     pub fn elapsed(&self) -> Option<Duration> {
-        self.extent().map(|extent| extent.len())
+        self.extent().and_then(|extent| extent.len())
     }
 
     pub fn on_drop<F: FnOnce(Option<Extent>)>(self, complete: F) -> TimerGuard<C, F> {

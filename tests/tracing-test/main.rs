@@ -14,7 +14,7 @@ fn main() {
         .map_with(|ctxt| emit_tracing::ctxt(ctxt, subscriber.clone()))
         .init();
 
-    #[emit::push_ctxt(span_id: emit::gen_span_id())]
+    #[emit::span("My span")]
     {
         emit::info!("Hello, world!");
     }

@@ -15,14 +15,10 @@ impl Extent {
         }
     }
 
-    pub fn span(ts: Range<Timestamp>) -> Option<Self> {
-        if ts.start > ts.end {
-            None
-        } else {
-            Some(Extent {
-                range: ts,
-                is_span: true,
-            })
+    pub fn span(ts: Range<Timestamp>) -> Self {
+        Extent {
+            range: ts,
+            is_span: true,
         }
     }
 
@@ -30,31 +26,16 @@ impl Extent {
         &self.range
     }
 
-    pub fn as_point(&self) -> Option<&Timestamp> {
-        if self.is_point() {
-            Some(&self.range.end)
-        } else {
-            None
-        }
-    }
-
-    pub fn to_point(&self) -> &Timestamp {
+    pub fn as_point(&self) -> &Timestamp {
         &self.range.end
     }
 
-    pub fn as_span(&self) -> Option<&Range<Timestamp>> {
+    pub fn len(&self) -> Option<Duration> {
         if self.is_span() {
-            Some(&self.range)
+            self.range.end.duration_since(self.range.start)
         } else {
             None
         }
-    }
-
-    pub fn len(&self) -> Duration {
-        self.range
-            .end
-            .duration_since(self.range.start)
-            .expect("end is always after start")
     }
 
     pub fn is_point(&self) -> bool {
@@ -114,7 +95,7 @@ impl ToExtent for Timestamp {
 
 impl ToExtent for Range<Timestamp> {
     fn to_extent(&self) -> Option<Extent> {
-        Extent::span(self.clone())
+        Some(Extent::span(self.clone()))
     }
 }
 

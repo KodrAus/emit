@@ -211,14 +211,21 @@ fn print_event(
     }
 
     if let Some(extent) = evt.extent() {
-        write_timestamp(buf, *extent.to_point());
-        write_plain(buf, " ");
-
-        let len = extent.len();
-        if !len.is_zero() {
-            write_duration(buf, len);
-            write_plain(buf, " ");
+        if extent.is_span() {
+            if let Some(len) = extent.len() {
+                write_timestamp(buf, *extent.as_point());
+                write_plain(buf, " ");
+                write_duration(buf, len);
+            } else {
+                write_timestamp(buf, extent.as_range().start);
+                write_plain(buf, "..");
+                write_timestamp(buf, extent.as_range().end);
+            }
+        } else {
+            write_timestamp(buf, *extent.as_point());
         }
+
+        write_plain(buf, " ");
     }
 
     if let Some(level) = evt.props().pull::<_, emit::Level>(LVL_KEY) {
