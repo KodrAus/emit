@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use emit_core::{extent::ToExtent, well_known::LVL_KEY};
+use emit_core::extent::ToExtent;
 
 #[doc(inline)]
 pub use emit_macros::*;
@@ -27,13 +27,13 @@ pub use self::{
     extent::Extent,
     filter::Filter,
     frame::FrameCtxt,
-    id::{IdCtxt, IdRng, SpanId, TraceId},
+    id::{IdRng, SpanId, TraceId},
     level::Level,
     props::Props,
     rng::Rng,
     str::Str,
     template::Template,
-    timer::{StartTimer, Timer},
+    timer::Timer,
     timestamp::Timestamp,
     value::Value,
 };
@@ -63,98 +63,6 @@ fn base_emit(
         }
     });
 }
-
-pub trait Emit: Emitter + Filter + Ctxt + Clock + Rng {
-    fn debug<P: Props>(&self, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            self.now(),
-            tpl,
-            props.chain((LVL_KEY, Level::Debug)),
-        )
-    }
-
-    fn info<P: Props>(&self, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            self.now(),
-            tpl,
-            props.chain((LVL_KEY, Level::Info)),
-        )
-    }
-
-    fn warn<P: Props>(&self, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            self.now(),
-            tpl,
-            props.chain((LVL_KEY, Level::Warn)),
-        )
-    }
-
-    fn error<P: Props>(&self, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            self.now(),
-            tpl,
-            props.chain((LVL_KEY, Level::Error)),
-        )
-    }
-
-    fn debug_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            extent,
-            tpl,
-            props.chain((LVL_KEY, Level::Debug)),
-        )
-    }
-
-    fn info_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            extent,
-            tpl,
-            props.chain((LVL_KEY, Level::Info)),
-        )
-    }
-
-    fn warn_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            extent,
-            tpl,
-            props.chain((LVL_KEY, Level::Warn)),
-        )
-    }
-
-    fn error_at<E: ToExtent, P: Props>(&self, extent: E, tpl: Template, props: P) {
-        base_emit(
-            self,
-            self,
-            self,
-            extent,
-            tpl,
-            props.chain((LVL_KEY, Level::Error)),
-        )
-    }
-}
-
-impl<E: Emitter + Filter + Ctxt + Clock + Rng + ?Sized> Emit for E {}
 
 #[doc(hidden)]
 pub mod __private {

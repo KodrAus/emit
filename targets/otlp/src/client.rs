@@ -557,10 +557,11 @@ impl OtlpTransport {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        use emit::{IdRng as _, StartTimer as _};
+        use emit::IdRng as _;
 
         let rt = emit::runtime::internal();
 
+        // TODO: Function to start a span
         let ctxt = emit::frame::Frame::new_push(
             rt.ctxt(),
             emit::props! {
@@ -578,7 +579,7 @@ impl OtlpTransport {
                 } => {
                     let batch_size = batch.len();
 
-                    let timer = rt.start_timer();
+                    let timer = emit::timer::Timer::start(rt);
 
                     let res = http
                         .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)

@@ -192,11 +192,11 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
     }
 }
 
-impl<TEmitter: Emitter, TFilter, TCtxt, TClock, TRng> Emitter
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Emitter
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
     fn emit<P: Props>(&self, evt: &Event<P>) {
-        self.emitter.emit(evt)
+        self.emit(evt)
     }
 
     fn blocking_flush(&self, timeout: core::time::Duration) {
@@ -204,7 +204,7 @@ impl<TEmitter: Emitter, TFilter, TCtxt, TClock, TRng> Emitter
     }
 }
 
-impl<TEmitter, TFilter: Filter, TCtxt, TClock, TRng> Filter
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Filter
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
@@ -212,7 +212,7 @@ impl<TEmitter, TFilter: Filter, TCtxt, TClock, TRng> Filter
     }
 }
 
-impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TRng> Ctxt
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Ctxt
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
     type Current = TCtxt::Current;
@@ -243,7 +243,7 @@ impl<TEmitter, TFilter, TCtxt: Ctxt, TClock, TRng> Ctxt
     }
 }
 
-impl<TEmitter, TFilter, TCtxt, TClock: Clock, TRng> Clock
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Clock
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
     fn now(&self) -> Option<Timestamp> {
@@ -251,7 +251,7 @@ impl<TEmitter, TFilter, TCtxt, TClock: Clock, TRng> Clock
     }
 }
 
-impl<TEmitter, TFilter, TCtxt, TClock, TRng: Rng> Rng
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Rng
     for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
     fn gen_u64(&self) -> Option<u64> {

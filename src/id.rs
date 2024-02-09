@@ -1,10 +1,4 @@
-use emit_core::{
-    ctxt::Ctxt,
-    props::Props,
-    rng::Rng,
-    value::FromValue,
-    well_known::{SPAN_ID_KEY, TRACE_ID_KEY},
-};
+use emit_core::{rng::Rng, value::FromValue};
 
 use crate::value::{ToValue, Value};
 use core::{
@@ -304,7 +298,7 @@ impl<const N: usize> fmt::Write for Buffer<N> {
     }
 }
 
-pub trait IdRng: Rng {
+pub trait IdRng {
     fn gen_trace_id(&self) -> Option<TraceId>;
 
     fn gen_span_id(&self) -> Option<SpanId>;
@@ -322,31 +316,6 @@ impl<T: Rng + ?Sized> IdRng for T {
         let a = self.gen_u64()?;
 
         Some(SpanId::new(NonZeroU64::new(a)?))
-    }
-}
-
-pub trait IdCtxt: Ctxt {
-    fn current_trace_id(&self) -> Option<TraceId>;
-    fn current_span_id(&self) -> Option<SpanId>;
-}
-
-impl<C: Ctxt + ?Sized> IdCtxt for C {
-    fn current_span_id(&self) -> Option<SpanId> {
-        let mut span_id = None;
-        self.with_current(|current| {
-            span_id = current.pull(SPAN_ID_KEY);
-        });
-
-        span_id
-    }
-
-    fn current_trace_id(&self) -> Option<TraceId> {
-        let mut trace_id = None;
-        self.with_current(|current| {
-            trace_id = current.pull(TRACE_ID_KEY);
-        });
-
-        trace_id
     }
 }
 

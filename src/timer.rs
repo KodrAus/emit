@@ -2,16 +2,6 @@ use core::time::Duration;
 
 use crate::{Clock, Extent, Timestamp, ToExtent};
 
-pub trait StartTimer: Clock {
-    fn start_timer(&self) -> Timer<&Self>;
-}
-
-impl<C: Clock + ?Sized> StartTimer for C {
-    fn start_timer(&self) -> Timer<&Self> {
-        Timer::start(self)
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct Timer<C> {
     start: Option<Timestamp>,

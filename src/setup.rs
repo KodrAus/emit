@@ -58,7 +58,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
         emitter: UEmitter,
     ) -> Setup<emitter::And<TEmitter, UEmitter>, TFilter, TCtxt> {
         Setup {
-            emitter: self.emitter.and_emitter(emitter),
+            emitter: self.emitter.and_to(emitter),
             filter: self.filter,
             ctxt: self.ctxt,
             platform: self.platform,

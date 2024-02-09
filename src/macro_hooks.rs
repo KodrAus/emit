@@ -461,8 +461,8 @@ pub fn __private_emit(
     let rt = crate::runtime::shared();
 
     base_emit(
-        rt.emitter().and_emitter(to),
-        rt.filter().and_filter(when),
+        rt.emitter().and_to(to),
+        rt.filter().and_when(when),
         rt.ctxt(),
         extent.to_extent().or_else(|| rt.now().to_extent()),
         tpl,
