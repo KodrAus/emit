@@ -121,7 +121,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     r
 }
 
-#[emit::push_ctxt(b, bx: 90)]
+#[emit::span("in_ctxt2", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
     emit::warn!(
         "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",

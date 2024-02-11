@@ -17,7 +17,6 @@ use proc_macro2::TokenStream;
 mod args;
 mod build;
 mod capture;
-mod ctxt;
 mod emit;
 mod event;
 mod filter;
@@ -244,32 +243,6 @@ Construct a set of properties.
 pub fn props(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     build::expand_props_tokens(build::ExpandPropsTokens {
         input: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
-#[proc_macro_attribute]
-pub fn push_ctxt(
-    args: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    ctxt::expand_tokens(ctxt::ExpandTokens {
-        root: false,
-        input: TokenStream::from(args),
-        item: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
-}
-
-#[proc_macro_attribute]
-pub fn root_ctxt(
-    args: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    ctxt::expand_tokens(ctxt::ExpandTokens {
-        root: true,
-        input: TokenStream::from(args),
-        item: TokenStream::from(item),
     })
     .unwrap_or_compile_error()
 }
