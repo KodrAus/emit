@@ -181,22 +181,24 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
                 )
                 .unwrap();
 
-            emit::runtime::internal().emit(&emit::debug_event!(
+            emit::debug!(
+                rt: emit::runtime::internal(),
                 "received {response}",
                 #[emit::as_debug]
-                response
-            ));
+                response,
+            );
         }
         Err(body) => {
             let response =
                 crate::data::generated::collector::metrics::v1::ExportMetricsPartialSuccess::decode(body)
                     .unwrap();
 
-            emit::runtime::internal().emit(&emit::warn_event!(
+            emit::warn!(
+                rt: emit::runtime::internal(),
                 "received {response}",
                 #[emit::as_debug]
-                response
-            ));
+                response,
+            );
         }
     }
 }

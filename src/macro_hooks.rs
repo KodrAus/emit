@@ -6,6 +6,8 @@ use emit_core::{
     extent::{Extent, ToExtent},
     filter::Filter,
     props::Props,
+    rng::Rng,
+    runtime::Runtime,
     str::ToStr,
     template::Template,
     value::{ToValue, Value},
@@ -16,7 +18,6 @@ use emit_core::{
     ctxt::Ctxt,
     empty::Empty,
     event::Event,
-    runtime::{AmbientClock, AmbientCtxt},
     well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
 };
 
@@ -451,15 +452,14 @@ pub fn __private_format(tpl: Template, props: impl Props) -> alloc::string::Stri
 }
 
 #[track_caller]
-pub fn __private_emit(
+pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
     to: impl Emitter,
     when: impl Filter,
     extent: impl ToExtent,
     tpl: Template,
     props: impl Props,
 ) {
-    let rt = crate::runtime::shared();
-
     base_emit(
         rt.emitter().and_to(to),
         rt.filter().and_when(when),
@@ -472,31 +472,13 @@ pub fn __private_emit(
 
 #[track_caller]
 #[cfg(feature = "alloc")]
-pub fn __private_push_ctxt(props: impl Props) -> Frame<AmbientCtxt<'static>> {
-    let rt = crate::runtime::shared();
-
-    Frame::new_push(rt.ctxt(), props)
-}
-
-#[track_caller]
-#[cfg(feature = "alloc")]
-pub fn __private_root_ctxt(props: impl Props) -> Frame<AmbientCtxt<'static>> {
-    let rt = crate::runtime::shared();
-
-    Frame::new_root(rt.ctxt(), props)
-}
-
-#[track_caller]
-#[cfg(feature = "alloc")]
-pub fn __private_push_span_ctxt(
+pub fn __private_push_span_ctxt<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
     when: impl Filter,
     tpl: Template,
     ctxt_props: impl Props,
     evt_props: impl Props,
-) -> (
-    Frame<Option<AmbientCtxt<'static>>>,
-    Option<Timer<AmbientClock<'static>>>,
-) {
+) -> (Frame<Option<&'a C>>, Option<Timer<&'a T>>) {
     struct TraceContext {
         trace_id: Option<TraceId>,
         span_parent: Option<SpanId>,
@@ -524,8 +506,6 @@ pub fn __private_push_span_ctxt(
         }
     }
 
-    let rt = crate::runtime::shared();
-
     let mut trace_id = None;
     let mut span_parent = None;
 
@@ -543,7 +523,7 @@ pub fn __private_push_span_ctxt(
         span_id,
     };
 
-    let timer = Timer::start(*rt.clock());
+    let timer = Timer::start(rt.clock());
 
     if when.matches(&Event::new(
         timer.extent().map(|extent| *extent.as_point()),

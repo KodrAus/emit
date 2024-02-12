@@ -547,6 +547,7 @@ enum OtlpTransport {
 }
 
 impl OtlpTransport {
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "send")]
     pub(crate) async fn send(
         &self,
         batch: Vec<PreEncoded>,
@@ -557,73 +558,67 @@ impl OtlpTransport {
         ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>,
         decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
-        use emit::IdRng as _;
+        match self {
+            OtlpTransport::Http {
+                ref http,
+                ref resource,
+                ref scope,
+            } => {
+                let batch_size = batch.len();
 
-        let rt = emit::runtime::internal();
+                let res = match http
+                    .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
+                    .await
+                {
+                    Ok(res) => {
+                        span.complete(|extent| {
+                            emit::debug!(
+                                rt: emit::runtime::internal(),
+                                extent,
+                                "OTLP batch of {batch_size} events responded {status_code}",
+                                batch_size,
+                                status_code: res.status(),
+                            )
+                        });
 
-        // TODO: Function to start a span
-        let ctxt = emit::frame::Frame::new_push(
-            rt.ctxt(),
-            emit::props! {
-                trace_id: rt.gen_trace_id(),
-                span_id: rt.gen_span_id(),
-            },
-        );
-
-        ctxt.with_future(async move {
-            match self {
-                OtlpTransport::Http {
-                    ref http,
-                    ref resource,
-                    ref scope,
-                } => {
-                    let batch_size = batch.len();
-
-                    let timer = emit::timer::Timer::start(rt);
-
-                    let res = http
-                        .send(encode(resource.as_ref(), scope.as_ref(), &batch)?)
-                        .await
-                        .map_err(|err| {
-                            rt.emit(&emit::warn_event!(
-                                extent: timer,
+                        res
+                    }
+                    Err(err) => {
+                        span.complete(|extent| {
+                            emit::warn!(
+                                rt: emit::runtime::internal(),
+                                extent,
                                 "OTLP batch of {batch_size} events failed to send: {err}",
                                 batch_size,
                                 err,
-                            ));
+                            )
+                        });
 
-                            BatchError::retry(err, batch)
-                        })?;
+                        return Err(BatchError::retry(err, batch));
+                    }
+                };
 
-                    rt.emit(&emit::debug_event!(
-                        extent: timer,
-                        "OTLP batch of {batch_size} events responded {status_code}",
-                        batch_size,
-                        status_code: res.status(),
-                    ));
+                if let Some(decode) = decode {
+                    let status = res.status();
+                    let body = res.read_to_vec().await.map_err(|err| {
+                        emit::warn!(
+                            rt: emit::runtime::internal(),
+                            "failed to read OTLP response: {err}",
+                            err,
+                        );
 
-                    if let Some(decode) = decode {
-                        let status = res.status();
-                        let body = res.read_to_vec().await.map_err(|err| {
-                            rt.emit(&emit::warn_event!(
-                                "failed to read OTLP response: {err}",
-                                err,
-                            ));
+                        BatchError::no_retry(err)
+                    })?;
 
-                            BatchError::no_retry(err)
-                        })?;
-
-                        if status >= 200 && status < 300 {
-                            decode(Ok(&body));
-                        } else {
-                            decode(Err(&body));
-                        }
+                    if status >= 200 && status < 300 {
+                        decode(Ok(&body));
+                    } else {
+                        decode(Err(&body));
                     }
                 }
             }
+        }
 
-            Ok(())
-        })
-        .await
+        Ok(())
     }
 }

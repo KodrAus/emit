@@ -48,7 +48,7 @@ async fn main() {
             .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        .and_to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
+        //.and_to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
         .and_to(
             emit::level::min_level(emit::Level::Warn).wrap(
                 emit_file::set("./target/logs/log.txt")

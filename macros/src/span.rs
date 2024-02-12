@@ -18,6 +18,7 @@ pub struct ExpandTokens {
 }
 
 struct Args {
+    rt: TokenStream,
     to: TokenStream,
     when: TokenStream,
     arg: Option<Ident>,
@@ -25,6 +26,11 @@ struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut rt = Arg::token_stream("rt", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
         let mut to = Arg::token_stream("to", |fv| {
             let expr = &fv.expr;
 
@@ -39,10 +45,11 @@ impl Parse for Args {
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut arg, &mut to, &mut when],
+            [&mut arg, &mut rt, &mut to, &mut when],
         )?;
 
         Ok(Args {
+            rt: rt.take().unwrap_or_else(|| quote!(emit::runtime::shared())),
             to: to.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             when: when.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             arg: arg.take(),
@@ -71,6 +78,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             ..
         })) => {
             **block = syn::parse2::<Block>(inject_sync(
+                &args.rt,
                 &args.to,
                 &args.when,
                 &template,
@@ -83,6 +91,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         // A synchronous block
         Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
             *block = syn::parse2::<Block>(inject_sync(
+                &args.rt,
                 &args.to,
                 &args.when,
                 &template,
@@ -101,6 +110,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             ..
         })) => {
             **block = syn::parse2::<Block>(inject_async(
+                &args.rt,
                 &args.to,
                 &args.when,
                 &template,
@@ -113,6 +123,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         // An asynchronous block
         Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
             *block = syn::parse2::<Block>(inject_async(
+                &args.rt,
                 &args.to,
                 &args.when,
                 &template,
@@ -129,6 +140,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 }
 
 fn inject_sync(
+    rt_tokens: &TokenStream,
     to_tokens: &TokenStream,
     when_tokens: &TokenStream,
     template: &Template,
@@ -142,11 +154,12 @@ fn inject_sync(
     let template_tokens = template.template_tokens();
 
     quote!({
-        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
         let __ctxt_guard = __ctxt.enter();
 
         let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
             emit::__private::__private_emit(
+                #rt_tokens,
                 #to_tokens,
                 emit::empty::Empty,
                 extent,
@@ -160,6 +173,7 @@ fn inject_sync(
 }
 
 fn inject_async(
+    rt_tokens: &TokenStream,
     to_tokens: &TokenStream,
     when_tokens: &TokenStream,
     template: &Template,
@@ -173,11 +187,12 @@ fn inject_async(
     let template_tokens = template.template_tokens();
 
     quote!({
-        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
 
         __ctxt.with_future(async {
             let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
                 emit::__private::__private_emit(
+                    #rt_tokens,
                     #to_tokens,
                     emit::empty::Empty,
                     extent,

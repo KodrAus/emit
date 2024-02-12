@@ -20,7 +20,7 @@ pub trait Filter {
         }
     }
 
-    fn or_filter<U>(self, other: U) -> Or<Self, U>
+    fn or_when<U>(self, other: U) -> Or<Self, U>
     where
         Self: Sized,
     {

@@ -241,11 +241,8 @@ impl Worker {
         }
     }
 
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "on_batch")]
     fn on_batch(&mut self, mut batch: EventBatch) -> Result<(), BatchError<EventBatch>> {
-        let rt = emit::runtime::internal();
-
-        let timer = emit::timer::Timer::start(rt);
-
         let now = std::time::UNIX_EPOCH.elapsed().unwrap();
         let ts = emit::Timestamp::new(now).unwrap();
         let parts = ts.to_parts();
@@ -257,12 +254,16 @@ impl Worker {
 
         if file.is_none() {
             if let Err(err) = fs::create_dir_all(&self.dir) {
-                rt.emit(&emit::warn_event!(
-                    "failed to create root directory {path}: {err}",
-                    #[emit::as_debug]
-                    path: &self.dir,
-                    err,
-                ));
+                span.complete(|extent| {
+                    emit::warn!(
+                        rt: emit::runtime::internal(),
+                        extent,
+                        "failed to create root directory {path}: {err}",
+                        #[emit::as_debug]
+                        path: &self.dir,
+                        err,
+                    )
+                });
 
                 return Err(emit_batcher::BatchError::retry(err, batch));
             }
@@ -270,12 +271,13 @@ impl Worker {
             let _ = file_set
                 .read(&self.file_prefix, &self.file_ext)
                 .map_err(|err| {
-                    rt.emit(&emit::warn_event!(
+                    emit::warn!(
+                        rt: emit::runtime::internal(),
                         "failed to files in read {path}: {err}",
                         #[emit::as_debug]
                         path: &file_set.dir,
                         err,
-                    ));
+                    );
 
                     err
                 });
@@ -287,12 +289,13 @@ impl Worker {
 
                     file = ActiveFile::try_open_reuse(&path)
                         .map_err(|err| {
-                            rt.emit(&emit::warn_event!(
+                            emit::warn!(
+                                rt: emit::runtime::internal(),
                                 "failed to open {path}: {err}",
                                 #[emit::as_debug]
                                 path,
                                 err,
-                            ));
+                            );
 
                             err
                         })
@@ -325,21 +328,23 @@ impl Worker {
 
             match ActiveFile::try_open_create(&path) {
                 Ok(file) => {
-                    rt.emit(&emit::warn_event!(
+                    emit::debug!(
+                        rt: emit::runtime::internal(),
                         "created {path}",
                         #[emit::as_debug]
                         path: file.file_path,
-                    ));
+                    );
 
                     file
                 }
                 Err(err) => {
-                    rt.emit(&emit::warn_event!(
+                    emit::warn!(
+                        rt: emit::runtime::internal(),
                         "failed to create {path}: {err}",
                         #[emit::as_debug]
                         path,
                         err,
-                    ));
+                    );
 
                     return Err(emit_batcher::BatchError::retry(err, batch));
                 }
@@ -350,12 +355,16 @@ impl Worker {
 
         while let Some(buf) = batch.current() {
             if let Err(err) = file.write_event(buf.as_bytes()) {
-                rt.emit(&emit::warn_event!(
-                    "failed to write event to {path}: {err}",
-                    #[emit::as_debug]
-                    path: file.file_path,
-                    err,
-                ));
+                span.complete(|extent| {
+                    emit::warn!(
+                        rt: emit::runtime::internal(),
+                        extent,
+                        "failed to write event to {path}: {err}",
+                        #[emit::as_debug]
+                        path: file.file_path,
+                        err,
+                    )
+                });
 
                 return Err(emit_batcher::BatchError::retry(err, batch));
             }
@@ -370,13 +379,16 @@ impl Worker {
             .sync_all()
             .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
-        rt.emit(&emit::debug_event!(
-            extent: timer,
-            "wrote {written_bytes} bytes to {path}",
-            written_bytes,
-            #[emit::as_debug]
-            path: file.file_path,
-        ));
+        span.complete(|extent| {
+            emit::debug!(
+                rt: emit::runtime::internal(),
+                extent,
+                "wrote {written_bytes} bytes to {path}",
+                written_bytes,
+                #[emit::as_debug]
+                path: file.file_path,
+            )
+        });
 
         // Set the active file so the next batch can attempt to use it
         // At this point the file is expected to be valid
