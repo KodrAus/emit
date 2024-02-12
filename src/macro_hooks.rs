@@ -2,6 +2,7 @@ use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{
     clock::Clock,
+    ctxt::Ctxt,
     emitter::Emitter,
     extent::{Extent, ToExtent},
     filter::Filter,
@@ -15,7 +16,6 @@ use emit_core::{
 
 #[cfg(feature = "alloc")]
 use emit_core::{
-    ctxt::Ctxt,
     empty::Empty,
     event::Event,
     well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
@@ -451,18 +451,29 @@ pub fn __private_format(tpl: Template, props: impl Props) -> alloc::string::Stri
     s
 }
 
+struct FirstDefined<A, B>(Option<A>, B);
+
+impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
+    fn matches<P: Props>(&self, evt: &emit_core::event::Event<P>) -> bool {
+        if let Some(ref first) = self.0 {
+            return first.matches(evt);
+        }
+
+        self.1.matches(evt)
+    }
+}
+
 #[track_caller]
 pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
-    to: impl Emitter,
-    when: impl Filter,
+    when: Option<impl Filter>,
     extent: impl ToExtent,
     tpl: Template,
     props: impl Props,
 ) {
     base_emit(
-        rt.emitter().and_to(to),
-        rt.filter().and_when(when),
+        rt.emitter(),
+        FirstDefined(when, rt.filter()),
         rt.ctxt(),
         extent.to_extent().or_else(|| rt.now().to_extent()),
         tpl,
@@ -474,7 +485,7 @@ pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 #[cfg(feature = "alloc")]
 pub fn __private_push_span_ctxt<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
-    when: impl Filter,
+    when: Option<impl Filter>,
     tpl: Template,
     ctxt_props: impl Props,
     evt_props: impl Props,
@@ -525,7 +536,7 @@ pub fn __private_push_span_ctxt<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R:
 
     let timer = Timer::start(rt.clock());
 
-    if when.matches(&Event::new(
+    if FirstDefined(when, rt.filter()).matches(&Event::new(
         timer.extent().map(|extent| *extent.as_point()),
         tpl.by_ref(),
         ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),

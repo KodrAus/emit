@@ -108,6 +108,10 @@ impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
     }
 }
 
+pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> Wrap<F, E> {
+    filter.wrap(emitter)
+}
+
 pub struct And<T, U> {
     left: T,
     right: U,
@@ -156,6 +160,10 @@ impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
         self.0.matches(evt)
     }
+}
+
+pub fn always() -> Empty {
+    Empty
 }
 
 mod internal {

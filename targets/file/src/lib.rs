@@ -257,6 +257,7 @@ impl Worker {
                 span.complete(|extent| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
+                        when: emit::always(),
                         extent,
                         "failed to create root directory {path}: {err}",
                         #[emit::as_debug]
@@ -358,6 +359,7 @@ impl Worker {
                 span.complete(|extent| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
+                        when: emit::always(),
                         extent,
                         "failed to write event to {path}: {err}",
                         #[emit::as_debug]
@@ -382,6 +384,7 @@ impl Worker {
         span.complete(|extent| {
             emit::debug!(
                 rt: emit::runtime::internal(),
+                when: emit::always(),
                 extent,
                 "wrote {written_bytes} bytes to {path}",
                 written_bytes,

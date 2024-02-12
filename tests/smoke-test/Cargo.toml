@@ -12,9 +12,6 @@ path = "main.rs"
 path = "../../"
 features = ["serde"]
 
-[dependencies.emit_metrics]
-path = "../../metrics"
-
 [dependencies.emit_otlp]
 path = "../../targets/otlp"
 features = ["decode_responses"]

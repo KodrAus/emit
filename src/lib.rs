@@ -25,7 +25,7 @@ pub use self::{
     emitter::Emitter,
     event::Event,
     extent::Extent,
-    filter::Filter,
+    filter::{always, Filter},
     frame::FrameCtxt,
     id::{IdRng, SpanId, TraceId},
     level::Level,

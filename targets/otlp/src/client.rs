@@ -574,6 +574,7 @@ impl OtlpTransport {
                         span.complete(|extent| {
                             emit::debug!(
                                 rt: emit::runtime::internal(),
+                                when: emit::always(),
                                 extent,
                                 "OTLP batch of {batch_size} events responded {status_code}",
                                 batch_size,
@@ -587,6 +588,7 @@ impl OtlpTransport {
                         span.complete(|extent| {
                             emit::warn!(
                                 rt: emit::runtime::internal(),
+                                when: emit::always(),
                                 extent,
                                 "OTLP batch of {batch_size} events failed to send: {err}",
                                 batch_size,

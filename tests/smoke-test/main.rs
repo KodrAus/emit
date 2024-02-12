@@ -15,9 +15,7 @@ extern crate serde_derive;
 async fn main() {
     println!("{}", emit::format!("Hello, {x}", x: "world"));
 
-    let internal = emit::setup()
-        .to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
-        .init_internal();
+    let internal = emit::setup().to(emit_term::stdout()).init_internal();
 
     let emitter = emit::setup()
         .to(emit_otlp::new()
@@ -48,7 +46,7 @@ async fn main() {
             .scope("some-scope", "0.1", emit::props! {})
             .spawn()
             .unwrap())
-        //.and_to(emit_metrics::aggregate_by_count(30, emit_term::stdout()))
+        .and_to(emit_term::stdout())
         .and_to(
             emit::level::min_level(emit::Level::Warn).wrap(
                 emit_file::set("./target/logs/log.txt")
@@ -115,7 +113,9 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     .await;
 
     if let Err(ref err) = r {
-        span.complete(|extent| emit::warn!(extent, "in_ctxt failed with {err}"));
+        span.complete(
+            |extent| emit::warn!(when: emit::always(), extent, "in_ctxt failed with {err}"),
+        );
     }
 
     r

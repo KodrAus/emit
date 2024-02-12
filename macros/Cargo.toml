@@ -12,6 +12,7 @@ proc-macro = true
 std = []
 serde = []
 sval = []
+implicit-rt = []
 
 [dependencies.proc-macro2]
 version = "1"

@@ -79,6 +79,27 @@ impl Arg<TokenStream> {
     ) -> Self {
         Arg::new(key, to_tokens)
     }
+
+    pub fn take_when(self) -> TokenStream {
+        self.take()
+            .map(|tokens| quote!(Some(#tokens)))
+            .unwrap_or_else(|| quote!(None::<emit::empty::Empty>))
+    }
+
+    pub fn take_rt(self) -> Result<TokenStream, syn::Error> {
+        #[cfg(feature = "implicit-rt")]
+        {
+            Ok(self
+                .take()
+                .unwrap_or_else(|| quote!(emit::runtime::shared())))
+        }
+        #[cfg(not(feature = "implicit-rt"))]
+        {
+            use proc_macro2::Span;
+
+            self.take().ok_or_else(|| syn::Error::new(Span::call_site(), "a runtime must be specified by the `rt` parameter unless the `implicit-rt` feature of `emit` is enabled"))
+        }
+    }
 }
 
 impl<T> Arg<T> {

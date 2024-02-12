@@ -1,8 +1,5 @@
 use crate::{clock::Clock, rng::Rng, Timestamp};
 
-#[cfg(not(feature = "std"))]
-use emit_core::empty::Empty;
-
 #[cfg(feature = "std")]
 use emit_core::runtime::{InternalClock, InternalRng};
 
@@ -18,12 +15,12 @@ pub(crate) mod thread_rng;
 #[cfg(feature = "std")]
 type DefaultClock = system_clock::SystemClock;
 #[cfg(not(feature = "std"))]
-type DefaultClock = Empty;
+type DefaultClock = emit_core::empty::Empty;
 
 #[cfg(feature = "rng")]
 type DefaultIdGen = thread_rng::ThreadRng;
 #[cfg(not(feature = "rng"))]
-type DefaultIdGen = Empty;
+type DefaultIdGen = emit_core::empty::Empty;
 
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
