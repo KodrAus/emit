@@ -5,10 +5,18 @@ use emit_batcher::BatchError;
 
 pub use self::{export_trace_service::*, span::*};
 
-use super::{MessageFormatter, MessageRenderer, PreEncoded};
+use super::{default_message_formatter, MessageFormatter, MessageRenderer, PreEncoded};
 
 pub(crate) struct EventEncoder {
     pub name: Box<MessageFormatter>,
+}
+
+impl Default for EventEncoder {
+    fn default() -> Self {
+        EventEncoder {
+            name: default_message_formatter(),
+        }
+    }
 }
 
 impl EventEncoder {

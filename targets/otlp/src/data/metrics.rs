@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 use emit::{
     well_known::{
@@ -12,100 +12,44 @@ use sval_protobuf::buf::ProtoBuf;
 
 use crate::data::generated::{common::v1::*, metrics::v1::*};
 
-use super::{MessageFormatter, PreEncoded};
+use super::{MessageFormatter, MessageRenderer, PreEncoded};
 
 pub(crate) struct EventEncoder {
     pub name: Box<MessageFormatter>,
+    pub guage: GuageEncoder,
+    pub sum: SumEncoder,
+    pub count: SumEncoder,
 }
 
-impl EventEncoder {
-    pub(crate) fn encode_event(
+pub(crate) struct SumEncoder {
+    pub single_point_per_sample: bool,
+}
+
+impl SumEncoder {
+    fn encode_data_points(
         &self,
-        evt: &emit::event::Event<impl emit::props::Props>,
-    ) -> Option<PreEncoded> {
-        use prost::Message;
-
-        if let (Some(metric_name), Some(metric_value), metric_agg) = (
-            evt.props().get(METRIC_NAME_KEY),
-            evt.props().get(METRIC_VALUE_KEY),
-            evt.props().get(METRIC_AGG_KEY),
-        ) {
-            let (start_time_unix_nano, time_unix_nano, aggregation_temporality) = evt
-                .extent()
-                .map(|extent| {
-                    let range = extent.as_range();
-
-                    (
-                        range.start.to_unix_time().as_nanos() as u64,
-                        range.end.to_unix_time().as_nanos() as u64,
-                        if extent.is_span() {
-                            AggregationTemporality::Delta
-                        } else {
-                            AggregationTemporality::Cumulative
-                        } as i32,
-                    )
-                })
-                .unwrap_or_default();
-
-            let metric_name = metric_name
-                .to_cow_str()
-                .unwrap_or_else(|| Cow::Owned(metric_name.to_string()));
-
-            let mut attributes = Vec::new();
-
-            evt.props()
-                .filter(|k, _| k != METRIC_NAME_KEY && k != METRIC_VALUE_KEY)
-                .for_each(|k, v| {
-                    let key = k.to_cow().into_owned();
-                    let value = crate::data::generated::any_value::to_value(v);
-
-                    attributes.push(KeyValue { key, value });
-
-                    ControlFlow::Continue(())
-                });
-
-            let data = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
-                Some(METRIC_AGG_SUM) => Some(metric::Data::Sum(Sum {
-                    aggregation_temporality,
-                    is_monotonic: false,
-                    data_points: SumPoints::new().points_from_value(
-                        start_time_unix_nano,
-                        time_unix_nano,
-                        metric_value,
-                    )?,
-                })),
-                Some(METRIC_AGG_COUNT) => Some(metric::Data::Sum(Sum {
-                    aggregation_temporality,
-                    is_monotonic: true,
-                    data_points: SumPoints::new().points_from_value(
-                        start_time_unix_nano,
-                        time_unix_nano,
-                        metric_value,
-                    )?,
-                })),
-                _ => Some(metric::Data::Gauge(Gauge {
-                    data_points: RawPointSet::new().points_from_value(
-                        start_time_unix_nano,
-                        time_unix_nano,
-                        metric_value,
-                    )?,
-                })),
-            };
-
-            let msg = Metric {
-                name: metric_name.into_owned(),
-                description: String::new(),
-                unit: String::new(),
-                data,
-            };
-
-            let mut buf = Vec::new();
-            msg.encode(&mut buf).unwrap();
-
-            return Some(PreEncoded::Proto(ProtoBuf::pre_encoded(buf)));
+        start_time_unix_nano: u64,
+        time_unix_nano: u64,
+        metric_value: emit::Value,
+    ) -> Option<Vec<NumberDataPoint>> {
+        if self.single_point_per_sample {
+            SumPoints::new().points_from_value(start_time_unix_nano, time_unix_nano, metric_value)
+        } else {
+            RawPointSet::new().points_from_value(start_time_unix_nano, time_unix_nano, metric_value)
         }
+    }
+}
 
-        None
+pub(crate) struct GuageEncoder {}
+
+impl GuageEncoder {
+    fn encode_data_points(
+        &self,
+        start_time_unix_nano: u64,
+        time_unix_nano: u64,
+        metric_value: emit::Value,
+    ) -> Option<Vec<NumberDataPoint>> {
+        RawPointSet::new().points_from_value(start_time_unix_nano, time_unix_nano, metric_value)
     }
 }
 
@@ -313,6 +257,122 @@ impl DataPointBuilder for RawPointSet {
                 Some(self.0)
             }
         }
+    }
+}
+
+impl Default for EventEncoder {
+    fn default() -> Self {
+        Self {
+            name: default_name_formatter(),
+            guage: GuageEncoder {},
+            sum: SumEncoder {
+                single_point_per_sample: false,
+            },
+            count: SumEncoder {
+                single_point_per_sample: false,
+            },
+        }
+    }
+}
+
+fn default_name_formatter() -> Box<MessageFormatter> {
+    Box::new(|evt, f| {
+        if let Some(name) = evt.props().get(METRIC_NAME_KEY) {
+            write!(f, "{}", name)
+        } else {
+            write!(f, "{}", evt.msg())
+        }
+    })
+}
+
+impl EventEncoder {
+    pub(crate) fn encode_event(
+        &self,
+        evt: &emit::event::Event<impl emit::props::Props>,
+    ) -> Option<PreEncoded> {
+        use prost::Message;
+
+        if let (Some(metric_value), metric_agg) = (
+            evt.props().get(METRIC_VALUE_KEY),
+            evt.props().get(METRIC_AGG_KEY),
+        ) {
+            let (start_time_unix_nano, time_unix_nano, aggregation_temporality) = evt
+                .extent()
+                .map(|extent| {
+                    let range = extent.as_range();
+
+                    (
+                        range.start.to_unix_time().as_nanos() as u64,
+                        range.end.to_unix_time().as_nanos() as u64,
+                        if extent.is_span() {
+                            AggregationTemporality::Delta
+                        } else {
+                            AggregationTemporality::Cumulative
+                        } as i32,
+                    )
+                })
+                .unwrap_or_default();
+
+            let metric_name = MessageRenderer {
+                fmt: &self.name,
+                evt,
+            };
+
+            let mut attributes = Vec::new();
+
+            evt.props()
+                .filter(|k, _| k != METRIC_NAME_KEY && k != METRIC_VALUE_KEY)
+                .for_each(|k, v| {
+                    let key = k.to_cow().into_owned();
+                    let value = crate::data::generated::any_value::to_value(v);
+
+                    attributes.push(KeyValue { key, value });
+
+                    ControlFlow::Continue(())
+                });
+
+            let data = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
+                Some(METRIC_AGG_SUM) => Some(metric::Data::Sum(Sum {
+                    aggregation_temporality,
+                    is_monotonic: false,
+                    data_points: self.sum.encode_data_points(
+                        start_time_unix_nano,
+                        time_unix_nano,
+                        metric_value,
+                    )?,
+                })),
+                Some(METRIC_AGG_COUNT) => Some(metric::Data::Sum(Sum {
+                    aggregation_temporality,
+                    is_monotonic: true,
+                    data_points: self.count.encode_data_points(
+                        start_time_unix_nano,
+                        time_unix_nano,
+                        metric_value,
+                    )?,
+                })),
+                _ => Some(metric::Data::Gauge(Gauge {
+                    data_points: self.guage.encode_data_points(
+                        start_time_unix_nano,
+                        time_unix_nano,
+                        metric_value,
+                    )?,
+                })),
+            };
+
+            let msg = Metric {
+                name: metric_name.to_string(),
+                description: String::new(),
+                unit: String::new(),
+                data,
+            };
+
+            let mut buf = Vec::new();
+            msg.encode(&mut buf).unwrap();
+
+            return Some(PreEncoded::Proto(ProtoBuf::pre_encoded(buf)));
+        }
+
+        None
     }
 }
 

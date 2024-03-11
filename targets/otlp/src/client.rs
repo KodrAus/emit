@@ -2,7 +2,7 @@ use emit_batcher::BatchError;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, default_message_formatter, logs, metrics, traces, PreEncoded},
+    data::{self, logs, metrics, traces, PreEncoded},
     Error,
 };
 
@@ -123,9 +123,7 @@ pub struct OtlpLogsBuilder {
 impl OtlpLogsBuilder {
     pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpLogsBuilder {
-            encoder: logs::EventEncoder {
-                body: default_message_formatter(),
-            },
+            encoder: logs::EventEncoder::default(),
             encoding: Encoding::Proto,
             transport,
         }
@@ -159,9 +157,7 @@ pub struct OtlpTracesBuilder {
 impl OtlpTracesBuilder {
     pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpTracesBuilder {
-            encoder: traces::EventEncoder {
-                name: default_message_formatter(),
-            },
+            encoder: traces::EventEncoder::default(),
             encoding: Encoding::Proto,
             transport,
         }
@@ -195,9 +191,7 @@ pub struct OtlpMetricsBuilder {
 impl OtlpMetricsBuilder {
     pub fn proto(transport: OtlpTransportBuilder) -> Self {
         OtlpMetricsBuilder {
-            encoder: metrics::EventEncoder {
-                name: default_message_formatter(),
-            },
+            encoder: metrics::EventEncoder::default(),
             encoding: Encoding::Proto,
             transport,
         }
@@ -205,6 +199,30 @@ impl OtlpMetricsBuilder {
 
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn name(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.encoder.name = Box::new(writer);
+        self
+    }
+
+    pub fn reaggregate_multi_point_sums(mut self, reaggregate: bool) -> Self {
+        self.encoder.sum.single_point_per_sample = reaggregate;
+        self
+    }
+
+    pub fn reaggregate_multi_value_counts(mut self, reaggregate: bool) -> Self {
+        self.encoder.count.single_point_per_sample = reaggregate;
+        self
     }
 }
 
