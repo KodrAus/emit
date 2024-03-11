@@ -61,7 +61,29 @@ async fn main() {
 
     sample_metrics();
 
+    let timer = emit::timer::Timer::start(emit::runtime::shared());
+
     let _ = in_trace().await;
+
+    emit::emit!(
+        extent: timer,
+        "{metric_agg} of {metric_name} is {metric_value}",
+        metric_agg: "count",
+        metric_name: "smoke_test::sum",
+        #[emit::as_value]
+        metric_value: [
+            1i64,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+        ],
+    );
 
     emitter.blocking_flush(Duration::from_secs(30));
     internal.blocking_flush(Duration::from_secs(5));
@@ -143,7 +165,7 @@ fn sample_metrics() {
 
     for (metric_value, metric_agg, metric_name) in [(
         &COUNT,
-        emit::well_known::METRIC_AGG_SUM,
+        emit::well_known::METRIC_AGG_COUNT,
         "smoke_test::count",
     )] {
         emit::emit!(

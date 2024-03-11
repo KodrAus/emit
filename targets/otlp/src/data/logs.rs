@@ -70,8 +70,7 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
             let response =
                 crate::data::generated::collector::logs::v1::ExportLogsServiceResponse::decode(
                     body,
-                )
-                .unwrap();
+                );
 
             emit::debug!(
                 rt: emit::runtime::internal(),
@@ -82,8 +81,7 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
         }
         Err(body) => {
             let response =
-                crate::data::generated::collector::logs::v1::ExportLogsPartialSuccess::decode(body)
-                    .unwrap();
+                crate::data::generated::collector::logs::v1::ExportLogsPartialSuccess::decode(body);
 
             emit::warn!(
                 rt: emit::runtime::internal(),

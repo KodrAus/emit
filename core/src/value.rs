@@ -255,6 +255,18 @@ impl<'v> FromValue<'v> for f64 {
     }
 }
 
+impl<const N: usize> ToValue for [f64; N] {
+    fn to_value(&self) -> Value {
+        Value::from(self)
+    }
+}
+
+impl<'v, const N: usize> From<&'v [f64; N]> for Value<'v> {
+    fn from(value: &'v [f64; N]) -> Self {
+        Value(value.into())
+    }
+}
+
 impl ToValue for i64 {
     fn to_value(&self) -> Value {
         Value::from(*self)
@@ -270,6 +282,18 @@ impl<'v> From<i64> for Value<'v> {
 impl<'v> FromValue<'v> for i64 {
     fn from_value(value: Value<'v>) -> Option<Self> {
         value.to_i64()
+    }
+}
+
+impl<const N: usize> ToValue for [i64; N] {
+    fn to_value(&self) -> Value {
+        Value::from(self)
+    }
+}
+
+impl<'v, const N: usize> From<&'v [i64; N]> for Value<'v> {
+    fn from(value: &'v [i64; N]) -> Self {
+        Value(value.into())
     }
 }
 

@@ -284,6 +284,23 @@ pub fn optional(
 }
 
 /**
+Capture a key-value pair using its `ToValue` implementation.
+*/
+#[proc_macro_attribute]
+pub fn as_value(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    capture_as(
+        "as_value",
+        TokenStream::from(args),
+        TokenStream::from(item),
+        quote!(__private_capture_as_value),
+        quote!(__private_capture_anon_as_value),
+    )
+}
+
+/**
 Capture a key-value pair using its `Debug` implementation.
 */
 #[proc_macro_attribute]

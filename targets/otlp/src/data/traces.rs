@@ -74,8 +74,7 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
             let response =
                 crate::data::generated::collector::trace::v1::ExportTraceServiceResponse::decode(
                     body,
-                )
-                .unwrap();
+                );
 
             emit::debug!(
                 rt: emit::runtime::internal(),
@@ -88,8 +87,7 @@ pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
             let response =
                 crate::data::generated::collector::trace::v1::ExportTracePartialSuccess::decode(
                     body,
-                )
-                .unwrap();
+                );
 
             emit::warn!(
                 rt: emit::runtime::internal(),

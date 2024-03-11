@@ -72,6 +72,9 @@ pub enum CaptureLevel {}
 
 pub enum CaptureError {}
 
+pub enum CaptureValue {}
+pub enum CaptureAnonValue {}
+
 pub enum CaptureSpanId {}
 pub enum CaptureTraceId {}
 
@@ -83,6 +86,7 @@ impl CaptureStr for CaptureLevel {}
 impl CaptureStr for CaptureError {}
 impl CaptureStr for CaptureSpanId {}
 impl CaptureStr for CaptureTraceId {}
+impl CaptureStr for CaptureValue {}
 
 impl<T: CaptureStr + ?Sized> Capture<T> for str {
     fn capture(&self) -> Option<Value> {
@@ -171,6 +175,24 @@ where
 {
     fn capture(&self) -> Option<Value> {
         Some(value_bag::ValueBag::from_debug(self).into())
+    }
+}
+
+impl<T> Capture<CaptureValue> for T
+where
+    T: ToValue + Any,
+{
+    fn capture(&self) -> Option<Value> {
+        Some(self.to_value())
+    }
+}
+
+impl<T> Capture<CaptureAnonValue> for T
+where
+    T: ToValue,
+{
+    fn capture(&self) -> Option<Value> {
+        Some(self.to_value())
     }
 }
 
@@ -342,6 +364,20 @@ pub trait __PrivateCaptureHook {
     fn __private_capture_anon_as_debug(&self) -> Option<Value>
     where
         Self: Capture<CaptureAnonDebug>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_capture_as_value(&self) -> Option<Value>
+    where
+        Self: Capture<CaptureValue>,
+    {
+        Capture::capture(self)
+    }
+
+    fn __private_capture_anon_as_value(&self) -> Option<Value>
+    where
+        Self: Capture<CaptureAnonValue>,
     {
         Capture::capture(self)
     }

@@ -28,5 +28,6 @@ pub const METRIC_VALUE_KEY: &'static str = "metric_value";
 pub const METRIC_UNIT_KEY: &'static str = "metric_unit";
 
 pub const METRIC_AGG_SUM: &'static str = "sum";
+pub const METRIC_AGG_COUNT: &'static str = "count";
 pub const METRIC_AGG_MIN: &'static str = "min";
 pub const METRIC_AGG_MAX: &'static str = "max";
