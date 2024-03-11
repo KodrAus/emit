@@ -1,4 +1,10 @@
 #[path = ""]
+pub(crate) mod google {
+    #[path = "./generated/google.rpc.rs"]
+    pub(crate) mod rpc;
+}
+
+#[path = ""]
 pub(crate) mod logs {
     #[path = "./generated/opentelemetry.proto.logs.v1.rs"]
     pub(crate) mod v1;
@@ -46,6 +52,31 @@ pub(crate) mod collector {
     pub(crate) mod metrics {
         #[path = "./generated/opentelemetry.proto.collector.metrics.v1.rs"]
         pub(crate) mod v1;
+    }
+}
+
+#[cfg(feature = "decode_responses")]
+pub(crate) mod response {
+    use std::{fmt, str};
+
+    use prost::Message;
+
+    #[derive(Debug)]
+    #[allow(dead_code)]
+    enum Response<'a, T> {
+        Proto(T),
+        Text(&'a str),
+        Unknown(&'a [u8]),
+    }
+
+    pub(crate) fn decode<'a, T: Default + Message + 'a>(body: &'a [u8]) -> impl fmt::Debug + 'a {
+        if let Ok(msg) = T::decode(body) {
+            Response::Proto(msg)
+        } else if let Ok(text) = str::from_utf8(body) {
+            Response::Text(text)
+        } else {
+            Response::Unknown(body)
+        }
     }
 }
 

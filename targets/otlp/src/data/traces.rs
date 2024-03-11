@@ -67,33 +67,21 @@ pub(crate) fn encode_request(
 
 #[cfg(feature = "decode_responses")]
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
-    use prost::Message;
-
     match body {
         Ok(body) => {
-            let response =
-                crate::data::generated::collector::trace::v1::ExportTraceServiceResponse::decode(
-                    body,
-                );
-
             emit::debug!(
                 rt: emit::runtime::internal(),
-                "received {response}",
+                "received traces {response}",
                 #[emit::as_debug]
-                response,
+                response: crate::data::generated::response::decode::<crate::data::generated::collector::trace::v1::ExportTraceServiceResponse>(body),
             );
         }
         Err(body) => {
-            let response =
-                crate::data::generated::collector::trace::v1::ExportTracePartialSuccess::decode(
-                    body,
-                );
-
             emit::warn!(
                 rt: emit::runtime::internal(),
-                "received {response}",
+                "received traces {response}",
                 #[emit::as_debug]
-                response,
+                response: crate::data::generated::response::decode::<crate::data::generated::google::rpc::Status>(body),
             );
         }
     }

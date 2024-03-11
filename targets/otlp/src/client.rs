@@ -614,7 +614,7 @@ impl OtlpTransport {
 
                     if status >= 200 && status < 300 {
                         decode(Ok(&body));
-                    } else if status != 404 {
+                    } else {
                         decode(Err(&body));
                     }
                 }

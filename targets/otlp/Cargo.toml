@@ -7,7 +7,7 @@ edition = "2021"
 default = ["http", "grpc"]
 http = ["dep:hyper", "dep:hyper-util"]
 grpc = ["dep:prost", "dep:serde", "emit/serde"]
-decode_responses = ["dep:prost"]
+decode_responses = ["dep:prost", "dep:prost-types"]
 
 [dependencies.emit]
 path = "../../"
@@ -51,7 +51,11 @@ features = ["tokio"]
 version = "1"
 
 [dependencies.prost]
-version = "0.11"
+version = "0.12"
+optional = true
+
+[dependencies.prost-types]
+version = "0.12"
 optional = true
 
 [dependencies.serde]
