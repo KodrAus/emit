@@ -23,6 +23,7 @@ pub(crate) struct EventEncoder {
 
 pub(crate) struct SumEncoder {
     pub single_point_per_sample: bool,
+    // TODO: delta to cumulative
 }
 
 impl SumEncoder {
