@@ -214,16 +214,6 @@ impl OtlpMetricsBuilder {
         self.encoder.name = Box::new(writer);
         self
     }
-
-    pub fn reaggregate_multi_point_sums(mut self, reaggregate: bool) -> Self {
-        self.encoder.sum.single_point_per_sample = reaggregate;
-        self
-    }
-
-    pub fn reaggregate_multi_value_counts(mut self, reaggregate: bool) -> Self {
-        self.encoder.count.single_point_per_sample = reaggregate;
-        self
-    }
 }
 
 enum Encoding {

@@ -80,6 +80,7 @@ pub(crate) mod response {
     }
 }
 
+#[cfg(feature = "grpc")]
 pub(crate) mod any_value {
     use std::fmt;
 
