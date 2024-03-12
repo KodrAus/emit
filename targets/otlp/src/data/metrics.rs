@@ -346,7 +346,7 @@ pub(crate) fn encode_request(
 pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
     match body {
         Ok(body) => {
-            emit::warn!(
+            emit::debug!(
                 rt: emit::runtime::internal(),
                 "received metrics {response}",
                 #[emit::as_debug]
