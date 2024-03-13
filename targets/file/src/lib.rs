@@ -149,11 +149,15 @@ impl emit::Emitter for FileSet {
             let rt = rt.get();
 
             for metric in self.sample_metrics() {
-                rt.emit(&emit::Event::new(
-                    &metric,
-                    emit::tpl!("{metric_agg} of {metric_name} is {metric_value}"),
-                    (&metric).chain((MODULE_KEY, module_path!())),
-                ));
+                emit::emit!(
+                    rt,
+                    extent: metric.extent(),
+                    props: metric.props(),
+                    "{metric_agg} of {metric_name} is {metric_value}",
+                    metric_name: metric.name(),
+                    metric_agg: metric.agg(),
+                    metric_value: metric.value(),
+                );
             }
         }
     }

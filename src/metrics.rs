@@ -31,13 +31,33 @@ impl<'a> Metric<'a> {
             props: Empty,
         }
     }
+}
 
+impl<'a, P> Metric<'a, P> {
     pub fn name(&self) -> &Str<'a> {
         &self.name
     }
 
     pub fn with_name(mut self, name: impl Into<Str<'a>>) -> Self {
         self.name = name.into();
+        self
+    }
+
+    pub fn agg(&self) -> &Str<'a> {
+        &self.agg
+    }
+
+    pub fn with_agg(mut self, agg: impl Into<Str<'a>>) -> Self {
+        self.agg = agg.into();
+        self
+    }
+
+    pub fn value(&self) -> &Value<'a> {
+        &self.value
+    }
+
+    pub fn with_value(mut self, value: impl Into<Value<'a>>) -> Self {
+        self.value = value.into();
         self
     }
 
@@ -50,7 +70,11 @@ impl<'a> Metric<'a> {
         &self.extent
     }
 
-    pub fn with_props<P>(self, props: P) -> Metric<'a, P> {
+    pub fn props(&self) -> &P {
+        &self.props
+    }
+
+    pub fn with_props<U>(self, props: U) -> Metric<'a, U> {
         Metric {
             extent: self.extent,
             name: self.name,

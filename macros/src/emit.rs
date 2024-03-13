@@ -14,6 +14,7 @@ pub struct ExpandTokens {
 
 struct Args {
     rt: TokenStream,
+    props: TokenStream,
     extent: TokenStream,
     when: TokenStream,
 }
@@ -30,6 +31,11 @@ impl Parse for Args {
 
             Ok(quote!(#expr))
         });
+        let mut props = Arg::token_stream("props", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
         let mut when = Arg::token_stream("when", |fv| {
             let expr = &fv.expr;
 
@@ -38,11 +44,12 @@ impl Parse for Args {
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut extent, &mut rt, &mut when],
+            [&mut extent, &mut props, &mut rt, &mut when],
         )?;
 
         Ok(Args {
             extent: extent.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
+            props: props.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             rt: rt.take_rt()?,
             when: when.take_when(),
         })
@@ -56,6 +63,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
     let props_match_input_tokens = props.match_input_tokens();
     let props_match_binding_tokens = props.match_binding_tokens();
+    let base_props_tokens = args.props;
     let props_tokens = props.match_bound_tokens();
 
     let extent_tokens = args.extent;
@@ -72,7 +80,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                     #when_tokens,
                     #extent_tokens,
                     #template_tokens,
-                    #props_tokens,
+                    emit::Props::chain(&#base_props_tokens, #props_tokens),
                 )
             }
         }
