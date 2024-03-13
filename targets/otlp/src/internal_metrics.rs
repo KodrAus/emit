@@ -1,42 +1,42 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use emit::Clock;
-
-macro_rules! increment {
-    ($metric:path) => {
-        increment!($metric, 1);
-    };
-    ($metic:path, $by:expr) => {
-        $metic.fetch_add($by, std::sync::atomic::Ordering::Relaxed);
-    };
+#[derive(Default)]
+pub(crate) struct InternalMetrics {
+    pub(crate) otlp_event_discarded: Counter,
 }
 
-pub(crate) static INTERNAL_METRICS: InternalMetrics = InternalMetrics {
-    log_batches_sent: AtomicUsize::new(0),
-};
+#[derive(Default)]
+pub(crate) struct Counter(AtomicUsize);
 
-pub(crate) struct InternalMetrics {
-    pub(crate) log_batches_sent: AtomicUsize,
+impl Counter {
+    pub const fn new() -> Self {
+        Counter(AtomicUsize::new(0))
+    }
+
+    pub fn increment(&self) {
+        self.increment_by(1);
+    }
+
+    pub fn increment_by(&self, by: usize) {
+        self.0.fetch_add(by, Ordering::Relaxed);
+    }
+
+    pub fn sample(&self) -> usize {
+        self.0.load(Ordering::Relaxed)
+    }
 }
 
 impl InternalMetrics {
-    pub(crate) fn emit(&self) {
+    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
         let InternalMetrics {
-            ref log_batches_sent,
+            otlp_event_discarded: otlp_event_discard,
         } = self;
 
-        let rt = emit::runtime::internal();
-
-        let extent = rt.now();
-
-        emit::info!(
-            rt,
-            extent,
-            "{metric_value} {signal} batches sent",
-            metric_name: "batches_sent",
-            metric_agg: "count",
-            metric_value: log_batches_sent.load(Ordering::Relaxed),
-            signal: "logs"
-        );
+        [emit::metrics::Metric::new(
+            "otlp_event_discard",
+            emit::well_known::METRIC_AGG_COUNT,
+            otlp_event_discard.sample(),
+        )]
+        .into_iter()
     }
 }

@@ -1,16 +1,23 @@
 #![feature(stmt_expr_attributes, proc_macro_hygiene)]
 
+mod internal_metrics;
+
 use std::{
     fs::{self, File},
     io::{self, Write},
     mem,
     ops::ControlFlow,
     path::{Path, PathBuf},
+    sync::Arc,
     thread,
 };
 
-use emit::well_known::{MSG_KEY, TPL_KEY, TS_KEY, TS_START_KEY};
+use emit::{
+    well_known::{MODULE_KEY, MSG_KEY, TPL_KEY, TS_KEY, TS_START_KEY},
+    Props,
+};
 use emit_batcher::BatchError;
+use internal_metrics::InternalMetrics;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -77,7 +84,10 @@ impl FileSetBuilder {
     pub fn spawn(self) -> Result<FileSet, Error> {
         let (dir, file_prefix, file_ext) = dir_prefix_ext(self.file_set)?;
 
+        let metrics = Arc::new(InternalMetrics::default());
+
         let mut worker = Worker::new(
+            metrics.clone(),
             dir,
             file_prefix,
             file_ext,
@@ -95,6 +105,7 @@ impl FileSetBuilder {
 
         Ok(FileSet {
             sender,
+            metrics,
             _handle: handle,
         })
     }
@@ -102,7 +113,23 @@ impl FileSetBuilder {
 
 pub struct FileSet {
     sender: emit_batcher::Sender<EventBatch>,
+    metrics: Arc<InternalMetrics>,
     _handle: thread::JoinHandle<()>,
+}
+
+impl FileSet {
+    pub fn sample_metrics<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'a {
+        self.sender
+            .sample_metrics()
+            .map(|metric| {
+                let name = format!("file_{}", metric.name());
+
+                metric.with_name(name)
+            })
+            .chain(self.metrics.sample())
+    }
 }
 
 impl emit::Emitter for FileSet {
@@ -115,7 +142,20 @@ impl emit::Emitter for FileSet {
     }
 
     fn blocking_flush(&self, timeout: std::time::Duration) {
-        emit_batcher::sync::blocking_flush(&self.sender, timeout)
+        emit_batcher::sync::blocking_flush(&self.sender, timeout);
+
+        let rt = emit::runtime::internal_slot();
+        if rt.is_enabled() {
+            let rt = rt.get();
+
+            for metric in self.sample_metrics() {
+                rt.emit(&emit::Event::new(
+                    &metric,
+                    emit::tpl!("{metric_agg} of {metric_name} is {metric_value}"),
+                    (&metric).chain((MODULE_KEY, module_path!())),
+                ));
+            }
+        }
     }
 }
 
@@ -209,6 +249,7 @@ impl EventBatch {
 }
 
 struct Worker {
+    metrics: Arc<InternalMetrics>,
     active_file: Option<ActiveFile>,
     roll_by: RollBy,
     max_files: usize,
@@ -221,6 +262,7 @@ struct Worker {
 
 impl Worker {
     fn new(
+        metrics: Arc<InternalMetrics>,
         dir: String,
         file_prefix: String,
         file_ext: String,
@@ -230,6 +272,7 @@ impl Worker {
         max_file_size_bytes: usize,
     ) -> Self {
         Worker {
+            metrics,
             active_file: None,
             roll_by,
             max_files,
@@ -250,7 +293,7 @@ impl Worker {
         let file_ts = file_ts(self.roll_by, parts);
 
         let mut file = self.active_file.take();
-        let mut file_set = ActiveFileSet::empty(&self.dir);
+        let mut file_set = ActiveFileSet::empty(&self.metrics, &self.dir);
 
         if file.is_none() {
             if let Err(err) = fs::create_dir_all(&self.dir) {
@@ -272,6 +315,8 @@ impl Worker {
             let _ = file_set
                 .read(&self.file_prefix, &self.file_ext)
                 .map_err(|err| {
+                    self.metrics.file_set_read_failed.increment();
+
                     emit::warn!(
                         rt: emit::runtime::internal(),
                         "failed to files in read {path}: {err}",
@@ -290,6 +335,8 @@ impl Worker {
 
                     file = ActiveFile::try_open_reuse(&path)
                         .map_err(|err| {
+                            self.metrics.file_open_failed.increment();
+
                             emit::warn!(
                                 rt: emit::runtime::internal(),
                                 "failed to open {path}: {err}",
@@ -329,6 +376,8 @@ impl Worker {
 
             match ActiveFile::try_open_create(&path) {
                 Ok(file) => {
+                    self.metrics.file_create.increment();
+
                     emit::debug!(
                         rt: emit::runtime::internal(),
                         "created {path}",
@@ -339,6 +388,8 @@ impl Worker {
                     file
                 }
                 Err(err) => {
+                    self.metrics.file_create_failed.increment();
+
                     emit::warn!(
                         rt: emit::runtime::internal(),
                         "failed to create {path}: {err}",
@@ -356,6 +407,8 @@ impl Worker {
 
         while let Some(buf) = batch.current() {
             if let Err(err) = file.write_event(buf.as_bytes()) {
+                self.metrics.file_write_failed.increment();
+
                 span.complete(|extent| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
@@ -403,12 +456,14 @@ impl Worker {
 
 struct ActiveFileSet<'a> {
     dir: &'a str,
+    metrics: &'a InternalMetrics,
     file_set: Vec<String>,
 }
 
 impl<'a> ActiveFileSet<'a> {
-    fn empty(dir: &'a str) -> Self {
+    fn empty(metrics: &'a InternalMetrics, dir: &'a str) -> Self {
         ActiveFileSet {
+            metrics,
             dir,
             file_set: Vec::new(),
         }
@@ -462,7 +517,26 @@ impl<'a> ActiveFileSet<'a> {
             let mut path = PathBuf::from(self.dir);
             path.push(self.file_set.pop().unwrap());
 
-            let _ = fs::remove_file(path);
+            if let Err(err) = fs::remove_file(&path) {
+                self.metrics.file_delete_failed.increment();
+
+                emit::warn!(
+                    rt: emit::runtime::internal(),
+                    "failed to delete {path}: {err}",
+                    #[emit::as_debug]
+                    path,
+                    err,
+                );
+            } else {
+                self.metrics.file_delete.increment();
+
+                emit::debug!(
+                    rt: emit::runtime::internal(),
+                    "deleted {path}",
+                    #[emit::as_debug]
+                    path,
+                );
+            }
         }
     }
 }

@@ -3,7 +3,9 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write};
 
-use emit::well_known::{LVL_KEY, METRIC_VALUE_KEY, MODULE_KEY, SPAN_ID_KEY, TRACE_ID_KEY};
+use emit::well_known::{
+    LVL_KEY, METRIC_NAME_KEY, METRIC_VALUE_KEY, MODULE_KEY, SPAN_ID_KEY, TRACE_ID_KEY,
+};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -228,6 +230,11 @@ fn print_event(
         write_plain(buf, " ");
     }
 
+    if evt.props().get(METRIC_NAME_KEY).is_some() {
+        write_fg(buf, "metric", METRIC);
+        write_plain(buf, " ");
+    }
+
     if let Some(level) = evt.props().pull::<_, emit::Level>(LVL_KEY) {
         if let Some(level_color) = level_color(&level) {
             write_fg(buf, level, Color::Ansi256(level_color));
@@ -344,6 +351,7 @@ impl<'a> emit::template::Write for Writer<'a> {
 }
 
 const MODULE: Color = Color::Ansi256(244);
+const METRIC: Color = Color::Ansi256(174);
 
 const TEXT: Color = Color::Ansi256(69);
 const NUMBER: Color = Color::Ansi256(135);
