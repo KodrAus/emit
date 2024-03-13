@@ -8,6 +8,7 @@ use crate::{
     args::{self, Arg},
     event::push_event_props,
     props::Props,
+    source::source_tokens,
     template::{self, Template},
 };
 
@@ -140,14 +141,16 @@ fn inject_sync(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
+    let source_tokens = source_tokens();
 
     quote!({
-        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #source_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
         let __ctxt_guard = __ctxt.enter();
 
         let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
             emit::__private::__private_emit(
                 #rt_tokens,
+                #source_tokens,
                 Some(emit::always()),
                 extent,
                 #template_tokens,
@@ -171,14 +174,16 @@ fn inject_async(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
+    let source_tokens = source_tokens();
 
     quote!({
-        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #source_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
 
         __ctxt.with_future(async {
             let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
                 emit::__private::__private_emit(
                     #rt_tokens,
+                    #source_tokens,
                     Some(emit::always()),
                     extent,
                     #template_tokens,

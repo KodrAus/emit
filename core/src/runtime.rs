@@ -178,10 +178,11 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
     pub fn emit<P: Props>(&self, evt: &Event<P>) {
         self.ctxt.with_current(|ctxt| {
             let evt = Event::new(
+                evt.source().by_ref(),
                 evt.extent()
                     .cloned()
                     .or_else(|| self.clock.now().to_extent()),
-                evt.tpl(),
+                evt.tpl().by_ref(),
                 ctxt.chain(evt.props()),
             );
 

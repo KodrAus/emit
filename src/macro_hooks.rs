@@ -6,6 +6,7 @@ use emit_core::{
     emitter::Emitter,
     extent::{Extent, ToExtent},
     filter::Filter,
+    path::Path,
     props::Props,
     rng::Rng,
     runtime::Runtime,
@@ -502,6 +503,7 @@ impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
 #[track_caller]
 pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
+    source: impl Into<Path<'a>>,
     when: Option<impl Filter>,
     extent: impl ToExtent,
     tpl: Template,
@@ -509,6 +511,7 @@ pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 ) {
     base_emit(
         rt.emitter(),
+        source.into(),
         FirstDefined(when, rt.filter()),
         rt.ctxt(),
         extent.to_extent().or_else(|| rt.now().to_extent()),
@@ -519,10 +522,11 @@ pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 
 #[track_caller]
 #[cfg(feature = "alloc")]
-pub fn __private_push_span_ctxt<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
+    source: impl Into<Path<'b>>,
     when: Option<impl Filter>,
-    tpl: Template,
+    tpl: Template<'b>,
     ctxt_props: impl Props,
     evt_props: impl Props,
 ) -> (Frame<Option<&'a C>>, Option<Timer<&'a T>>) {
@@ -573,8 +577,9 @@ pub fn __private_push_span_ctxt<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R:
     let timer = Timer::start(rt.clock());
 
     if FirstDefined(when, rt.filter()).matches(&Event::new(
+        source,
         timer.extent().map(|extent| *extent.as_point()),
-        tpl.by_ref(),
+        tpl,
         ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),
     )) {
         (

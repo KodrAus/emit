@@ -3,9 +3,7 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write};
 
-use emit::well_known::{
-    LVL_KEY, METRIC_NAME_KEY, METRIC_VALUE_KEY, MODULE_KEY, SPAN_ID_KEY, TRACE_ID_KEY,
-};
+use emit::well_known::{LVL_KEY, METRIC_NAME_KEY, METRIC_VALUE_KEY, SPAN_ID_KEY, TRACE_ID_KEY};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -242,9 +240,7 @@ fn print_event(
         }
     }
 
-    if let Some(module) = evt.props().get(MODULE_KEY) {
-        write_fg(buf, format_args!("{} ", module), MODULE);
-    }
+    write_fg(buf, format_args!("{} ", evt.source()), MODULE);
 
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");

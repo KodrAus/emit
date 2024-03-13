@@ -2,32 +2,49 @@ use core::{fmt, ops::ControlFlow};
 
 use crate::{
     extent::{Extent, ToExtent},
+    path::Path,
     props::{ByRef, ErasedProps, Props},
     template::{Render, Template},
 };
 
 #[derive(Clone)]
 pub struct Event<'a, P> {
+    // "where"
+    source: Path<'a>,
+    // "when"
     extent: Option<Extent>,
+    // "what"
     tpl: Template<'a>,
+    // "why"
     props: P,
+    // "how" is your problem
 }
 
 impl<'a, P> Event<'a, P> {
-    pub fn new(extent: impl ToExtent, tpl: Template<'a>, props: P) -> Self {
+    pub fn new(
+        source: impl Into<Path<'a>>,
+        extent: impl ToExtent,
+        tpl: Template<'a>,
+        props: P,
+    ) -> Self {
         Event {
+            source: source.into(),
             extent: extent.to_extent(),
             tpl,
             props,
         }
     }
 
+    pub fn source(&self) -> &Path<'a> {
+        &self.source
+    }
+
     pub fn extent(&self) -> Option<&Extent> {
         self.extent.as_ref()
     }
 
-    pub fn tpl(&self) -> Template {
-        self.tpl.by_ref()
+    pub fn tpl(&self) -> &Template<'a> {
+        &self.tpl
     }
 
     pub fn props(&self) -> &P {
@@ -42,6 +59,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
         Event {
+            source: self.source.by_ref(),
             extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: self.props.by_ref(),
@@ -50,6 +68,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn erase<'b>(&'b self) -> Event<'b, &'b dyn ErasedProps> {
         Event {
+            source: self.source.by_ref(),
             extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: &self.props,
@@ -77,6 +96,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 
         let mut f = f.debug_struct("Event");
 
+        f.field("source", &self.source);
         f.field("extent", &self.extent);
         f.field("msg", &self.msg());
         f.field("tpl", &self.tpl);

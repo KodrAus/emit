@@ -4,6 +4,7 @@ use syn::{parse::Parse, FieldValue};
 use crate::{
     args::{self, Arg},
     event::push_event_props,
+    source::source_tokens,
     template,
 };
 
@@ -69,6 +70,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let extent_tokens = args.extent;
     let rt_tokens = args.rt;
     let when_tokens = args.when;
+    let source_tokens = source_tokens();
 
     let template_tokens = template.template_tokens();
 
@@ -77,6 +79,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             (#(#props_match_binding_tokens),*) => {
                 emit::__private::__private_emit(
                     #rt_tokens,
+                    #source_tokens,
                     #when_tokens,
                     #extent_tokens,
                     #template_tokens,

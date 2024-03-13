@@ -26,6 +26,7 @@ mod hook;
 mod key;
 mod optional;
 mod props;
+mod source;
 mod span;
 mod template;
 mod util;

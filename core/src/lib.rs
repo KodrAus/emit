@@ -12,6 +12,7 @@ pub mod empty;
 pub mod event;
 pub mod extent;
 pub mod filter;
+pub mod path;
 pub mod props;
 pub mod rng;
 pub mod runtime;

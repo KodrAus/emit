@@ -4,6 +4,7 @@ use syn::{parse::Parse, FieldValue, Ident};
 use crate::{
     args::{self, Arg},
     props::Props,
+    source::source_tokens,
     template,
 };
 
@@ -52,9 +53,10 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let base_props_tokens = args.props;
     let template_tokens = template.template_tokens();
     let props_tokens = props.props_tokens();
+    let source_tokens = source_tokens();
 
     Ok(
-        quote!(emit::Event::new(#extent_tokens, #template_tokens, emit::Props::chain(&#base_props_tokens, #props_tokens))),
+        quote!(emit::Event::new(#source_tokens, #extent_tokens, #template_tokens, emit::Props::chain(&#base_props_tokens, #props_tokens))),
     )
 }
 
@@ -69,14 +71,6 @@ pub fn push_event_props(props: &mut Props, level: Option<TokenStream>) -> Result
             true,
         )?;
     }
-
-    // Add the location as a property
-    let loc_ident = Ident::new(emit_core::well_known::MODULE_KEY, Span::call_site());
-    props.push(
-        &syn::parse2::<FieldValue>(quote!(#loc_ident: emit::__private::__private_module!()))?,
-        false,
-        true,
-    )?;
 
     Ok(())
 }

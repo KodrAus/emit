@@ -3,7 +3,7 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use emit_core::extent::ToExtent;
+use emit_core::{extent::ToExtent, path::Path};
 
 #[doc(inline)]
 pub use emit_macros::*;
@@ -50,6 +50,7 @@ pub use setup::*;
 #[track_caller]
 fn base_emit(
     to: impl Emitter,
+    source: Path,
     when: impl Filter,
     ctxt: impl Ctxt,
     ts: impl ToExtent,
@@ -57,7 +58,7 @@ fn base_emit(
     props: impl Props,
 ) {
     ctxt.with_current(|ctxt| {
-        let evt = Event::new(ts, tpl, props.chain(ctxt));
+        let evt = Event::new(source, ts, tpl, props.chain(ctxt));
 
         if when.matches(&evt) {
             to.emit(&evt);
