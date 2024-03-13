@@ -17,6 +17,18 @@ pub struct Otlp {
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
+impl Otlp {
+    pub fn sample_metrics<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'a {
+        self.sender.sample_metrics().map(|metric| {
+            let name = format!("otlp_{}", metric.name());
+
+            metric.with_name(name)
+        })
+    }
+}
+
 impl emit::emitter::Emitter for Otlp {
     fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
         if let Some(ref encoder) = self.metrics {
@@ -38,7 +50,20 @@ impl emit::emitter::Emitter for Otlp {
     }
 
     fn blocking_flush(&self, timeout: Duration) {
-        emit_batcher::tokio::blocking_flush(&self.sender, timeout)
+        emit_batcher::tokio::blocking_flush(&self.sender, timeout);
+
+        let rt = emit::runtime::internal_slot();
+        if rt.is_enabled() {
+            let rt = rt.get();
+
+            for metric in self.sample_metrics() {
+                rt.emit(&emit::Event::new(
+                    &metric,
+                    emit::tpl!("{metric_agg} of {metric_name} is {metric_value}"),
+                    &metric,
+                ));
+            }
+        }
     }
 }
 

@@ -1,13 +1,19 @@
+use crate::internal_metrics::InternalMetrics;
 use std::{
+    any::Any,
     cmp,
     future::{self, Future},
     mem,
-    panic::{self, AssertUnwindSafe},
-    pin::pin,
+    panic::{self, AssertUnwindSafe, UnwindSafe},
+    pin::{pin, Pin},
     sync::{Arc, Mutex, OnceLock},
-    task, thread,
+    task,
+    task::{Context, Poll},
+    thread,
     time::Duration,
 };
+
+mod internal_metrics;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -66,6 +72,7 @@ impl<T> Channel for Vec<T> {
 
 pub fn bounded<T: Channel>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
+        metrics: Default::default(),
         state: Mutex::new(State {
             next_batch: Batch::new(),
             is_open: true,
@@ -108,6 +115,7 @@ impl<T: Channel> Sender<T> {
         // in this case because the clearing is opaque to outside observers
         if state.next_batch.channel.remaining() >= self.max_capacity {
             state.next_batch.channel.clear();
+            self.shared.metrics.queue_overflow.increment();
         }
 
         // If the channel is closed then return without adding the message
@@ -139,6 +147,10 @@ impl<T: Channel> Sender<T> {
         else {
             state.next_batch.watchers.push(watcher);
         }
+    }
+
+    pub fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+        self.shared.sample_metrics()
     }
 }
 
@@ -283,25 +295,35 @@ impl<T: Channel> Receiver<T> {
 
                 // Emit the batch, taking care not to panic
                 loop {
-                    if let Ok(on_batch) =
-                        panic::catch_unwind(AssertUnwindSafe(|| on_batch(current_batch.channel)))
+                    match panic::catch_unwind(AssertUnwindSafe(|| on_batch(current_batch.channel)))
                     {
-                        // If the current batch failed then it may be retried
-                        // This depends on `on_batch`, who may or may not return a batch to retry
-                        // depending on the kind of failure
-                        if let Err(BatchError { retryable }) = AssertUnwindSafe(on_batch).await {
-                            if retryable.remaining() > 0 && self.retry.next() {
-                                // Delay a bit before trying again; this gives the external service
-                                // a chance to get itself together
-                                wait(self.retry_delay.next()).await;
-
-                                current_batch = Batch {
-                                    channel: retryable,
-                                    watchers: current_batch.watchers,
-                                };
-
-                                continue;
+                        Ok(on_batch) => match CatchUnwind(AssertUnwindSafe(on_batch)).await {
+                            Ok(Ok(())) => {
+                                self.shared.metrics.queue_batch_processed.increment();
                             }
+                            Ok(Err(BatchError { retryable })) => {
+                                self.shared.metrics.queue_batch_failed.increment();
+
+                                if retryable.remaining() > 0 && self.retry.next() {
+                                    // Delay a bit before trying again; this gives the external service
+                                    // a chance to get itself together
+                                    wait(self.retry_delay.next()).await;
+
+                                    current_batch = Batch {
+                                        channel: retryable,
+                                        watchers: current_batch.watchers,
+                                    };
+
+                                    self.shared.metrics.queue_batch_retry.increment();
+                                    continue;
+                                }
+                            }
+                            Err(_) => {
+                                self.shared.metrics.queue_batch_panicked.increment();
+                            }
+                        },
+                        Err(_) => {
+                            self.shared.metrics.queue_batch_panicked.increment();
                         }
                     }
 
@@ -326,6 +348,23 @@ impl<T: Channel> Receiver<T> {
                 wait(self.idle_delay.next()).await;
             }
         }
+    }
+
+    pub fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+        self.shared.sample_metrics()
+    }
+}
+
+struct CatchUnwind<F>(F);
+
+impl<F: Future + UnwindSafe> Future for CatchUnwind<F> {
+    type Output = Result<F::Output, Box<dyn Any + Send>>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: `CatchUnwind` uses structural pinning
+        let f = unsafe { Pin::map_unchecked_mut(self, |x| &mut x.0) };
+
+        panic::catch_unwind(AssertUnwindSafe(|| f.poll(cx)))?.map(Ok)
     }
 }
 
@@ -390,7 +429,20 @@ impl Retry {
 }
 
 struct Shared<T> {
+    metrics: InternalMetrics,
     state: Mutex<State<T>>,
+}
+
+impl<T: Channel> Shared<T> {
+    fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+        let queue_length = { self.state.lock().unwrap().next_batch.channel.remaining() };
+
+        self.metrics.sample().chain(Some(emit::metrics::Metric::new(
+            "queue_length",
+            emit::well_known::METRIC_AGG_LAST,
+            queue_length,
+        )))
+    }
 }
 
 struct State<T> {

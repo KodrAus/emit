@@ -85,7 +85,9 @@ async fn main() {
         ],
     );
 
-    emitter.blocking_flush(Duration::from_secs(30));
+    emit::info!("shutting down");
+
+    emitter.blocking_flush(Duration::from_secs(60));
     internal.blocking_flush(Duration::from_secs(5));
 }
 

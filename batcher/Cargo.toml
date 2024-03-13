@@ -3,6 +3,10 @@ name = "emit_batcher"
 version = "0.0.0"
 edition = "2021"
 
+[dependencies.emit]
+path = "../"
+default-features = false
+
 [dependencies.tokio]
 version = "1"
 features = ["rt-multi-thread", "sync", "time"]

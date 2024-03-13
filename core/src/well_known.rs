@@ -31,3 +31,4 @@ pub const METRIC_AGG_SUM: &'static str = "sum";
 pub const METRIC_AGG_COUNT: &'static str = "count";
 pub const METRIC_AGG_MIN: &'static str = "min";
 pub const METRIC_AGG_MAX: &'static str = "max";
+pub const METRIC_AGG_LAST: &'static str = "last";

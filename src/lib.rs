@@ -17,6 +17,7 @@ pub use emit_core::{
 pub mod frame;
 pub mod id;
 pub mod level;
+pub mod metrics;
 pub mod timer;
 
 pub use self::{

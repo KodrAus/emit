@@ -286,6 +286,24 @@ mod alloc_support {
             }
         }
     }
+
+    impl ToStr for String {
+        fn to_str(&self) -> Str {
+            Str::new_ref(self)
+        }
+    }
+
+    impl From<String> for Str<'static> {
+        fn from(value: String) -> Self {
+            Str::new_owned(value)
+        }
+    }
+
+    impl<'k> From<&'k String> for Str<'k> {
+        fn from(value: &'k String) -> Self {
+            Str::new_ref(value)
+        }
+    }
 }
 
 use crate::value::{FromValue, ToValue, Value};
