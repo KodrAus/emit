@@ -33,14 +33,14 @@ impl<'a> FromValue<'a> for Path<'a> {
 }
 
 impl Path<'static> {
-    pub const fn new(source: &'static str) -> Self {
-        Path(Str::new(source))
+    pub const fn new(path: &'static str) -> Self {
+        Path(Str::new(path))
     }
 }
 
 impl<'a> Path<'a> {
-    pub const fn new_ref(source: &'a str) -> Self {
-        Path(Str::new_ref(source))
+    pub const fn new_ref(path: &'a str) -> Self {
+        Path(Str::new_ref(path))
     }
 
     pub fn by_ref<'b>(&'b self) -> Path<'b> {
@@ -49,6 +49,10 @@ impl<'a> Path<'a> {
 
     pub fn segments(&self) -> impl Iterator<Item = &str> {
         self.0.as_str().split("::")
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        Some(self.0.as_str())
     }
 
     pub fn is_child_of<'b>(&self, other: &Path<'b>) -> bool {
@@ -78,7 +82,7 @@ impl<'a> fmt::Display for Path<'a> {
 }
 
 #[cfg(feature = "sval")]
-impl<'k> sval::Value for Path<'k> {
+impl<'a> sval::Value for Path<'a> {
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
         use sval_ref::ValueRef as _;
 
@@ -87,16 +91,47 @@ impl<'k> sval::Value for Path<'k> {
 }
 
 #[cfg(feature = "sval")]
-impl<'k> sval_ref::ValueRef<'k> for Path<'k> {
-    fn stream_ref<S: sval::Stream<'k> + ?Sized>(&self, stream: &mut S) -> sval::Result {
+impl<'a> sval_ref::ValueRef<'a> for Path<'a> {
+    fn stream_ref<S: sval::Stream<'a> + ?Sized>(&self, stream: &mut S) -> sval::Result {
         self.0.stream_ref(stream)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'k> serde::Serialize for Path<'k> {
+impl<'a> serde::Serialize for Path<'a> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "alloc")]
+mod alloc_support {
+    use alloc::{
+        borrow::{Cow, ToOwned},
+        boxed::Box,
+        string::String,
+    };
+
+    use super::*;
+
+    impl Path<'static> {
+        pub fn new_owned(path: impl Into<Box<str>>) -> Self {
+            Path(Str::new_owned(path))
+        }
+    }
+
+    impl<'a> Path<'a> {
+        pub fn new_cow_ref(path: Cow<'a, str>) -> Self {
+            Path(Str::new_cow_ref(path))
+        }
+
+        pub fn to_cow(&self) -> Cow<'static, str> {
+            self.0.to_cow()
+        }
+
+        pub fn to_owned(&self) -> Path<'static> {
+            Path(self.0.to_owned())
+        }
     }
 }
 

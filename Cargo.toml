@@ -9,10 +9,10 @@ members = [
     "targets/tracing",
     "targets/log",
     "macros",
-    "benchmark", "targets/tracing", "targets/log", "tests/tracing-test",
-]
-exclude = [
-    "tests/smoke-test"
+    "benchmark",
+    "tests/smoke-test",
+    "tests/tracing-test",
+    "tests/log-test",
 ]
 
 [package]
