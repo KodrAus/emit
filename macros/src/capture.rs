@@ -37,15 +37,15 @@ pub fn key_value_with_hook(
     captured: bool,
 ) -> TokenStream {
     let fn_name = match &*fv.key_name() {
-        emit_core::well_known::LVL_KEY => quote_spanned!(fv.span()=> __private_capture_as_level),
-        emit_core::well_known::ERR_KEY => quote_spanned!(fv.span()=> __private_capture_as_error),
-        emit_core::well_known::SPAN_ID_KEY => {
+        emit_core::well_known::KEY_LVL => quote_spanned!(fv.span()=> __private_capture_as_level),
+        emit_core::well_known::KEY_ERR => quote_spanned!(fv.span()=> __private_capture_as_error),
+        emit_core::well_known::KEY_SPAN_ID => {
             quote_spanned!(fv.span()=> __private_capture_as_span_id)
         }
-        emit_core::well_known::SPAN_PARENT_KEY => {
+        emit_core::well_known::KEY_SPAN_PARENT => {
             quote_spanned!(fv.span()=> __private_capture_as_span_id)
         }
-        emit_core::well_known::TRACE_ID_KEY => {
+        emit_core::well_known::KEY_TRACE_ID => {
             quote_spanned!(fv.span()=> __private_capture_as_trace_id)
         }
         // In other cases, capture using the default implementation

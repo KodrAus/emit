@@ -86,11 +86,11 @@ impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
             &LOG_RECORD_ATTRIBUTES_INDEX,
             |stream| {
                 stream_attributes(stream, &self.0, |k, v| match k.as_str() {
-                    emit::well_known::LVL_KEY => {
+                    emit::well_known::KEY_LVL => {
                         level = v.by_ref().cast::<emit::Level>().unwrap_or_default();
                         true
                     }
-                    emit::well_known::SPAN_ID_KEY => {
+                    emit::well_known::KEY_SPAN_ID => {
                         span_id = v
                             .by_ref()
                             .cast::<emit::SpanId>()
@@ -98,7 +98,7 @@ impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
                             .unwrap_or_default();
                         true
                     }
-                    emit::well_known::TRACE_ID_KEY => {
+                    emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
                             .cast::<emit::TraceId>()

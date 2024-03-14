@@ -4,7 +4,7 @@ use emit_core::{
     props::Props,
     runtime::InternalFilter,
     value::FromValue,
-    well_known::{LVL_DEBUG, LVL_ERROR, LVL_INFO, LVL_KEY, LVL_WARN},
+    well_known::{KEY_LVL, LVL_DEBUG, LVL_ERROR, LVL_INFO, LVL_WARN},
 };
 
 use crate::value::{ToValue, Value};
@@ -133,7 +133,7 @@ impl MinLevel {
 impl Filter for MinLevel {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
         evt.props()
-            .pull::<Level, _>(LVL_KEY)
+            .pull::<Level, _>(KEY_LVL)
             .unwrap_or(self.default)
             >= self.min
     }

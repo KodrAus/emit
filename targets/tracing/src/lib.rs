@@ -2,7 +2,7 @@
 
 use core::{fmt, ops::ControlFlow, time::Duration};
 
-use emit::well_known::{SPAN_ID_KEY, TRACE_ID_KEY};
+use emit::well_known::{KEY_SPAN_ID, KEY_TRACE_ID};
 
 pub fn ctxt<C: emit::Ctxt, S: tracing::Subscriber>(
     emit_ctxt: C,
@@ -34,8 +34,8 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
             None,
             tracing::field::FieldSet::new(
                 &[
-                    emit::well_known::TRACE_ID_KEY,
-                    emit::well_known::SPAN_ID_KEY,
+                    emit::well_known::KEY_TRACE_ID,
+                    emit::well_known::KEY_SPAN_ID,
                 ],
                 tracing_core::identify_callsite!(&CALLSITE),
             ),
@@ -45,30 +45,30 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
         static CALLSITE: tracing::callsite::DefaultCallsite =
             tracing::callsite::DefaultCallsite::new(&METADATA);
 
-        let tracing_id = if let Some(span_id) = props.pull::<emit::SpanId, _>(SPAN_ID_KEY) {
+        let tracing_id = if let Some(span_id) = props.pull::<emit::SpanId, _>(KEY_SPAN_ID) {
             let fields = tracing::field::FieldSet::new(
                 &[
-                    emit::well_known::TRACE_ID_KEY,
-                    emit::well_known::SPAN_ID_KEY,
+                    emit::well_known::KEY_TRACE_ID,
+                    emit::well_known::KEY_SPAN_ID,
                 ],
                 tracing_core::identify_callsite!(&CALLSITE),
             );
 
             let trace_id = props
-                .pull::<emit::TraceId, _>(TRACE_ID_KEY)
+                .pull::<emit::TraceId, _>(KEY_TRACE_ID)
                 .map(tracing::field::display);
 
             let id = self.1.new_span(&tracing::span::Attributes::new(
                 &METADATA,
                 &fields.value_set(&[
                     (
-                        &fields.field(emit::well_known::TRACE_ID_KEY).unwrap(),
+                        &fields.field(emit::well_known::KEY_TRACE_ID).unwrap(),
                         trace_id
                             .as_ref()
                             .map(|trace_id| trace_id as &dyn tracing::Value),
                     ),
                     (
-                        &fields.field(emit::well_known::SPAN_ID_KEY).unwrap(),
+                        &fields.field(emit::well_known::KEY_SPAN_ID).unwrap(),
                         Some(&tracing::field::display(span_id) as &dyn tracing::Value),
                     ),
                 ]),
@@ -126,8 +126,8 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
             None,
             tracing::field::FieldSet::new(
                 &[
-                    emit::well_known::MSG_KEY,
-                    emit::well_known::TPL_KEY,
+                    emit::well_known::KEY_MSG,
+                    emit::well_known::KEY_TPL,
                     "props",
                 ],
                 tracing_core::identify_callsite!(&CALLSITE),
@@ -140,8 +140,8 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
 
         let fields = tracing::field::FieldSet::new(
             &[
-                emit::well_known::MSG_KEY,
-                emit::well_known::TPL_KEY,
+                emit::well_known::KEY_MSG,
+                emit::well_known::KEY_TPL,
                 "props",
             ],
             tracing_core::identify_callsite!(&CALLSITE),
@@ -150,18 +150,18 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
         let msg = tracing::field::display(evt.msg());
         let tpl = tracing::field::display(evt.tpl());
         let props = tracing::field::debug(DebugProps(evt.props().filter(|k, _| {
-            k != emit::well_known::TRACE_ID_KEY && k != emit::well_known::SPAN_ID_KEY
+            k != emit::well_known::KEY_TRACE_ID && k != emit::well_known::KEY_SPAN_ID
         })));
 
         self.0.event(&tracing::Event::new(
             &METADATA,
             &fields.value_set(&[
                 (
-                    &fields.field(emit::well_known::MSG_KEY).unwrap(),
+                    &fields.field(emit::well_known::KEY_MSG).unwrap(),
                     Some(&msg as &dyn tracing::Value),
                 ),
                 (
-                    &fields.field(emit::well_known::TPL_KEY).unwrap(),
+                    &fields.field(emit::well_known::KEY_TPL).unwrap(),
                     Some(&tpl as &dyn tracing::Value),
                 ),
                 (

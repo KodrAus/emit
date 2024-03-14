@@ -14,7 +14,7 @@ impl emit::Emitter for GlobalLogger {
                 .level(
                     match evt
                         .props()
-                        .pull::<emit::Level, _>(emit::well_known::LVL_KEY)
+                        .pull::<emit::Level, _>(emit::well_known::KEY_LVL)
                     {
                         Some(emit::Level::Debug) => log::Level::Debug,
                         Some(emit::Level::Info) => log::Level::Info,

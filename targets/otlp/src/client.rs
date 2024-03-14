@@ -1,4 +1,4 @@
-use emit::{well_known::MODULE_KEY, Props};
+use emit::{well_known::KEY_MODULE, Props};
 use emit_batcher::BatchError;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 

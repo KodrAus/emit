@@ -3,7 +3,7 @@
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write};
 
-use emit::well_known::{LVL_KEY, METRIC_NAME_KEY, METRIC_VALUE_KEY, SPAN_ID_KEY, TRACE_ID_KEY};
+use emit::well_known::{KEY_LVL, KEY_METRIC_NAME, KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_TRACE_ID};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -190,8 +190,8 @@ fn print_event(
     buf: &mut Buffer,
     evt: &emit::event::Event<impl emit::props::Props>,
 ) {
-    if let Some(span_id) = evt.props().pull::<emit::SpanId, _>(SPAN_ID_KEY) {
-        if let Some(trace_id) = evt.props().pull::<emit::TraceId, _>(TRACE_ID_KEY) {
+    if let Some(span_id) = evt.props().pull::<emit::SpanId, _>(KEY_SPAN_ID) {
+        if let Some(trace_id) = evt.props().pull::<emit::TraceId, _>(KEY_TRACE_ID) {
             let trace_id_color = trace_id_color(&trace_id);
 
             write_fg(buf, "▓", Color::Ansi256(trace_id_color));
@@ -228,12 +228,12 @@ fn print_event(
         write_plain(buf, " ");
     }
 
-    if evt.props().get(METRIC_NAME_KEY).is_some() {
+    if evt.props().get(KEY_METRIC_NAME).is_some() {
         write_fg(buf, "metric", METRIC);
         write_plain(buf, " ");
     }
 
-    if let Some(level) = evt.props().pull::<emit::Level, _>(LVL_KEY) {
+    if let Some(level) = evt.props().pull::<emit::Level, _>(KEY_LVL) {
         if let Some(level_color) = level_color(&level) {
             write_fg(buf, level, Color::Ansi256(level_color));
             write_plain(buf, " ");
@@ -245,7 +245,7 @@ fn print_event(
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");
 
-    if let Some(value) = evt.props().get(METRIC_VALUE_KEY) {
+    if let Some(value) = evt.props().get(KEY_METRIC_VALUE) {
         let buckets = value.as_f64_sequence();
 
         if !buckets.is_empty() {

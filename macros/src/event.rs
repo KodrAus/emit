@@ -70,7 +70,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 pub fn push_event_props(props: &mut Props, level: Option<TokenStream>) -> Result<(), syn::Error> {
     // Add the level as a property
     if let Some(level_value) = level {
-        let level_ident = Ident::new(emit_core::well_known::LVL_KEY, Span::call_site());
+        let level_ident = Ident::new(emit_core::well_known::KEY_LVL, Span::call_site());
 
         props.push(
             &syn::parse2::<FieldValue>(quote!(#level_ident: emit::Level::#level_value))?,

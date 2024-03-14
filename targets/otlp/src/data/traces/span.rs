@@ -103,11 +103,11 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
             &SPAN_ATTRIBUTES_INDEX,
             |stream| {
                 stream_attributes(stream, &self.props, |k, v| match k.as_str() {
-                    emit::well_known::LVL_KEY => {
+                    emit::well_known::KEY_LVL => {
                         level = v.by_ref().cast().unwrap_or_default();
                         true
                     }
-                    emit::well_known::SPAN_ID_KEY => {
+                    emit::well_known::KEY_SPAN_ID => {
                         span_id = v
                             .by_ref()
                             .cast::<emit::SpanId>()
@@ -115,7 +115,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                             .unwrap_or_default();
                         true
                     }
-                    emit::well_known::SPAN_PARENT_KEY => {
+                    emit::well_known::KEY_SPAN_PARENT => {
                         parent_span_id = v
                             .by_ref()
                             .cast::<emit::SpanId>()
@@ -123,7 +123,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                             .unwrap_or_default();
                         true
                     }
-                    emit::well_known::TRACE_ID_KEY => {
+                    emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
                             .cast::<emit::TraceId>()
@@ -131,7 +131,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                             .unwrap_or_default();
                         true
                     }
-                    emit::well_known::ERR_KEY => {
+                    emit::well_known::KEY_ERR => {
                         has_err = true;
                         false
                     }
@@ -168,7 +168,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
         }
 
         if has_err {
-            let err = self.props.get(emit::well_known::ERR_KEY).unwrap();
+            let err = self.props.get(emit::well_known::KEY_ERR).unwrap();
 
             stream_field(
                 &mut *stream,

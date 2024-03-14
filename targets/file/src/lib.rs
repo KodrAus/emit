@@ -13,7 +13,7 @@ use std::{
 };
 
 use emit::{
-    well_known::{MODULE_KEY, MSG_KEY, TPL_KEY, TS_KEY, TS_START_KEY},
+    well_known::{KEY_MODULE, KEY_MSG, KEY_TPL, KEY_TS, KEY_TS_START},
     Props,
 };
 use emit_batcher::BatchError;
@@ -173,23 +173,23 @@ impl<'a, P: emit::Props> sval::Value for EventValue<'a, P> {
             let range = extent.as_range();
 
             if range.end != range.start {
-                stream.record_value_begin(None, &sval::Label::new(TS_START_KEY))?;
+                stream.record_value_begin(None, &sval::Label::new(KEY_TS_START))?;
                 sval::stream_display(&mut *stream, &range.start)?;
-                stream.record_value_end(None, &sval::Label::new(TS_START_KEY))?;
+                stream.record_value_end(None, &sval::Label::new(KEY_TS_START))?;
             }
 
-            stream.record_value_begin(None, &sval::Label::new(TS_KEY))?;
+            stream.record_value_begin(None, &sval::Label::new(KEY_TS))?;
             sval::stream_display(&mut *stream, &range.end)?;
-            stream.record_value_end(None, &sval::Label::new(TS_KEY))?;
+            stream.record_value_end(None, &sval::Label::new(KEY_TS))?;
         }
 
-        stream.record_value_begin(None, &sval::Label::new(MSG_KEY))?;
+        stream.record_value_begin(None, &sval::Label::new(KEY_MSG))?;
         sval::stream_display(&mut *stream, self.0.msg())?;
-        stream.record_value_end(None, &sval::Label::new(MSG_KEY))?;
+        stream.record_value_end(None, &sval::Label::new(KEY_MSG))?;
 
-        stream.record_value_begin(None, &sval::Label::new(TPL_KEY))?;
+        stream.record_value_begin(None, &sval::Label::new(KEY_TPL))?;
         sval::stream_display(&mut *stream, self.0.tpl())?;
-        stream.record_value_end(None, &sval::Label::new(TPL_KEY))?;
+        stream.record_value_end(None, &sval::Label::new(KEY_TPL))?;
 
         self.0.props().for_each(|k, v| {
             match (|| {

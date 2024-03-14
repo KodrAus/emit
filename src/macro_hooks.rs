@@ -19,7 +19,7 @@ use emit_core::{
 use emit_core::{
     empty::Empty,
     event::Event,
-    well_known::{SPAN_ID_KEY, SPAN_PARENT_KEY, TRACE_ID_KEY},
+    well_known::{KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID},
 };
 
 #[cfg(feature = "alloc")]
@@ -542,15 +542,15 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
             mut for_each: F,
         ) -> ControlFlow<()> {
             if let Some(ref trace_id) = self.trace_id {
-                for_each(TRACE_ID_KEY.to_str(), trace_id.to_value())?;
+                for_each(KEY_TRACE_ID.to_str(), trace_id.to_value())?;
             }
 
             if let Some(ref span_parent) = self.span_parent {
-                for_each(SPAN_PARENT_KEY.to_str(), span_parent.to_value())?;
+                for_each(KEY_SPAN_PARENT.to_str(), span_parent.to_value())?;
             }
 
             if let Some(ref span_id) = self.span_id {
-                for_each(SPAN_ID_KEY.to_str(), span_id.to_value())?;
+                for_each(KEY_SPAN_ID.to_str(), span_id.to_value())?;
             }
 
             ControlFlow::Continue(())
@@ -561,8 +561,8 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
     let mut span_parent = None;
 
     rt.with_current(|current| {
-        trace_id = current.pull::<TraceId, _>(TRACE_ID_KEY);
-        span_parent = current.pull::<SpanId, _>(SPAN_ID_KEY);
+        trace_id = current.pull::<TraceId, _>(KEY_TRACE_ID);
+        span_parent = current.pull::<SpanId, _>(KEY_SPAN_ID);
     });
 
     trace_id = trace_id.or_else(|| rt.gen_trace_id());

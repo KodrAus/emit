@@ -7,8 +7,8 @@ pub use self::{export_metrics_service::*, metric::*};
 
 use emit::{
     well_known::{
-        METRIC_AGG_COUNT, METRIC_AGG_KEY, METRIC_AGG_SUM, METRIC_NAME_KEY, METRIC_UNIT_KEY,
-        METRIC_VALUE_KEY,
+        KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_UNIT, KEY_METRIC_VALUE, METRIC_AGG_COUNT,
+        METRIC_AGG_SUM,
     },
     Props,
 };
@@ -32,7 +32,7 @@ impl Default for EventEncoder {
 
 fn default_name_formatter() -> Box<MessageFormatter> {
     Box::new(|evt, f| {
-        if let Some(name) = evt.props().get(METRIC_NAME_KEY) {
+        if let Some(name) = evt.props().get(KEY_METRIC_NAME) {
             write!(f, "{}", name)
         } else {
             write!(f, "{}", evt.msg())
@@ -46,8 +46,8 @@ impl EventEncoder {
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
         if let (Some(metric_value), metric_agg) = (
-            evt.props().get(METRIC_VALUE_KEY),
-            evt.props().get(METRIC_AGG_KEY),
+            evt.props().get(KEY_METRIC_VALUE),
+            evt.props().get(KEY_METRIC_AGG),
         ) {
             let (start_time_unix_nano, time_unix_nano, aggregation_temporality) = evt
                 .extent()
@@ -71,7 +71,7 @@ impl EventEncoder {
                 evt,
             };
 
-            let metric_unit = evt.props().get(METRIC_UNIT_KEY);
+            let metric_unit = evt.props().get(KEY_METRIC_UNIT);
 
             let protobuf = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
                 Some(METRIC_AGG_SUM) => sval_protobuf::stream_to_protobuf(Metric::<_, _, _> {

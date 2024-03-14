@@ -6,7 +6,7 @@ use emit_core::{
     props::Props,
     str::{Str, ToStr},
     value::{ToValue, Value},
-    well_known::{METRIC_AGG_KEY, METRIC_NAME_KEY, METRIC_VALUE_KEY},
+    well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE},
 };
 
 pub struct Metric<'a, P = Empty> {
@@ -96,9 +96,9 @@ impl<'a, P: Props> Props for Metric<'a, P> {
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for_each(METRIC_NAME_KEY.to_str(), self.name.to_value())?;
-        for_each(METRIC_AGG_KEY.to_str(), self.agg.to_value())?;
-        for_each(METRIC_VALUE_KEY.to_str(), self.value.by_ref())?;
+        for_each(KEY_METRIC_NAME.to_str(), self.name.to_value())?;
+        for_each(KEY_METRIC_AGG.to_str(), self.agg.to_value())?;
+        for_each(KEY_METRIC_VALUE.to_str(), self.value.by_ref())?;
 
         self.props.for_each(for_each)
     }

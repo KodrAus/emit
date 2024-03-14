@@ -1,12 +1,12 @@
 // Event
-pub const MODULE_KEY: &'static str = "module";
-pub const TS_KEY: &'static str = "ts";
-pub const TS_START_KEY: &'static str = "ts_start";
-pub const TPL_KEY: &'static str = "tpl";
-pub const MSG_KEY: &'static str = "msg";
+pub const KEY_MODULE: &'static str = "module";
+pub const KEY_TS: &'static str = "ts";
+pub const KEY_TS_START: &'static str = "ts_start";
+pub const KEY_TPL: &'static str = "tpl";
+pub const KEY_MSG: &'static str = "msg";
 
 // Level
-pub const LVL_KEY: &'static str = "lvl";
+pub const KEY_LVL: &'static str = "lvl";
 
 pub const LVL_DEBUG: &'static str = "debug";
 pub const LVL_INFO: &'static str = "info";
@@ -14,18 +14,18 @@ pub const LVL_WARN: &'static str = "warn";
 pub const LVL_ERROR: &'static str = "error";
 
 // Error
-pub const ERR_KEY: &'static str = "err";
+pub const KEY_ERR: &'static str = "err";
 
 // Trace
-pub const TRACE_ID_KEY: &'static str = "trace_id";
-pub const SPAN_ID_KEY: &'static str = "span_id";
-pub const SPAN_PARENT_KEY: &'static str = "span_parent";
+pub const KEY_TRACE_ID: &'static str = "trace_id";
+pub const KEY_SPAN_ID: &'static str = "span_id";
+pub const KEY_SPAN_PARENT: &'static str = "span_parent";
 
 // Metrics
-pub const METRIC_NAME_KEY: &'static str = "metric_name";
-pub const METRIC_AGG_KEY: &'static str = "metric_agg";
-pub const METRIC_VALUE_KEY: &'static str = "metric_value";
-pub const METRIC_UNIT_KEY: &'static str = "metric_unit";
+pub const KEY_METRIC_NAME: &'static str = "metric_name";
+pub const KEY_METRIC_AGG: &'static str = "metric_agg";
+pub const KEY_METRIC_VALUE: &'static str = "metric_value";
+pub const KEY_METRIC_UNIT: &'static str = "metric_unit";
 
 pub const METRIC_AGG_SUM: &'static str = "sum";
 pub const METRIC_AGG_COUNT: &'static str = "count";
