@@ -46,7 +46,7 @@ impl Parse for Args {
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut arg, &mut rt, &mut when],
+            [&mut module, &mut arg, &mut rt, &mut when],
         )?;
 
         Ok(Args {
