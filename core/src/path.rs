@@ -1,7 +1,7 @@
 use core::fmt;
 
 use crate::{
-    str::{Str, ToStr},
+    str::Str,
     value::{FromValue, ToValue, Value},
 };
 
@@ -17,18 +17,6 @@ impl<'a> From<&'a str> for Path<'a> {
 impl<'a> From<Str<'a>> for Path<'a> {
     fn from(value: Str<'a>) -> Self {
         Path(value)
-    }
-}
-
-impl<'a> From<Path<'a>> for Str<'a> {
-    fn from(value: Path<'a>) -> Self {
-        value.0
-    }
-}
-
-impl<'a> ToStr for Path<'a> {
-    fn to_str(&self) -> Str {
-        self.0.by_ref()
     }
 }
 

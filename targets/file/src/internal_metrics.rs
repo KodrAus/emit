@@ -46,37 +46,37 @@ impl InternalMetrics {
 
         [
             emit::metrics::Metric::new(
-                "file_set_read_failed",
+                stringify!(file_set_read_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_set_read_failed.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_open_failed",
+                stringify!(file_open_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_open_failed.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_create",
+                stringify!(file_create),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_create.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_create_failed",
+                stringify!(file_create_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_create_failed.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_write_failed",
+                stringify!(file_write_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_write_failed.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_delete",
+                stringify!(file_delete),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_delete.sample(),
             ),
             emit::metrics::Metric::new(
-                "file_delete_failed",
+                stringify!(file_delete_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_delete_failed.sample(),
             ),

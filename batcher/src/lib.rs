@@ -299,7 +299,7 @@ impl<T: Channel> Receiver<T> {
                     {
                         Ok(on_batch) => match CatchUnwind(AssertUnwindSafe(on_batch)).await {
                             Ok(Ok(())) => {
-                                self.shared.metrics.queue_batch.increment();
+                                self.shared.metrics.queue_batch_processed.increment();
                             }
                             Ok(Err(BatchError { retryable })) => {
                                 self.shared.metrics.queue_batch_failed.increment();
