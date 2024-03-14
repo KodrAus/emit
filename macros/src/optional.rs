@@ -21,8 +21,14 @@ pub fn rename_hook_tokens(opts: RenameHookTokens) -> Result<TokenStream, syn::Er
         target: "values in `emit` macros",
         args: opts.args,
         expr: opts.expr,
-        predicate: |ident: &str| ident.starts_with("__private_optional"),
+        predicate: |ident: &str| {
+            ident.starts_with("__private_optional") || ident.starts_with("__private_captured")
+        },
         to: move |_: &Args, ident: &Ident, args: &Punctuated<Expr, Comma>| {
+            if ident.to_string().starts_with("__private_captured") {
+                return None;
+            }
+
             let ident = Ident::new(&ident.to_string().replace("some", "option"), ident.span());
 
             Some((quote!(#ident), quote!(#args)))

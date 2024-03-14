@@ -13,7 +13,10 @@ extern crate serde_derive;
 
 #[tokio::main]
 async fn main() {
-    println!("{}", emit::format!("Hello, {x}", x: "world"));
+    println!(
+        "{}",
+        emit::format!("Hello, {x}", #[emit::optional] x: Some("world"))
+    );
 
     let internal = emit::setup().to(emit_term::stdout()).init_internal();
 
