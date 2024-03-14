@@ -240,7 +240,7 @@ fn print_event(
         }
     }
 
-    write_fg(buf, format_args!("{} ", evt.source()), MODULE);
+    write_fg(buf, format_args!("{} ", evt.module()), MODULE);
 
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");

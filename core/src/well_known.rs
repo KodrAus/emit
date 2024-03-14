@@ -1,4 +1,5 @@
 // Event
+pub const MODULE_KEY: &'static str = "module";
 pub const TS_KEY: &'static str = "ts";
 pub const TS_START_KEY: &'static str = "ts_start";
 pub const TPL_KEY: &'static str = "tpl";
@@ -13,8 +14,6 @@ pub const LVL_WARN: &'static str = "warn";
 pub const LVL_ERR: &'static str = "err";
 
 pub const ERR_KEY: &'static str = "err";
-
-pub const MODULE_KEY: &'static str = "module";
 
 // Trace
 pub const TRACE_ID_KEY: &'static str = "trace_id";

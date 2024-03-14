@@ -1,7 +1,7 @@
 use core::fmt;
 
 use crate::{
-    str::Str,
+    str::{Str, ToStr},
     value::{FromValue, ToValue, Value},
 };
 
@@ -17,6 +17,18 @@ impl<'a> From<&'a str> for Path<'a> {
 impl<'a> From<Str<'a>> for Path<'a> {
     fn from(value: Str<'a>) -> Self {
         Path(value)
+    }
+}
+
+impl<'a> From<Path<'a>> for Str<'a> {
+    fn from(value: Path<'a>) -> Self {
+        value.0
+    }
+}
+
+impl<'a> ToStr for Path<'a> {
+    fn to_str(&self) -> Str {
+        self.0.by_ref()
     }
 }
 
@@ -74,6 +86,29 @@ impl<'a> fmt::Debug for Path<'a> {
 impl<'a> fmt::Display for Path<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'k> sval::Value for Path<'k> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        use sval_ref::ValueRef as _;
+
+        self.0.stream_ref(stream)
+    }
+}
+
+#[cfg(feature = "sval")]
+impl<'k> sval_ref::ValueRef<'k> for Path<'k> {
+    fn stream_ref<S: sval::Stream<'k> + ?Sized>(&self, stream: &mut S) -> sval::Result {
+        self.0.stream_ref(stream)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'k> serde::Serialize for Path<'k> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
     }
 }
 

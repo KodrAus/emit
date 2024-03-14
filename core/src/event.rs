@@ -10,7 +10,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Event<'a, P> {
     // "where"
-    source: Path<'a>,
+    module: Path<'a>,
     // "when"
     extent: Option<Extent>,
     // "what"
@@ -22,21 +22,21 @@ pub struct Event<'a, P> {
 
 impl<'a, P> Event<'a, P> {
     pub fn new(
-        source: impl Into<Path<'a>>,
+        module: impl Into<Path<'a>>,
         extent: impl ToExtent,
         tpl: Template<'a>,
         props: P,
     ) -> Self {
         Event {
-            source: source.into(),
+            module: module.into(),
             extent: extent.to_extent(),
             tpl,
             props,
         }
     }
 
-    pub fn source(&self) -> &Path<'a> {
-        &self.source
+    pub fn module(&self) -> &Path<'a> {
+        &self.module
     }
 
     pub fn extent(&self) -> Option<&Extent> {
@@ -59,7 +59,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
         Event {
-            source: self.source.by_ref(),
+            module: self.module.by_ref(),
             extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: self.props.by_ref(),
@@ -68,7 +68,7 @@ impl<'a, P: Props> Event<'a, P> {
 
     pub fn erase<'b>(&'b self) -> Event<'b, &'b dyn ErasedProps> {
         Event {
-            source: self.source.by_ref(),
+            module: self.module.by_ref(),
             extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
             props: &self.props,
@@ -96,7 +96,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 
         let mut f = f.debug_struct("Event");
 
-        f.field("source", &self.source);
+        f.field("module", &self.module);
         f.field("extent", &self.extent);
         f.field("msg", &self.msg());
         f.field("tpl", &self.tpl);

@@ -4,7 +4,7 @@ use syn::{parse::Parse, FieldValue};
 use crate::{
     args::{self, Arg},
     event::push_event_props,
-    source::source_tokens,
+    module::module_tokens,
     template,
 };
 
@@ -15,6 +15,7 @@ pub struct ExpandTokens {
 
 struct Args {
     rt: TokenStream,
+    module: TokenStream,
     props: TokenStream,
     extent: TokenStream,
     when: TokenStream,
@@ -22,6 +23,11 @@ struct Args {
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut module = Arg::token_stream("module", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
         let mut extent = Arg::token_stream("extent", |fv| {
             let expr = &fv.expr;
 
@@ -45,10 +51,11 @@ impl Parse for Args {
 
         args::set_from_field_values(
             input.parse_terminated(FieldValue::parse, Token![,])?.iter(),
-            [&mut extent, &mut props, &mut rt, &mut when],
+            [&mut module, &mut extent, &mut props, &mut rt, &mut when],
         )?;
 
         Ok(Args {
+            module: module.take().unwrap_or_else(|| module_tokens()),
             extent: extent.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             props: props.take().unwrap_or_else(|| quote!(emit::empty::Empty)),
             rt: rt.take_rt()?,
@@ -70,7 +77,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let extent_tokens = args.extent;
     let rt_tokens = args.rt;
     let when_tokens = args.when;
-    let source_tokens = source_tokens();
+    let module_tokens = args.module;
 
     let template_tokens = template.template_tokens();
 
@@ -79,7 +86,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             (#(#props_match_binding_tokens),*) => {
                 emit::__private::__private_emit(
                     #rt_tokens,
-                    #source_tokens,
+                    #module_tokens,
                     #when_tokens,
                     #extent_tokens,
                     #template_tokens,

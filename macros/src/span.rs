@@ -7,8 +7,8 @@ use syn::{
 use crate::{
     args::{self, Arg},
     event::push_event_props,
+    module::module_tokens,
     props::Props,
-    source::source_tokens,
     template::{self, Template},
 };
 
@@ -20,6 +20,7 @@ pub struct ExpandTokens {
 
 struct Args {
     rt: TokenStream,
+    module: TokenStream,
     when: TokenStream,
     arg: Option<Ident>,
 }
@@ -27,6 +28,11 @@ struct Args {
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut rt = Arg::token_stream("rt", |fv| {
+            let expr = &fv.expr;
+
+            Ok(quote!(#expr))
+        });
+        let mut module = Arg::token_stream("module", |fv| {
             let expr = &fv.expr;
 
             Ok(quote!(#expr))
@@ -45,6 +51,7 @@ impl Parse for Args {
 
         Ok(Args {
             rt: rt.take_rt()?,
+            module: module.take().unwrap_or_else(|| module_tokens()),
             when: when.take_when(),
             arg: arg.take(),
         })
@@ -61,6 +68,8 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         .arg
         .unwrap_or_else(|| Ident::new("__span", Span::call_site()));
 
+    let module_tokens = args.module;
+
     let mut item = syn::parse2::<Stmt>(opts.item)?;
     match &mut item {
         // A synchronous function
@@ -73,6 +82,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         })) => {
             **block = syn::parse2::<Block>(inject_sync(
                 &args.rt,
+                &module_tokens,
                 &args.when,
                 &template,
                 &ctxt_props,
@@ -85,6 +95,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         Stmt::Expr(Expr::Block(ExprBlock { block, .. }), _) => {
             *block = syn::parse2::<Block>(inject_sync(
                 &args.rt,
+                &module_tokens,
                 &args.when,
                 &template,
                 &ctxt_props,
@@ -103,6 +114,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         })) => {
             **block = syn::parse2::<Block>(inject_async(
                 &args.rt,
+                &module_tokens,
                 &args.when,
                 &template,
                 &ctxt_props,
@@ -115,6 +127,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         Stmt::Expr(Expr::Async(ExprAsync { block, .. }), _) => {
             *block = syn::parse2::<Block>(inject_async(
                 &args.rt,
+                &module_tokens,
                 &args.when,
                 &template,
                 &ctxt_props,
@@ -131,6 +144,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
 
 fn inject_sync(
     rt_tokens: &TokenStream,
+    module_tokens: &TokenStream,
     when_tokens: &TokenStream,
     template: &Template,
     ctxt_props: &Props,
@@ -141,16 +155,15 @@ fn inject_sync(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
-    let source_tokens = source_tokens();
 
     quote!({
-        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #source_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (mut __ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #module_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
         let __ctxt_guard = __ctxt.enter();
 
         let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
             emit::__private::__private_emit(
                 #rt_tokens,
-                #source_tokens,
+                #module_tokens,
                 Some(emit::always()),
                 extent,
                 #template_tokens,
@@ -164,6 +177,7 @@ fn inject_sync(
 
 fn inject_async(
     rt_tokens: &TokenStream,
+    module_tokens: &TokenStream,
     when_tokens: &TokenStream,
     template: &Template,
     ctxt_props: &Props,
@@ -174,16 +188,15 @@ fn inject_async(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
-    let source_tokens = source_tokens();
 
     quote!({
-        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #source_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #module_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
 
         __ctxt.with_future(async {
             let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
                 emit::__private::__private_emit(
                     #rt_tokens,
-                    #source_tokens,
+                    #module_tokens,
                     Some(emit::always()),
                     extent,
                     #template_tokens,
