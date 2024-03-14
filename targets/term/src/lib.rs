@@ -245,19 +245,18 @@ fn print_event(
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");
 
-    let _ = out.print(&buf);
-
     if let Some(value) = evt.props().get(METRIC_VALUE_KEY) {
         let buckets = value.as_f64_sequence();
 
         if !buckets.is_empty() {
-            buf.clear();
-            print_histogram(out, buf, &buckets);
+            write_histogram(buf, &buckets);
         }
     }
+
+    let _ = out.print(&buf);
 }
 
-fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64]) {
+fn write_histogram(buf: &mut Buffer, buckets: &[f64]) {
     const BLOCKS: [&'static str; 7] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇"];
 
     let mut bucket_min = f64::NAN;
@@ -275,7 +274,6 @@ fn print_histogram(out: &BufferWriter, buf: &mut Buffer, buckets: &[f64]) {
     }
 
     let _ = buf.write(b"\n");
-    let _ = out.print(buf);
 }
 
 struct Writer<'a> {
