@@ -5,6 +5,7 @@ use crate::{
     path::Path,
     props::{ByRef, ErasedProps, Props},
     template::{Render, Template},
+    timestamp::Timestamp,
 };
 
 #[derive(Clone)]
@@ -24,13 +25,13 @@ impl<'a, P> Event<'a, P> {
     pub fn new(
         module: impl Into<Path<'a>>,
         extent: impl ToExtent,
-        tpl: Template<'a>,
+        tpl: impl Into<Template<'a>>,
         props: P,
     ) -> Self {
         Event {
             module: module.into(),
             extent: extent.to_extent(),
-            tpl,
+            tpl: tpl.into(),
             props,
         }
     }
@@ -41,6 +42,17 @@ impl<'a, P> Event<'a, P> {
 
     pub fn extent(&self) -> Option<&Extent> {
         self.extent.as_ref()
+    }
+
+    pub fn ts(&self) -> Option<&Timestamp> {
+        self.extent.as_ref().map(|extent| extent.as_point())
+    }
+
+    pub fn ts_start(&self) -> Option<&Timestamp> {
+        self.extent
+            .as_ref()
+            .and_then(|extent| extent.as_span())
+            .map(|span| &span.start)
     }
 
     pub fn tpl(&self) -> &Template<'a> {

@@ -11,8 +11,9 @@ pub const LVL_KEY: &'static str = "lvl";
 pub const LVL_DEBUG: &'static str = "debug";
 pub const LVL_INFO: &'static str = "info";
 pub const LVL_WARN: &'static str = "warn";
-pub const LVL_ERR: &'static str = "err";
+pub const LVL_ERROR: &'static str = "error";
 
+// Error
 pub const ERR_KEY: &'static str = "err";
 
 // Trace

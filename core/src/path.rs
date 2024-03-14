@@ -106,11 +106,7 @@ impl<'a> serde::Serialize for Path<'a> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::{
-        borrow::{Cow, ToOwned},
-        boxed::Box,
-        string::String,
-    };
+    use alloc::{borrow::Cow, boxed::Box};
 
     use super::*;
 
@@ -125,7 +121,7 @@ mod alloc_support {
             Path(Str::new_cow_ref(path))
         }
 
-        pub fn to_cow(&self) -> Cow<'static, str> {
+        pub fn to_cow(&self) -> Cow<'a, str> {
             self.0.to_cow()
         }
 

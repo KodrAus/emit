@@ -190,8 +190,8 @@ fn print_event(
     buf: &mut Buffer,
     evt: &emit::event::Event<impl emit::props::Props>,
 ) {
-    if let Some(span_id) = evt.props().pull::<_, emit::SpanId>(SPAN_ID_KEY) {
-        if let Some(trace_id) = evt.props().pull::<_, emit::TraceId>(TRACE_ID_KEY) {
+    if let Some(span_id) = evt.props().pull::<emit::SpanId, _>(SPAN_ID_KEY) {
+        if let Some(trace_id) = evt.props().pull::<emit::TraceId, _>(TRACE_ID_KEY) {
             let trace_id_color = trace_id_color(&trace_id);
 
             write_fg(buf, "▓", Color::Ansi256(trace_id_color));
@@ -233,7 +233,7 @@ fn print_event(
         write_plain(buf, " ");
     }
 
-    if let Some(level) = evt.props().pull::<_, emit::Level>(LVL_KEY) {
+    if let Some(level) = evt.props().pull::<emit::Level, _>(LVL_KEY) {
         if let Some(level_color) = level_color(&level) {
             write_fg(buf, level, Color::Ansi256(level_color));
             write_plain(buf, " ");

@@ -30,6 +30,14 @@ impl Extent {
         &self.range.end
     }
 
+    pub fn as_span(&self) -> Option<&Range<Timestamp>> {
+        if self.is_span() {
+            Some(&self.range)
+        } else {
+            None
+        }
+    }
+
     pub fn len(&self) -> Option<Duration> {
         if self.is_span() {
             self.range.end.duration_since(self.range.start)

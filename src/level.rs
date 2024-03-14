@@ -1,6 +1,10 @@
 use emit_core::{
-    event::Event, filter::Filter, props::Props, runtime::InternalFilter, value::FromValue,
-    well_known::LVL_KEY,
+    event::Event,
+    filter::Filter,
+    props::Props,
+    runtime::InternalFilter,
+    value::FromValue,
+    well_known::{LVL_DEBUG, LVL_ERROR, LVL_INFO, LVL_KEY, LVL_WARN},
 };
 
 use crate::value::{ToValue, Value};
@@ -23,10 +27,10 @@ impl fmt::Debug for Level {
 impl fmt::Display for Level {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Level::Info => "info",
-            Level::Error => "error",
-            Level::Warn => "warn",
-            Level::Debug => "debug",
+            Level::Info => LVL_INFO,
+            Level::Error => LVL_ERROR,
+            Level::Warn => LVL_WARN,
+            Level::Debug => LVL_DEBUG,
         })
     }
 }
@@ -129,7 +133,7 @@ impl MinLevel {
 impl Filter for MinLevel {
     fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
         evt.props()
-            .pull::<_, Level>(LVL_KEY)
+            .pull::<Level, _>(LVL_KEY)
             .unwrap_or(self.default)
             >= self.min
     }

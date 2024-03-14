@@ -158,8 +158,8 @@ async fn send_request(
             let mut span_id = None;
 
             rt.ctxt().with_current(|props| {
-                trace_id = props.pull::<_, emit::TraceId>(TRACE_ID_KEY);
-                span_id = props.pull::<_, emit::SpanId>(SPAN_ID_KEY);
+                trace_id = props.pull::<emit::TraceId, _>(TRACE_ID_KEY);
+                span_id = props.pull::<emit::SpanId, _>(SPAN_ID_KEY);
             });
 
             req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {

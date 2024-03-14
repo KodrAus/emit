@@ -39,37 +39,21 @@ impl<'v> Value<'v> {
     pub fn parse<T: FromStr>(&self) -> Option<T> {
         struct Extract<T>(Option<T>);
 
-        impl<'v, T: FromStr> Visitor<'v> for Extract<T> {
-            fn visit_any(&mut self, _: Value) {}
-
-            fn visit_str(&mut self, value: &str) {
-                self.0 = value.parse().ok();
-            }
-        }
-
-        let mut visitor = Extract(None);
-        self.visit(&mut visitor);
-        visitor.0
-    }
-
-    pub fn visit(&self, visitor: impl Visitor<'v>) {
-        struct Visit<V>(V);
-
-        impl<'v, V: Visitor<'v>> value_bag::visit::Visit<'v> for Visit<V> {
-            fn visit_any(&mut self, value: value_bag::ValueBag) -> Result<(), value_bag::Error> {
-                self.0.visit_any(Value(value));
-
+        impl<'v, T: FromStr> value_bag::visit::Visit<'v> for Extract<T> {
+            fn visit_any(&mut self, _: value_bag::ValueBag) -> Result<(), value_bag::Error> {
                 Ok(())
             }
 
             fn visit_str(&mut self, value: &str) -> Result<(), value_bag::Error> {
-                self.0.visit_str(value);
+                self.0 = value.parse().ok();
 
                 Ok(())
             }
         }
 
-        let _ = self.0.visit(Visit(visitor));
+        let mut visitor = Extract(None);
+        let _ = self.0.visit(&mut visitor);
+        visitor.0
     }
 
     pub fn to_borrowed_str(&self) -> Option<&'v str> {
@@ -90,32 +74,6 @@ impl<'v> Value<'v> {
 
     pub fn to_i64(&self) -> Option<i64> {
         self.0.to_i64()
-    }
-}
-
-pub trait Visitor<'v> {
-    fn visit_any(&mut self, value: Value);
-
-    fn visit_str(&mut self, value: &str) {
-        self.visit_any(Value::from(value))
-    }
-
-    fn visit_f64(&mut self, value: f64) {
-        self.visit_any(Value::from(value))
-    }
-}
-
-impl<'a, 'v, V: Visitor<'v> + ?Sized> Visitor<'v> for &'a mut V {
-    fn visit_any(&mut self, value: Value) {
-        (**self).visit_any(value)
-    }
-
-    fn visit_str(&mut self, value: &str) {
-        (**self).visit_str(value)
-    }
-
-    fn visit_f64(&mut self, value: f64) {
-        (**self).visit_f64(value)
     }
 }
 

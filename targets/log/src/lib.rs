@@ -14,7 +14,7 @@ impl emit::Emitter for GlobalLogger {
                 .level(
                     match evt
                         .props()
-                        .pull::<_, emit::Level>(emit::well_known::LVL_KEY)
+                        .pull::<emit::Level, _>(emit::well_known::LVL_KEY)
                     {
                         Some(emit::Level::Debug) => log::Level::Debug,
                         Some(emit::Level::Info) => log::Level::Info,
@@ -29,7 +29,7 @@ impl emit::Emitter for GlobalLogger {
         );
     }
 
-    fn blocking_flush(&self, timeout: Duration) {
+    fn blocking_flush(&self, _: Duration) {
         // NOTE: Doesn't respect the timeout
         log::logger().flush();
     }

@@ -50,7 +50,7 @@ pub trait Props {
         ByRef(self)
     }
 
-    fn pull<'kv, K: ToStr, V: FromValue<'kv>>(&'kv self, key: K) -> Option<V> {
+    fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
         self.get(key).and_then(|v| v.cast())
     }
 }
@@ -65,6 +65,10 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
 
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         (**self).get(key)
+    }
+
+    fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
+        (**self).pull(key)
     }
 }
 

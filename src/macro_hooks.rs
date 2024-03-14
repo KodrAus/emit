@@ -561,8 +561,8 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
     let mut span_parent = None;
 
     rt.with_current(|current| {
-        trace_id = current.pull::<_, TraceId>(TRACE_ID_KEY);
-        span_parent = current.pull::<_, SpanId>(SPAN_ID_KEY);
+        trace_id = current.pull::<TraceId, _>(TRACE_ID_KEY);
+        span_parent = current.pull::<SpanId, _>(SPAN_ID_KEY);
     });
 
     trace_id = trace_id.or_else(|| rt.gen_trace_id());

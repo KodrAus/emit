@@ -44,6 +44,12 @@ impl<'a> fmt::Display for Template<'a> {
     }
 }
 
+impl<'a> From<&'a [Part<'a>]> for Template<'a> {
+    fn from(value: &'a [Part<'a>]) -> Self {
+        Template::new_ref(value)
+    }
+}
+
 impl Template<'static> {
     pub fn new(parts: &'static [Part<'static>]) -> Self {
         Template(TemplateKind::Parts(parts))
