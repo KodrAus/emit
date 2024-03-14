@@ -126,8 +126,6 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
             None,
             tracing::field::FieldSet::new(
                 &[
-                    emit::well_known::TS_KEY,
-                    emit::well_known::TS_START_KEY,
                     emit::well_known::MSG_KEY,
                     emit::well_known::TPL_KEY,
                     "props",
@@ -142,27 +140,12 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
 
         let fields = tracing::field::FieldSet::new(
             &[
-                emit::well_known::TS_KEY,
-                emit::well_known::TS_START_KEY,
                 emit::well_known::MSG_KEY,
                 emit::well_known::TPL_KEY,
                 "props",
             ],
             tracing_core::identify_callsite!(&CALLSITE),
         );
-
-        let mut ts = None;
-        let mut ts_start = None;
-
-        if let Some(extent) = evt.extent() {
-            let range = extent.as_range();
-
-            ts = Some(tracing::field::display(range.end));
-
-            if extent.is_span() {
-                ts_start = Some(tracing::field::display(range.start));
-            }
-        }
 
         let msg = tracing::field::display(evt.msg());
         let tpl = tracing::field::display(evt.tpl());
@@ -173,16 +156,6 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
         self.0.event(&tracing::Event::new(
             &METADATA,
             &fields.value_set(&[
-                (
-                    &fields.field(emit::well_known::TS_KEY).unwrap(),
-                    ts.as_ref().map(|ts| ts as &dyn tracing::Value),
-                ),
-                (
-                    &fields.field(emit::well_known::TS_START_KEY).unwrap(),
-                    ts_start
-                        .as_ref()
-                        .map(|ts_start| ts_start as &dyn tracing::Value),
-                ),
                 (
                     &fields.field(emit::well_known::MSG_KEY).unwrap(),
                     Some(&msg as &dyn tracing::Value),
