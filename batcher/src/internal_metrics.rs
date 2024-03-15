@@ -27,7 +27,7 @@ impl Counter {
 }
 
 impl InternalMetrics {
-    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             queue_overflow,
             queue_batch_processed,
@@ -38,29 +38,44 @@ impl InternalMetrics {
 
         [
             emit::metrics::Metric::new(
+                "emit_batcher",
+                emit::empty::Empty,
                 stringify!(queue_overflow),
                 emit::well_known::METRIC_AGG_COUNT,
                 queue_overflow.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_batcher",
+                emit::empty::Empty,
                 stringify!(queue_batch_processed),
                 emit::well_known::METRIC_AGG_COUNT,
                 queue_batch_processed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_batcher",
+                emit::empty::Empty,
                 stringify!(queue_batch_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 queue_batch_failed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_batcher",
+                emit::empty::Empty,
                 stringify!(queue_batch_panicked),
                 emit::well_known::METRIC_AGG_COUNT,
                 queue_batch_panicked.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_batcher",
+                emit::empty::Empty,
                 stringify!(queue_batch_retry),
                 emit::well_known::METRIC_AGG_COUNT,
                 queue_batch_retry.sample(),
+                emit::empty::Empty,
             ),
         ]
         .into_iter()

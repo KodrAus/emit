@@ -51,7 +51,7 @@ async fn main() {
             .unwrap())
         .and_to(emit_term::stdout())
         .and_to(
-            emit::level::min_level(emit::Level::Warn).wrap(
+            emit::level::min_level(emit::Level::Warn).wrap_emitter(
                 emit_file::set("./target/logs/log.txt")
                     .reuse_files(true)
                     .roll_by_minute()

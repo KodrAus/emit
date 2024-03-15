@@ -1,15 +1,11 @@
 use core::ops::ControlFlow;
 
 use emit_core::{
-    empty::Empty,
-    extent::{Extent, ToExtent},
-    props::Props,
-    str::{Str, ToStr},
-    value::{ToValue, Value},
-    well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE},
+    empty::Empty, extent::{Extent, ToExtent}, path::Path, props::Props, str::{Str, ToStr}, value::{ToValue, Value}, well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE}
 };
 
-pub struct Metric<'a, P = Empty> {
+pub struct Metric<'a, P> {
+    module: Path<'a>,
     extent: Option<Extent>,
     name: Str<'a>,
     agg: Str<'a>,
@@ -17,23 +13,34 @@ pub struct Metric<'a, P = Empty> {
     props: P,
 }
 
-impl<'a> Metric<'a> {
+impl<'a, P> Metric<'a, P> {
     pub fn new(
+        module: impl Into<Path<'a>>,
+        extent: impl ToExtent,
         name: impl Into<Str<'a>>,
         agg: impl Into<Str<'a>>,
         value: impl Into<Value<'a>>,
+        props: P,
     ) -> Self {
         Metric {
-            extent: None,
+            module: module.into(),
+            extent: extent.to_extent(),
             name: name.into(),
             agg: agg.into(),
             value: value.into(),
-            props: Empty,
+            props,
         }
     }
-}
 
-impl<'a, P> Metric<'a, P> {
+    pub fn module(&self) -> &Path<'a> {
+        &self.module
+    }
+
+    pub fn with_module(mut self, module: impl Into<Path<'a>>) -> Self {
+        self.module = module.into();
+        self
+    }
+
     pub fn name(&self) -> &Str<'a> {
         &self.name
     }
@@ -76,11 +83,36 @@ impl<'a, P> Metric<'a, P> {
 
     pub fn with_props<U>(self, props: U) -> Metric<'a, U> {
         Metric {
+            module: self.module,
             extent: self.extent,
             name: self.name,
             agg: self.agg,
             value: self.value,
             props,
+        }
+    }
+}
+
+impl<'a, P: Props> Metric<'a, P> {
+    pub fn by_ref<'b>(&'b self) -> Metric<'b, ByRef<'b, P>> {
+        Metric {
+            module: self.module.by_ref(),
+            extent: self.extent.clone(),
+            name: self.name.by_ref(),
+            agg: self.agg.by_ref(),
+            value: self.value.by_ref(),
+            props: self.props.by_ref(),
+        }
+    }
+
+    pub fn erase<'b>(&'b self) -> Metric<'b, &'b dyn ErasedProps> {
+        Metric {
+            module: self.module.by_ref(),
+            extent: self.extent.clone(),
+            name: self.name.by_ref(),
+            agg: self.agg.by_ref(),
+            value: self.value.by_ref(),
+            props: &self.props,
         }
     }
 }

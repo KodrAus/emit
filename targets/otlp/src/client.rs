@@ -23,14 +23,10 @@ pub struct Otlp {
 impl Otlp {
     pub fn sample_metrics<'a>(
         &'a self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'a {
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'a {
         self.sender
             .sample_metrics()
-            .map(|metric| {
-                let name = format!("otlp_{}", metric.name());
-
-                metric.with_name(name)
-            })
+            .map(|metric| metric.with_module("emit_otlp"))
             .chain(self.metrics.sample())
     }
 }

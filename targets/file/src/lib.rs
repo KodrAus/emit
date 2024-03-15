@@ -120,14 +120,10 @@ pub struct FileSet {
 impl FileSet {
     pub fn sample_metrics<'a>(
         &'a self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'a {
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'a {
         self.sender
             .sample_metrics()
-            .map(|metric| {
-                let name = format!("file_{}", metric.name());
-
-                metric.with_name(name)
-            })
+            .map(|metric| metric.with_module("emit_file"))
             .chain(self.metrics.sample())
     }
 }

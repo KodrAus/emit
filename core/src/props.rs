@@ -29,6 +29,30 @@ pub trait Props {
         value
     }
 
+    fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
+        self.get(key).and_then(|v| v.cast())
+    }
+
+    fn count(&self) -> usize {
+        let mut count = 0;
+
+        self.for_each(|_, _| {
+            count += 1;
+
+            ControlFlow::Continue(())
+        });
+
+        count
+    }
+
+    fn is_unique(&self) -> bool {
+        false
+    }
+
+    fn is_sorted(&self) -> bool {
+        false
+    }
+
     fn chain<U: Props>(self, other: U) -> Chain<Self, U>
     where
         Self: Sized,
@@ -50,8 +74,14 @@ pub trait Props {
         ByRef(self)
     }
 
-    fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
-        self.get(key).and_then(|v| v.cast())
+    #[cfg(feature = "alloc")]
+    fn dedup(self) -> Dedup<Self>
+    where
+        Self: Sized,
+    {
+        Dedup {
+            src: self,
+        }
     }
 }
 
@@ -65,6 +95,10 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
 
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         (**self).get(key)
+    }
+
+    fn count(&self) -> usize {
+        (**self).count()
     }
 
     fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
@@ -101,6 +135,18 @@ impl<K: ToStr, V: ToValue> Props for (K, V) {
     ) -> ControlFlow<()> {
         for_each(self.0.to_str(), self.1.to_value())
     }
+
+    fn count(&self) -> usize {
+        1
+    }
+
+    fn is_sorted(&self) -> bool {
+        true
+    }
+
+    fn is_unique(&self) -> bool {
+        true
+    }
 }
 
 impl<P: Props> Props for [P] {
@@ -114,6 +160,10 @@ impl<P: Props> Props for [P] {
 
         ControlFlow::Continue(())
     }
+
+    fn count(&self) -> usize {
+        self.iter().map(|props| props.count()).sum()
+    }
 }
 
 impl<T, const N: usize> Props for [T; N]
@@ -125,6 +175,10 @@ where
         for_each: F,
     ) -> ControlFlow<()> {
         (self as &[_]).for_each(for_each)
+    }
+
+    fn count(&self) -> usize {
+        (self as &[_]).count()
     }
 }
 
@@ -148,6 +202,18 @@ where
     fn get<'v, Q: ToStr>(&'v self, key: Q) -> Option<Value<'v>> {
         self.get(key.to_str().as_ref()).map(|v| v.to_value())
     }
+
+    fn count(&self) -> usize {
+        self.len()
+    }
+
+    fn is_unique(&self) -> bool {
+        true
+    }
+
+    fn is_sorted(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(feature = "std")]
@@ -170,6 +236,14 @@ where
     fn get<'v, Q: ToStr>(&'v self, key: Q) -> Option<Value<'v>> {
         self.get(key.to_str().as_ref()).map(|v| v.to_value())
     }
+
+    fn count(&self) -> usize {
+        self.len()
+    }
+
+    fn is_unique(&self) -> bool {
+        true
+    }
 }
 
 impl Props for Empty {
@@ -178,6 +252,10 @@ impl Props for Empty {
         _: F,
     ) -> ControlFlow<()> {
         ControlFlow::Continue(())
+    }
+
+    fn count(&self) -> usize {
+        0
     }
 }
 
@@ -201,6 +279,11 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
+        if self.first.is_sorted() && self.second.is_sorted() {
+            // Use a joining strategy that yields from `first` until `second` is more recent
+            todo!()
+        }
+
         self.first.for_each(&mut for_each)?;
         self.second.for_each(for_each)
     }
@@ -209,6 +292,14 @@ impl<A: Props, B: Props> Props for Chain<A, B> {
         let key = key.borrow();
 
         self.first.get(key).or_else(|| self.second.get(key))
+    }
+
+    fn count(&self) -> usize {
+        self.first.count() + self.second.count()
+    }
+
+    fn is_sorted(&self) -> bool {
+        self.first.is_sorted() && self.second.is_sorted()
     }
 }
 
@@ -220,6 +311,10 @@ impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
         for_each: F,
     ) -> ControlFlow<()> {
         self.0.for_each(for_each)
+    }
+
+    fn count(&self) -> usize {
+        self.0.count()
     }
 }
 
@@ -252,6 +347,55 @@ impl<T: Props, F: Fn(Str, Value) -> bool> Props for Filter<T, F> {
     }
 }
 
+#[cfg(feature = "alloc")]
+mod alloc_support {
+    use super::*;
+
+    pub struct Dedup<P> {
+        pub(super) src: P,
+    }
+
+    impl<P: Props> Props for Dedup<P> {
+        fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+            &'kv self,
+            mut for_each: F,
+        ) -> ControlFlow<()> {
+            if self.src.is_unique() {
+                return self.src.for_each(for_each);
+            }
+
+            let mut seen = alloc::collections::BTreeMap::new();
+
+            self.src.for_each(|key, value| {
+                seen.entry(key).or_insert(value);
+
+                ControlFlow::Continue(())
+            });
+
+            for (key, value) in seen {
+                for_each(key, value)?;
+            }
+
+            ControlFlow::Continue(())
+        }
+
+        fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
+            self.src.get(key)
+        }
+
+        fn is_unique(&self) -> bool {
+            true
+        }
+
+        fn is_sorted(&self) -> bool {
+            true
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+pub use alloc_support::*;
+
 mod internal {
     use core::ops::ControlFlow;
 
@@ -264,6 +408,12 @@ mod internal {
         ) -> ControlFlow<()>;
 
         fn dispatch_get(&self, key: Str) -> Option<Value>;
+        
+        fn dispatch_count(&self) -> usize;
+
+        fn dispatch_is_unique(&self) -> bool;
+
+        fn dispatch_is_sorted(&self) -> bool;
     }
 
     pub trait SealedProps {
@@ -292,6 +442,18 @@ impl<P: Props> internal::DispatchProps for P {
     fn dispatch_get<'v>(&'v self, key: Str) -> Option<Value<'v>> {
         self.get(key)
     }
+
+    fn dispatch_count(&self) -> usize {
+        self.count()
+    }
+
+    fn dispatch_is_sorted(&self) -> bool {
+        self.is_sorted()
+    }
+
+    fn dispatch_is_unique(&self) -> bool {
+        self.is_unique()
+    }
 }
 
 impl<'a> Props for dyn ErasedProps + 'a {
@@ -304,5 +466,17 @@ impl<'a> Props for dyn ErasedProps + 'a {
 
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         self.erase_props().0.dispatch_get(key.to_str())
+    }
+
+    fn count(&self) -> usize {
+        self.erase_props().0.dispatch_count()
+    }
+
+    fn is_sorted(&self) -> bool {
+        self.erase_props().0.dispatch_is_sorted()
+    }
+
+    fn is_unique(&self) -> bool {
+        self.erase_props().0.dispatch_is_unique()
     }
 }

@@ -33,7 +33,7 @@ impl Counter {
 }
 
 impl InternalMetrics {
-    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             file_set_read_failed,
             file_open_failed,
@@ -46,39 +46,60 @@ impl InternalMetrics {
 
         [
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_set_read_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_set_read_failed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_open_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_open_failed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_create),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_create.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_create_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_create_failed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_write_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_write_failed.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_delete),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_delete.sample(),
+                emit::empty::Empty,
             ),
             emit::metrics::Metric::new(
+                "emit_file",
+                emit::empty::Empty,
                 stringify!(file_delete_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 file_delete_failed.sample(),
+                emit::empty::Empty,
             ),
         ]
         .into_iter()

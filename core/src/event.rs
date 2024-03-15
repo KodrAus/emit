@@ -40,8 +40,18 @@ impl<'a, P> Event<'a, P> {
         &self.module
     }
 
+    pub fn with_module(mut self, module: impl Into<Path<'a>>) -> Self {
+        self.module = module.into();
+        self
+    }
+
     pub fn extent(&self) -> Option<&Extent> {
         self.extent.as_ref()
+    }
+
+    pub fn with_extent(mut self, extent: impl ToExtent) -> Self {
+        self.extent = extent.to_extent();
+        self
     }
 
     pub fn ts(&self) -> Option<&Timestamp> {
@@ -59,8 +69,17 @@ impl<'a, P> Event<'a, P> {
         &self.tpl
     }
 
+    pub fn with_tpl(mut self, tpl: impl Into<Template<'a>>) -> Self {
+        self.tpl = tpl.into();
+        self
+    }
+
     pub fn props(&self) -> &P {
         &self.props
+    }
+
+    pub fn with_props<U>(self, props: U) -> Event<'a, U> {
+        Event { module: self.module, extent: self.extent, tpl: self.tpl, props }
     }
 }
 

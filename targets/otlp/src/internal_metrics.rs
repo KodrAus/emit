@@ -27,15 +27,18 @@ impl Counter {
 }
 
 impl InternalMetrics {
-    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static>> + 'static {
+    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             otlp_event_discarded,
         } = self;
 
         [emit::metrics::Metric::new(
+            "emit_otlp",
+            emit::empty::Empty,
             stringify!(otlp_event_discarded),
             emit::well_known::METRIC_AGG_COUNT,
             otlp_event_discarded.sample(),
+            emit::empty::Empty,
         )]
         .into_iter()
     }

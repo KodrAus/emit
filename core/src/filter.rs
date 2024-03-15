@@ -30,7 +30,7 @@ pub trait Filter {
         }
     }
 
-    fn wrap<E>(self, emitter: E) -> Wrap<Self, E>
+    fn wrap_emitter<E>(self, emitter: E) -> Wrap<Self, E>
     where
         Self: Sized,
     {
@@ -109,7 +109,7 @@ impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
 }
 
 pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> Wrap<F, E> {
-    filter.wrap(emitter)
+    filter.wrap_emitter(emitter)
 }
 
 pub struct And<T, U> {

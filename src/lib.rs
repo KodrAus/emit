@@ -13,7 +13,7 @@ The core event model includes:
 
 - **Module (`module`):** The name of the component that triggered the event.
 - **Extent (`ts_start`..`ts`):** The point or span of time for which the event is relevant.
-- **Template (`tpl`):** A human-readable description of the event that its properties may be interpolated into.
+- **Template (`tpl` and `msg`):** A human-readable description of the event that its properties may be interpolated into.
 - **Properties (`props`):** The payload of the event.
 
 ## Extensions
@@ -37,6 +37,14 @@ Emit doesn't hard-code common observability concepts into events. It instead rel
 - **Metric aggregation (`metric_agg`):** The aggregation over the data source the metric sample was computed with.
 - **Metric value (`metric_value`):** The sampled value from the metric source.
 - **Metric unit (`metric_unit`):** The unit the sampled value is in.
+
+## Extents
+
+The extent of an event is the time for which the event is relevant. This may be a single point in time if the event was triggered by something happening, or a span of time if the event was started at some point and completed at another.
+
+## Templates
+
+The primary source of information in an event is its _template_. A template is a human-readable description of an event with holes to interpolate values into. Templates are responsible for both capturing ambient state to package with an event, and to format that state into a human-readable representation. Templates are also useful as low-cardinality identifiers for a specific shaped event, independent of the properties captured by any particular instance of it.
 */
 
 #![cfg_attr(not(feature = "std"), no_std)]
