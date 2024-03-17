@@ -33,7 +33,9 @@ impl Counter {
 }
 
 impl InternalMetrics {
-    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    pub fn sample(
+        &self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             file_set_read_failed,
             file_open_failed,

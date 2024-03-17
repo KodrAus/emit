@@ -79,9 +79,7 @@ pub trait Props {
     where
         Self: Sized,
     {
-        Dedup {
-            src: self,
-        }
+        Dedup { src: self }
     }
 }
 
@@ -408,7 +406,7 @@ mod internal {
         ) -> ControlFlow<()>;
 
         fn dispatch_get(&self, key: Str) -> Option<Value>;
-        
+
         fn dispatch_count(&self) -> usize;
 
         fn dispatch_is_unique(&self) -> bool;

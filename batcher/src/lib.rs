@@ -149,7 +149,9 @@ impl<T: Channel> Sender<T> {
         }
     }
 
-    pub fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    pub fn sample_metrics(
+        &self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         self.shared.sample_metrics()
     }
 }
@@ -350,7 +352,9 @@ impl<T: Channel> Receiver<T> {
         }
     }
 
-    pub fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    pub fn sample_metrics(
+        &self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         self.shared.sample_metrics()
     }
 }
@@ -434,7 +438,9 @@ struct Shared<T> {
 }
 
 impl<T: Channel> Shared<T> {
-    fn sample_metrics(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    fn sample_metrics(
+        &self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let queue_length = { self.state.lock().unwrap().next_batch.channel.remaining() };
 
         self.metrics.sample().chain(Some(emit::metrics::Metric::new(

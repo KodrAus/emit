@@ -27,7 +27,9 @@ impl Counter {
 }
 
 impl InternalMetrics {
-    pub fn sample(&self) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    pub fn sample(
+        &self,
+    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             otlp_event_discarded,
         } = self;

@@ -79,7 +79,12 @@ impl<'a, P> Event<'a, P> {
     }
 
     pub fn with_props<U>(self, props: U) -> Event<'a, U> {
-        Event { module: self.module, extent: self.extent, tpl: self.tpl, props }
+        Event {
+            module: self.module,
+            extent: self.extent,
+            tpl: self.tpl,
+            props,
+        }
     }
 }
 
