@@ -1,10 +1,9 @@
 use core::ops::ControlFlow;
 
 use emit_core::{
-    empty::Empty,
     extent::{Extent, ToExtent},
     path::Path,
-    props::Props,
+    props::{ByRef, ErasedProps, Props},
     str::{Str, ToStr},
     value::{ToValue, Value},
     well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE},

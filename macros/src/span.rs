@@ -192,7 +192,7 @@ fn inject_async(
     quote!({
         let (__ctxt, __timer) = emit::__private::__private_push_span_ctxt(#rt_tokens, #module_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
 
-        __ctxt.with_future(async {
+        __ctxt.in_future(async {
             let #span_arg = emit::__private::__private_begin_span(__timer, |extent| {
                 emit::__private::__private_emit(
                     #rt_tokens,

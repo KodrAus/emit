@@ -279,12 +279,6 @@ impl<W: Write> Write for WriteBraced<W> {
 
 pub struct Braced<'a, P>(Render<'a, P>);
 
-impl<'a> Template<'a> {
-    pub fn braced<'b>(&'b self) -> Braced<'b, Empty> {
-        self.render(Empty).braced()
-    }
-}
-
 impl<'a, P> Render<'a, P> {
     pub fn braced(self) -> Braced<'a, P> {
         Braced(self)

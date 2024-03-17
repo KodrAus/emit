@@ -58,13 +58,13 @@ impl<C: Ctxt> Frame<C> {
     }
 
     #[track_caller]
-    pub fn with<R>(mut self, scope: impl FnOnce() -> R) -> R {
+    pub fn call<R>(mut self, scope: impl FnOnce() -> R) -> R {
         let __guard = self.enter();
         scope()
     }
 
     #[track_caller]
-    pub fn with_future<F>(self, future: F) -> FrameFuture<C, F> {
+    pub fn in_future<F>(self, future: F) -> FrameFuture<C, F> {
         FrameFuture {
             frame: self,
             future,

@@ -92,7 +92,7 @@ pub use emit_macros::*;
 
 #[doc(inline)]
 pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, props, rng, runtime, str, template,
+    clock, ctxt, emitter, empty, event, extent, filter, path, props, rng, runtime, str, template,
     timestamp, value, well_known,
 };
 

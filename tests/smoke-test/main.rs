@@ -27,11 +27,11 @@ async fn main() {
                     emit_otlp::http("http://localhost:4318/v1/logs")
                         .headers([("X-ApiKey", "1234")]),
                 )
-                .body(|evt, f| write!(f, "{}", evt.tpl().braced())),
+                .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
             )
             .traces(
                 emit_otlp::traces_http_proto("http://localhost:4318/v1/traces")
-                    .name(|evt, f| write!(f, "{}", evt.tpl().braced())),
+                    .name(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
             )
             .metrics(emit_otlp::metrics_http_proto(
                 "http://localhost:4318/v1/metrics",
@@ -102,7 +102,7 @@ async fn in_trace() -> Result<(), io::Error> {
         futures.push(tokio::spawn(
             emit::runtime::shared()
                 .current_frame()
-                .with_future(in_ctxt(i)),
+                .in_future(in_ctxt(i)),
         ));
     }
 
