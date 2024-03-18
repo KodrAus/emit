@@ -11,7 +11,7 @@ fn main() {
 
     let _ = emit::setup()
         .to(emit_tracing::emitter(subscriber.clone()))
-        .map_with(|ctxt| emit_tracing::ctxt(ctxt, subscriber.clone()))
+        .map_ctxt(|ctxt| emit_tracing::ctxt(ctxt, subscriber.clone()))
         .init();
 
     #[emit::span("My span")]

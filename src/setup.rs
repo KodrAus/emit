@@ -43,7 +43,7 @@ impl Setup {
 
 impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, TCtxt> {
     #[must_use = "call `.init()` to finish setup"]
-    pub fn to<UEmitter: Emitter>(self, emitter: UEmitter) -> Setup<UEmitter, TFilter, TCtxt> {
+    pub fn emit_to<UEmitter: Emitter>(self, emitter: UEmitter) -> Setup<UEmitter, TFilter, TCtxt> {
         Setup {
             emitter,
             filter: self.filter,
@@ -53,7 +53,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
     }
 
     #[must_use = "call `.init()` to finish setup"]
-    pub fn and_to<UEmitter: Emitter>(
+    pub fn and_emit_to<UEmitter: Emitter>(
         self,
         emitter: UEmitter,
     ) -> Setup<emitter::And<TEmitter, UEmitter>, TFilter, TCtxt> {
@@ -66,7 +66,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
     }
 
     #[must_use = "call `.init()` to finish setup"]
-    pub fn map_to<UEmitter: Emitter>(
+    pub fn map_emitter<UEmitter: Emitter>(
         self,
         map: impl FnOnce(TEmitter) -> UEmitter,
     ) -> Setup<UEmitter, TFilter, TCtxt> {
@@ -79,7 +79,17 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
     }
 
     #[must_use = "call `.init()` to finish setup"]
-    pub fn with<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TEmitter, TFilter, UCtxt> {
+    pub fn emit_when<UFilter: Filter>(self, filter: UFilter) -> Setup<TEmitter, UFilter, TCtxt> {
+        Setup {
+            emitter: self.emitter,
+            filter,
+            ctxt: self.ctxt,
+            platform: self.platform,
+        }
+    }
+
+    #[must_use = "call `.init()` to finish setup"]
+    pub fn with_ctxt<UCtxt: Ctxt>(self, ctxt: UCtxt) -> Setup<TEmitter, TFilter, UCtxt> {
         Setup {
             emitter: self.emitter,
             filter: self.filter,
@@ -89,7 +99,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
     }
 
     #[must_use = "call `.init()` to finish setup"]
-    pub fn map_with<UCtxt: Ctxt>(
+    pub fn map_ctxt<UCtxt: Ctxt>(
         self,
         map: impl FnOnce(TCtxt) -> UCtxt,
     ) -> Setup<TEmitter, TFilter, UCtxt> {

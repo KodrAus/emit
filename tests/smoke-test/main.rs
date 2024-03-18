@@ -18,39 +18,42 @@ async fn main() {
         emit::format!("Hello, {x}", #[emit::optional] x: Some("world"))
     );
 
-    let internal = emit::setup().to(emit_term::stdout()).init_internal();
+    let internal = emit::setup().emit_to(emit_term::stdout()).init_internal();
 
     let emitter = emit::setup()
-        .to(emit_otlp::new()
-            .logs(
-                emit_otlp::logs_proto(
-                    emit_otlp::http("http://localhost:4318/v1/logs")
-                        .headers([("X-ApiKey", "1234")]),
+        .emit_to(
+            emit_otlp::new()
+                .logs(
+                    emit_otlp::logs_proto(
+                        emit_otlp::http("http://localhost:4318/v1/logs")
+                            .headers([("X-ApiKey", "1234")]),
+                    )
+                    .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
                 )
-                .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
-            )
-            .traces(
-                emit_otlp::traces_http_proto("http://localhost:4318/v1/traces")
-                    .name(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
-            )
-            .metrics(emit_otlp::metrics_http_proto(
-                "http://localhost:4318/v1/metrics",
-            ))
-            .resource(emit::props! {
-                #[emit::key("service.name")]
-                service_name: "smoke-test-rs",
-                #[emit::key("telemetry.sdk.language")]
-                language: "rust",
-                #[emit::key("telemetry.sdk.name")]
-                sdk: "emit",
-                #[emit::key("telemetry.sdk.version")]
-                version: "0.1",
-            })
-            .scope("some-scope", "0.1", emit::props! {})
-            .spawn()
-            .unwrap())
-        .and_to(emit_term::stdout())
-        .and_to(
+                .traces(
+                    emit_otlp::traces_http_proto("http://localhost:4318/v1/traces").name(
+                        |evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced()),
+                    ),
+                )
+                .metrics(emit_otlp::metrics_http_proto(
+                    "http://localhost:4318/v1/metrics",
+                ))
+                .resource(emit::props! {
+                    #[emit::key("service.name")]
+                    service_name: "smoke-test-rs",
+                    #[emit::key("telemetry.sdk.language")]
+                    language: "rust",
+                    #[emit::key("telemetry.sdk.name")]
+                    sdk: "emit",
+                    #[emit::key("telemetry.sdk.version")]
+                    version: "0.1",
+                })
+                .scope("some-scope", "0.1", emit::props! {})
+                .spawn()
+                .unwrap(),
+        )
+        .and_emit_to(emit_term::stdout())
+        .and_emit_to(
             emit::level::min_level(emit::Level::Warn).wrap_emitter(
                 emit_file::set("./target/logs/log.txt")
                     .reuse_files(true)
