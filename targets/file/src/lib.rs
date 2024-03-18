@@ -120,7 +120,7 @@ pub struct FileSet {
 impl FileSet {
     pub fn sample_metrics<'a>(
         &'a self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'a {
+    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'a {
         self.sender
             .sample_metrics()
             .map(|metric| metric.with_module("emit_file"))
@@ -300,7 +300,7 @@ impl Worker {
                 span.complete(|extent| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
-                        when: emit::always(),
+                        when: emit::filter::always(),
                         extent,
                         "failed to create root directory {path}: {err}",
                         #[emit::as_debug]
@@ -412,7 +412,7 @@ impl Worker {
                 span.complete(|extent| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
-                        when: emit::always(),
+                        when: emit::filter::always(),
                         extent,
                         "failed to write event to {path}: {err}",
                         #[emit::as_debug]
@@ -437,7 +437,7 @@ impl Worker {
         span.complete(|extent| {
             emit::debug!(
                 rt: emit::runtime::internal(),
-                when: emit::always(),
+                when: emit::filter::always(),
                 extent,
                 "wrote {written_bytes} bytes to {path}",
                 written_bytes,

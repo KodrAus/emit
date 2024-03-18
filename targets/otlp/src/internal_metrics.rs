@@ -9,10 +9,6 @@ pub(crate) struct InternalMetrics {
 pub(crate) struct Counter(AtomicUsize);
 
 impl Counter {
-    pub const fn new() -> Self {
-        Counter(AtomicUsize::new(0))
-    }
-
     pub fn increment(&self) {
         self.increment_by(1);
     }
@@ -29,12 +25,12 @@ impl Counter {
 impl InternalMetrics {
     pub fn sample(
         &self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             otlp_event_discarded,
         } = self;
 
-        [emit::metrics::Metric::new(
+        [emit::metric::Metric::new(
             "emit_otlp",
             emit::empty::Empty,
             stringify!(otlp_event_discarded),

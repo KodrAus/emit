@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{cmp, fmt};
 
 #[cfg(feature = "alloc")]
 use alloc::boxed::Box;
@@ -109,6 +109,89 @@ impl<'a> ToValue for Template<'a> {
         }
     }
 }
+
+impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
+    fn eq(&self, other: &Template<'b>) -> bool {
+        // Optimize for the case where both templates are just text literals
+        if let (Some(a), Some(b)) = (self.as_str(), other.as_str()) {
+            return a == b;
+        }
+
+        let mut ai = 0;
+        let mut ati = 0;
+        let mut bi = 0;
+        let mut bti = 0;
+
+        let a = self.0.parts();
+        let b = other.0.parts();
+
+        while ai < a.len() && bi < b.len() {
+            let ap = &a[ai];
+            let bp = &b[bi];
+
+            match (&ap.0, &bp.0) {
+                (PartKind::Text { value: ref a }, PartKind::Text { value: ref b }) => {
+                    let a = a.as_str();
+                    let b = b.as_str();
+
+                    let at = &a[ati..];
+                    let bt = &b[bti..];
+
+                    let len = cmp::min(at.len(), bt.len());
+
+                    let at = &at[..len];
+                    let bt = &bt[..len];
+
+                    if at != bt {
+                        return false;
+                    }
+
+                    ati += len;
+                    bti += len;
+
+                    if ati == a.len() {
+                        ai += 1;
+                        ati = 0;
+                    }
+
+                    if bti == b.len() {
+                        bi += 1;
+                        bti = 0;
+                    }
+
+                    continue;
+                }
+                (PartKind::Hole { label: ref a, .. }, PartKind::Hole { label: ref b, .. }) => {
+                    if a != b {
+                        return false;
+                    }
+
+                    ai += 1;
+                    bi += 1;
+
+                    continue;
+                }
+                _ => return false,
+            }
+        }
+
+        // If there's any data left then it would have to be empty text
+        for part in a[ai..].iter().chain(b[bi..].iter()) {
+            let PartKind::Text { ref value } = part.0 else {
+                return false;
+            };
+
+            if !value.as_str().is_empty() {
+                return false;
+            }
+        }
+
+        // If all data was processed then the templates are equal
+        true
+    }
+}
+
+impl<'a> Eq for Template<'a> {}
 
 pub struct Render<'a, P> {
     tpl: Template<'a>,
@@ -488,5 +571,33 @@ mod alloc_support {
                 }),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn template_eq() {
+        let a = [
+            Part::text("a"),
+            Part::text("b"),
+            Part::hole("c"),
+            Part::text(""),
+            Part::text("de"),
+        ];
+        let a = Template::new_ref(&a);
+
+        let b = [
+            Part::text(""),
+            Part::text("ab"),
+            Part::hole("c"),
+            Part::text("de"),
+            Part::text(""),
+        ];
+        let b = Template::new_ref(&b);
+
+        assert_eq!(a, b);
     }
 }

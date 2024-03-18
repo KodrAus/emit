@@ -47,7 +47,14 @@ impl<'v> FromValue<'v> for TraceId {
 }
 
 impl TraceId {
-    pub fn new(v: NonZeroU128) -> Self {
+    pub fn random<R: Rng>(rng: R) -> Option<Self> {
+        let a = rng.gen_u64()? as u128;
+        let b = (rng.gen_u64()? as u128) << 64;
+
+        Some(TraceId::new(NonZeroU128::new(a | b)?))
+    }
+
+    pub const fn new(v: NonZeroU128) -> Self {
         TraceId(v)
     }
 
@@ -55,7 +62,7 @@ impl TraceId {
         Some(TraceId(NonZeroU128::new(v)?))
     }
 
-    pub fn to_u128(&self) -> u128 {
+    pub const fn to_u128(&self) -> u128 {
         self.0.get()
     }
 
@@ -148,7 +155,13 @@ impl<'v> FromValue<'v> for SpanId {
 }
 
 impl SpanId {
-    pub fn new(v: NonZeroU64) -> Self {
+    pub fn random<R: Rng>(rng: R) -> Option<Self> {
+        let a = rng.gen_u64()?;
+
+        Some(SpanId::new(NonZeroU64::new(a)?))
+    }
+
+    pub const fn new(v: NonZeroU64) -> Self {
         SpanId(v)
     }
 
@@ -156,7 +169,7 @@ impl SpanId {
         Some(SpanId(NonZeroU64::new(v)?))
     }
 
-    pub fn to_u64(&self) -> u64 {
+    pub const fn to_u64(&self) -> u64 {
         self.0.get()
     }
 
@@ -295,27 +308,6 @@ impl<const N: usize> fmt::Write for Buffer<N> {
         } else {
             Err(fmt::Error)
         }
-    }
-}
-
-pub trait IdRng {
-    fn gen_trace_id(&self) -> Option<TraceId>;
-
-    fn gen_span_id(&self) -> Option<SpanId>;
-}
-
-impl<T: Rng + ?Sized> IdRng for T {
-    fn gen_trace_id(&self) -> Option<TraceId> {
-        let a = self.gen_u64()? as u128;
-        let b = (self.gen_u64()? as u128) << 64;
-
-        Some(TraceId::new(NonZeroU128::new(a | b)?))
-    }
-
-    fn gen_span_id(&self) -> Option<SpanId> {
-        let a = self.gen_u64()?;
-
-        Some(SpanId::new(NonZeroU64::new(a)?))
     }
 }
 

@@ -23,16 +23,16 @@ use emit_core::{
 };
 
 #[cfg(feature = "alloc")]
-use crate::{frame::Frame, IdRng};
+use crate::frame::Frame;
 
 #[cfg(feature = "std")]
 use std::error::Error;
 
 use crate::{
     base_emit,
-    id::{SpanId, TraceId},
     template::{Formatter, Part},
     timer::TimerGuard,
+    trace::{SpanId, TraceId},
     Level, Str, Timer,
 };
 
@@ -501,6 +501,11 @@ impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
 }
 
 #[track_caller]
+pub fn __private_filter_span_complete() -> Option<impl Filter + Send + Sync + 'static> {
+    Some(crate::filter::always())
+}
+
+#[track_caller]
 pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
     source: impl Into<Path<'a>>,
@@ -565,8 +570,8 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
         span_parent = current.pull::<SpanId, _>(KEY_SPAN_ID);
     });
 
-    trace_id = trace_id.or_else(|| rt.gen_trace_id());
-    let span_id = rt.gen_span_id();
+    trace_id = trace_id.or_else(|| TraceId::random(rt));
+    let span_id = SpanId::random(rt);
 
     let trace_ctxt = TraceContext {
         trace_id,
@@ -583,11 +588,11 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
         ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),
     )) {
         (
-            Frame::new_push(Some(rt.ctxt()), trace_ctxt.chain(ctxt_props)),
+            Frame::push(Some(rt.ctxt()), trace_ctxt.chain(ctxt_props)),
             Some(timer),
         )
     } else {
-        (Frame::new_push(None, Empty), None)
+        (Frame::push(None, Empty), None)
     }
 }
 

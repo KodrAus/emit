@@ -10,7 +10,7 @@ use emit_core::{
 use crate::value::{ToValue, Value};
 use core::{fmt, str::FromStr};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {
     Debug,
     Info,

@@ -1,8 +1,6 @@
 mod export_metrics_service;
 mod metric;
 
-use std::ops::ControlFlow;
-
 pub use self::{export_metrics_service::*, metric::*};
 
 use emit::{
@@ -14,7 +12,6 @@ use emit::{
 };
 use emit_batcher::BatchError;
 use sval::Value;
-use sval_protobuf::buf::ProtoBuf;
 
 use super::{MessageFormatter, MessageRenderer, PreEncoded};
 

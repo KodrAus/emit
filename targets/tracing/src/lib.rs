@@ -172,7 +172,7 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
         ))
     }
 
-    fn blocking_flush(&self, timeout: Duration) {}
+    fn blocking_flush(&self, _: Duration) {}
 }
 
 struct DebugProps<P>(P);

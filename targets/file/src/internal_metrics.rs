@@ -35,7 +35,7 @@ impl Counter {
 impl InternalMetrics {
     pub fn sample(
         &self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             file_set_read_failed,
             file_open_failed,
@@ -47,7 +47,7 @@ impl InternalMetrics {
         } = self;
 
         [
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_set_read_failed),
@@ -55,7 +55,7 @@ impl InternalMetrics {
                 file_set_read_failed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_open_failed),
@@ -63,7 +63,7 @@ impl InternalMetrics {
                 file_open_failed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_create),
@@ -71,7 +71,7 @@ impl InternalMetrics {
                 file_create.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_create_failed),
@@ -79,7 +79,7 @@ impl InternalMetrics {
                 file_create_failed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_write_failed),
@@ -87,7 +87,7 @@ impl InternalMetrics {
                 file_write_failed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_delete),
@@ -95,7 +95,7 @@ impl InternalMetrics {
                 file_delete.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_file",
                 emit::empty::Empty,
                 stringify!(file_delete_failed),

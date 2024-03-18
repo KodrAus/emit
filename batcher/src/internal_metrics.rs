@@ -29,7 +29,7 @@ impl Counter {
 impl InternalMetrics {
     pub fn sample(
         &self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'static {
+    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
         let InternalMetrics {
             queue_overflow,
             queue_batch_processed,
@@ -39,7 +39,7 @@ impl InternalMetrics {
         } = self;
 
         [
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_batcher",
                 emit::empty::Empty,
                 stringify!(queue_overflow),
@@ -47,7 +47,7 @@ impl InternalMetrics {
                 queue_overflow.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_batcher",
                 emit::empty::Empty,
                 stringify!(queue_batch_processed),
@@ -55,7 +55,7 @@ impl InternalMetrics {
                 queue_batch_processed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_batcher",
                 emit::empty::Empty,
                 stringify!(queue_batch_failed),
@@ -63,7 +63,7 @@ impl InternalMetrics {
                 queue_batch_failed.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_batcher",
                 emit::empty::Empty,
                 stringify!(queue_batch_panicked),
@@ -71,7 +71,7 @@ impl InternalMetrics {
                 queue_batch_panicked.sample(),
                 emit::empty::Empty,
             ),
-            emit::metrics::Metric::new(
+            emit::metric::Metric::new(
                 "emit_batcher",
                 emit::empty::Empty,
                 stringify!(queue_batch_retry),

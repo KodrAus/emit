@@ -1,4 +1,3 @@
-use emit::{well_known::KEY_MODULE, Props};
 use emit_batcher::BatchError;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
@@ -23,7 +22,7 @@ pub struct Otlp {
 impl Otlp {
     pub fn sample_metrics<'a>(
         &'a self,
-    ) -> impl Iterator<Item = emit::metrics::Metric<'static, emit::empty::Empty>> + 'a {
+    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'a {
         self.sender
             .sample_metrics()
             .map(|metric| metric.with_module("emit_otlp"))
@@ -619,7 +618,7 @@ impl OtlpTransport {
                         span.complete(|extent| {
                             emit::debug!(
                                 rt: emit::runtime::internal(),
-                                when: emit::always(),
+                                when: emit::filter::always(),
                                 extent,
                                 "OTLP batch of {batch_size} events responded {status_code}",
                                 batch_size,
@@ -633,7 +632,7 @@ impl OtlpTransport {
                         span.complete(|extent| {
                             emit::warn!(
                                 rt: emit::runtime::internal(),
-                                when: emit::always(),
+                                when: emit::filter::always(),
                                 extent,
                                 "OTLP batch of {batch_size} events failed to send: {err}",
                                 batch_size,

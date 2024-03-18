@@ -97,10 +97,10 @@ pub use emit_core::{
 };
 
 pub mod frame;
-pub mod id;
 pub mod level;
-pub mod metrics;
+pub mod metric;
 pub mod timer;
+pub mod trace;
 
 pub use self::{
     clock::Clock,
@@ -108,9 +108,7 @@ pub use self::{
     emitter::Emitter,
     event::Event,
     extent::Extent,
-    filter::{always, Filter},
-    frame::FrameCtxt,
-    id::{IdRng, SpanId, TraceId},
+    filter::Filter,
     level::Level,
     props::Props,
     rng::Rng,
@@ -118,6 +116,7 @@ pub use self::{
     template::Template,
     timer::Timer,
     timestamp::Timestamp,
+    trace::{SpanId, TraceId},
     value::Value,
 };
 

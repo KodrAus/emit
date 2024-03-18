@@ -164,7 +164,7 @@ fn inject_sync(
             emit::__private::__private_emit(
                 #rt_tokens,
                 #module_tokens,
-                Some(emit::always()),
+                emit::__private::__private_filter_span_complete(),
                 extent,
                 #template_tokens,
                 #evt_props_tokens,
@@ -197,7 +197,7 @@ fn inject_async(
                 emit::__private::__private_emit(
                     #rt_tokens,
                     #module_tokens,
-                    Some(emit::always()),
+                    emit::__private::__private_filter_span_complete(),
                     extent,
                     #template_tokens,
                     #evt_props_tokens,

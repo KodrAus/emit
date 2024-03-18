@@ -100,9 +100,7 @@ async fn in_trace() -> Result<(), io::Error> {
 
     for i in 0..100 {
         futures.push(tokio::spawn(
-            emit::runtime::shared()
-                .current_frame()
-                .in_future(in_ctxt(i)),
+            emit::frame::Frame::current(emit::runtime::shared()).in_future(in_ctxt(i)),
         ));
     }
 
@@ -141,7 +139,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
 
     if let Err(ref err) = r {
         span.complete(
-            |extent| emit::warn!(when: emit::always(), extent, "in_ctxt failed with {err}"),
+            |extent| emit::warn!(when: emit::filter::always(), extent, "in_ctxt failed with {err}"),
         );
     }
 
