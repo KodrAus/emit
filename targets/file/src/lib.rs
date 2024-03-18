@@ -12,10 +12,7 @@ use std::{
     thread,
 };
 
-use emit::{
-    well_known::{KEY_MODULE, KEY_MSG, KEY_TPL, KEY_TS, KEY_TS_START},
-    Props,
-};
+use emit::well_known::{KEY_MSG, KEY_TPL, KEY_TS, KEY_TS_START};
 use emit_batcher::BatchError;
 use internal_metrics::InternalMetrics;
 

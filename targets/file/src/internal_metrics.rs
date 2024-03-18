@@ -15,10 +15,6 @@ pub(crate) struct InternalMetrics {
 pub(crate) struct Counter(AtomicUsize);
 
 impl Counter {
-    pub const fn new() -> Self {
-        Counter(AtomicUsize::new(0))
-    }
-
     pub fn increment(&self) {
         self.increment_by(1);
     }

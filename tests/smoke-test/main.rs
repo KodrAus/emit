@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use emit::{Clock as _, Filter as _, FrameCtxt as _};
+use emit::{Clock as _, Filter as _};
 
 #[macro_use]
 extern crate serde_derive;
