@@ -3,6 +3,114 @@ Structured diagnostics for Rust applications.
 
 Emit is a structured logging framework for manually instrumenting Rust applications with an expressive syntax.
 
+# Getting started
+
+Add `emit` to your `Cargo.toml`:
+
+```toml
+[dependencies.emit]
+version = "*"
+
+[dependencies.emit_term]
+version = "*"
+```
+
+`emit` needs to be configured with an _emitter_ that sends events somewhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
+
+At the start of your `main` function, use [`setup`] to initialize `emit`. At the end of your `main` function, use [`Setup::blocking_flush`] to ensure all emitted events are fully flushed to the outside target.
+
+```
+fn main() {
+    let rt = emit::setup()
+        .emit_to(emit_term::stdout())
+        .init();
+
+    // Your app code goes here
+
+    rt.blocking_flush(std::time::Duration::from_secs(5));
+}
+```
+
+# Logging events
+
+When something significant happens in your application you can emit an event for it. This can be done using the [`emit`], [`debug`], [`info`], [`warn`], and [`error`] macros. The macros accept a string literal _template_ that may have properties captured and interpolated into it using _field value_ syntax:
+
+```
+let user = "Rust";
+
+emit::info!("Hello, {user}");
+```
+
+Properties can also be captured after the template:
+
+```
+let user = "Rust";
+
+emit::info!("Hello", user);
+```
+
+Properties may be named or initialized directly in the macro:
+
+```
+emit::info!("Hello, {user: \"Rust\"}");
+```
+
+```
+emit::info!("Hello", user: "Rust");
+```
+
+Any field values that appear in the template between braces or after it are captured as properties on the event. Field values can also appear _before_ the template to customize how events are constructed and emitted. For example, the macros accept a `module` field value to set the name of the containing module for an event:
+
+```
+let user = "Rust";
+
+emit::info!(module: "my_mod", "Hello", user);
+```
+
+Think of field values before the template like optional function arguments.
+
+# Tracing functions
+
+When significant operations are executed in your application you can use span events to instrument them, corrolating any other events within them into a hierarchy. This can be done using the [`span`], [`debug_span`], [`info_span`], [`warn_span`], and [`error_span`] macros. The macros use the same syntax as those for regular events:
+
+```
+#[emit::info_span!("Invoke with {user}")]
+fn my_function(user: &str) {
+    // Function body..
+}
+```
+
+When `my_function` completes, an event will be emitted with the time it took to execute.
+
+## Completion
+
+The span macros accept an argument called `arg` _before_ the template for an identifier to give the [`timer::TimerGuard`] that can be used to manually complete the span. This can be useful to complete the span differently based on control-flow:
+
+```
+# type Error = Box<dyn std::error::Error>;
+#[emit::info_span!(arg: span, "Parse {id}")]
+fn my_function(id: &str) -> Result<i32, Error> {
+    match id.parse() {
+        Ok(id) => Ok(id),
+        Err(err) => {
+            span.complete(|extent| emit::error!(extent, "Parse {id} failed", err));
+
+            Err(err.into())
+        }
+    }
+}
+```
+
+In this example, we use the `arg` paramter to assign a local variable `span` that represents the span for our function. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
+
+You may also notice we pass a parameter before the template in the `error!` macro in the `Err` branch too. That sets the _extent_ of the event to the time the function spent executing. Parameters before the template are used to control how events are constructed and emitted, they aren't captured as properties. All properties are put within the template itself, or after it.
+
+# Templates and capturing
+
+# Customizing events
+
+# Runtimes
+
 # Data model
 
 ## Events
