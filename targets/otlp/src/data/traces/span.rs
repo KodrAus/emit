@@ -110,7 +110,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                     emit::well_known::KEY_SPAN_ID => {
                         span_id = v
                             .by_ref()
-                            .cast::<emit::SpanId>()
+                            .cast::<emit::trace::SpanId>()
                             .map(|span_id| span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
@@ -118,7 +118,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                     emit::well_known::KEY_SPAN_PARENT => {
                         parent_span_id = v
                             .by_ref()
-                            .cast::<emit::SpanId>()
+                            .cast::<emit::trace::SpanId>()
                             .map(|parent_span_id| parent_span_id.to_u64().to_be_bytes())
                             .unwrap_or_default();
                         true
@@ -126,7 +126,7 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                     emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
-                            .cast::<emit::TraceId>()
+                            .cast::<emit::trace::TraceId>()
                             .map(|trace_id| trace_id.to_u128().to_be_bytes())
                             .unwrap_or_default();
                         true

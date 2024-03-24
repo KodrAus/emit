@@ -10,8 +10,8 @@ use emit_core::{
     props::Props,
     rng::Rng,
     runtime::Runtime,
-    str::ToStr,
-    template::Template,
+    str::{Str, ToStr},
+    template::{Formatter, Part, Template},
     value::{ToValue, Value},
 };
 
@@ -30,10 +30,9 @@ use std::error::Error;
 
 use crate::{
     base_emit,
-    template::{Formatter, Part},
     timer::TimerGuard,
     trace::{SpanId, TraceId},
-    Level, Str, Timer,
+    Level, Timer,
 };
 
 /**

@@ -45,7 +45,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
         static CALLSITE: tracing::callsite::DefaultCallsite =
             tracing::callsite::DefaultCallsite::new(&METADATA);
 
-        let tracing_id = if let Some(span_id) = props.pull::<emit::SpanId, _>(KEY_SPAN_ID) {
+        let tracing_id = if let Some(span_id) = props.pull::<emit::trace::SpanId, _>(KEY_SPAN_ID) {
             let fields = tracing::field::FieldSet::new(
                 &[
                     emit::well_known::KEY_TRACE_ID,
@@ -55,7 +55,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
             );
 
             let trace_id = props
-                .pull::<emit::TraceId, _>(KEY_TRACE_ID)
+                .pull::<emit::trace::TraceId, _>(KEY_TRACE_ID)
                 .map(tracing::field::display);
 
             let id = self.1.new_span(&tracing::span::Attributes::new(

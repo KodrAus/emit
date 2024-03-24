@@ -113,6 +113,8 @@ fn hooks() -> HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<
                 }
                 #[cfg(not(feature = "sval"))]
                 {
+                    use syn::spanned::Spanned;
+
                     let _ = args;
 
                     Err(syn::Error::new(expr.span(), "capturing with `sval` is only possible when the `sval` Cargo feature is enabled"))
@@ -135,6 +137,8 @@ fn hooks() -> HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<
                 }
                 #[cfg(not(feature = "serde"))]
                 {
+                    use syn::spanned::Spanned;
+
                     let _ = args;
 
                     Err(syn::Error::new(expr.span(), "capturing with `serde` is only possible when the `serde` Cargo feature is enabled"))
@@ -157,6 +161,8 @@ fn hooks() -> HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<
             }
             #[cfg(not(feature = "std"))]
             {
+                use syn::spanned::Spanned;
+
                 let _ = args;
 
                 Err(syn::Error::new(
