@@ -35,7 +35,7 @@ pub fn key_value_with_hook(
     fv: &FieldValue,
     interpolated: bool,
     captured: bool,
-) -> TokenStream {
+) -> syn::Result<TokenStream> {
     let fn_name = match &*fv.key_name() {
         emit_core::well_known::KEY_LVL => quote_spanned!(fv.span()=> __private_capture_as_level),
         emit_core::well_known::KEY_ERR => quote_spanned!(fv.span()=> __private_capture_as_error),
@@ -73,11 +73,12 @@ pub fn key_value_with_hook(
         (#expr).__private_optional_capture_some().__private_optional_map_some(|v| v.#fn_name()) #interpolated_expr #captured_expr
     });
 
-    quote_spanned!(fv.span()=>
-        #(#attrs)*
+    hook::eval_hooks(
+        &attrs,
+        syn::parse_quote_spanned!(fv.span()=>
         {
             (#key_tokens, #value_tokens)
-        }
+        }),
     )
 }
 

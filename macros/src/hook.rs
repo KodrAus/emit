@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{collections::HashMap, fmt::Write, sync::OnceLock};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -8,10 +8,20 @@ use syn::{
     spanned::Spanned,
     token::Comma,
     visit_mut::{self, VisitMut},
-    Expr, ExprMethodCall, Ident,
+    Attribute, Expr, ExprMethodCall, Ident, Meta, MetaList,
 };
 
 use crate::util::parse_comma_separated2;
+
+static HOOKS: OnceLock<
+    HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<TokenStream>>,
+> = OnceLock::new();
+
+pub(crate) fn get(
+    name: &str,
+) -> Option<impl Fn(TokenStream, TokenStream) -> syn::Result<TokenStream>> {
+    HOOKS.get_or_init(crate::hooks).get(name)
+}
 
 pub struct RenameHookTokens<P, T> {
     pub args: TokenStream,
@@ -119,4 +129,32 @@ impl ToTokens for Hook {
 
         tokens.extend(quote!(#expr));
     }
+}
+
+pub(crate) fn eval_hooks(attrs: &[Attribute], expr: Expr) -> syn::Result<TokenStream> {
+    let mut unapplied = Vec::new();
+    let mut expr = quote!(#expr);
+
+    for attr in attrs {
+        if attr.path().segments.len() == 2 {
+            let root = attr.path().segments.first().unwrap();
+            let name = attr.path().segments.last().unwrap();
+
+            if root.ident == "emit" {
+                let args = match &attr.meta {
+                    Meta::List(MetaList { ref tokens, .. }) => Some(tokens),
+                    _ => None,
+                };
+
+                if let Some(eval) = get(&name.ident.to_string()) {
+                    expr = eval(quote!(#args), expr)?;
+                    continue;
+                }
+            }
+        }
+
+        unapplied.push(attr.clone());
+    }
+
+    Ok(quote_spanned!(expr.span()=> #(#unapplied)* #expr))
 }

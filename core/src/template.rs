@@ -513,8 +513,6 @@ enum PartKind<'a> {
 mod alloc_support {
     use super::*;
 
-    use alloc::vec::Vec;
-
     impl Template<'static> {
         pub fn new_owned(parts: impl Into<Box<[Part<'static>]>>) -> Self {
             let parts = parts.into();

@@ -69,6 +69,14 @@ impl<'a> Path<'a> {
     }
 }
 
+impl<'a> Eq for Path<'a> {}
+
+impl<'a, 'b> PartialEq<Path<'b>> for Path<'a> {
+    fn eq(&self, other: &Path<'b>) -> bool {
+        self.0 == other.0
+    }
+}
+
 impl<'a> fmt::Debug for Path<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
@@ -106,7 +114,7 @@ impl<'a> serde::Serialize for Path<'a> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::{borrow::Cow, boxed::Box};
+    use alloc::borrow::Cow;
 
     use super::*;
 

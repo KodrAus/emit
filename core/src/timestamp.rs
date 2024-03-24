@@ -52,6 +52,12 @@ impl Timestamp {
     }
 
     pub fn from_parts(parts: Parts) -> Option<Self> {
+        /*
+        Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
+
+        Licensed under Apache 2.0
+        */
+
         let is_leap;
         let start_of_year;
         let year = (parts.years as i64) - 1900;

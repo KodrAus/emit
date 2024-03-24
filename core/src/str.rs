@@ -247,10 +247,7 @@ impl<'k> serde::Serialize for Str<'k> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::{
-        borrow::{Cow, ToOwned},
-        string::String,
-    };
+    use alloc::borrow::Cow;
 
     use super::*;
 

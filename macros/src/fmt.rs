@@ -14,7 +14,7 @@ pub fn template_hole_with_hook(
     hole: &ExprLit,
     interpolated: bool,
     captured: bool,
-) -> TokenStream {
+) -> syn::Result<TokenStream> {
     let interpolated_expr = if interpolated {
         quote!(.__private_interpolated())
     } else {
@@ -27,13 +27,15 @@ pub fn template_hole_with_hook(
         quote!(.__private_uncaptured())
     };
 
-    quote_spanned!(hole.span()=>
-        #(#attrs)*
-        #[allow(unused_imports)]
-        {
-            use emit::__private::{__PrivateFmtHook as _, __PrivateInterpolatedHook as _};
-            emit::template::Part::hole(#hole).__private_fmt_as_default()#interpolated_expr #captured_expr
-        }
+    hook::eval_hooks(
+        &attrs,
+        syn::parse_quote_spanned!(hole.span()=>
+            #[allow(unused_imports)]
+            {
+                use emit::__private::{__PrivateFmtHook as _, __PrivateInterpolatedHook as _};
+                emit::template::Part::hole(#hole).__private_fmt_as_default()#interpolated_expr #captured_expr
+            }
+        ),
     )
 }
 

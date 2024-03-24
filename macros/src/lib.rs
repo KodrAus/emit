@@ -12,6 +12,8 @@ extern crate quote;
 #[macro_use]
 extern crate syn;
 
+use std::collections::HashMap;
+
 use proc_macro2::TokenStream;
 
 mod args;
@@ -32,6 +34,141 @@ mod template;
 mod util;
 
 use util::ResultToTokens;
+
+fn hooks() -> HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<TokenStream>> {
+    let mut map = HashMap::new();
+
+    map.insert(
+        "fmt",
+        (|args: TokenStream, expr: TokenStream| {
+            fmt::rename_hook_tokens(fmt::RenameHookTokens { args, expr })
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+        "key",
+        (|args: TokenStream, expr: TokenStream| {
+            key::rename_hook_tokens(key::RenameHookTokens { args, expr })
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+        "optional",
+        (|args: TokenStream, expr: TokenStream| {
+            optional::rename_hook_tokens(optional::RenameHookTokens { args, expr })
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+        "as_value",
+        (|args: TokenStream, expr: TokenStream| {
+            capture_as(
+                "as_value",
+                args,
+                expr,
+                quote!(__private_capture_as_value),
+                quote!(__private_capture_anon_as_value),
+            )
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+        "as_debug",
+        (|args: TokenStream, expr: TokenStream| {
+            capture_as(
+                "as_debug",
+                args,
+                expr,
+                quote!(__private_capture_as_debug),
+                quote!(__private_capture_anon_as_debug),
+            )
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+        "as_display",
+        (|args: TokenStream, expr: TokenStream| {
+            capture_as(
+                "as_display",
+                args,
+                expr,
+                quote!(__private_capture_as_display),
+                quote!(__private_capture_anon_as_display),
+            )
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map.insert(
+            "as_sval",
+            (|args: TokenStream, expr: TokenStream| {
+                #[cfg(feature = "sval")]
+                {
+                    capture_as(
+                        "as_sval",
+                        args,
+                        expr,
+                        quote!(__private_capture_as_sval),
+                        quote!(__private_capture_anon_as_sval),
+                    )
+                }
+                #[cfg(not(feature = "sval"))]
+                {
+                    let _ = args;
+
+                    Err(syn::Error::new(expr.span(), "capturing with `sval` is only possible when the `sval` Cargo feature is enabled"))
+                }
+            }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>
+        );
+
+    map.insert(
+            "as_serde",
+            (|args: TokenStream, expr: TokenStream| {
+                #[cfg(feature = "serde")]
+                {
+                    capture_as(
+                        "as_serde",
+                        args,
+                        expr,
+                        quote!(__private_capture_as_serde),
+                        quote!(__private_capture_anon_as_serde),
+                    )
+                }
+                #[cfg(not(feature = "serde"))]
+                {
+                    let _ = args;
+
+                    Err(syn::Error::new(expr.span(), "capturing with `serde` is only possible when the `serde` Cargo feature is enabled"))
+                }
+            }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>
+        );
+
+    map.insert(
+        "as_error",
+        (|args: TokenStream, expr: TokenStream| {
+            #[cfg(feature = "std")]
+            {
+                capture_as(
+                    "as_error",
+                    args,
+                    expr,
+                    quote!(__private_capture_as_error),
+                    quote!(__private_capture_as_error),
+                )
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                let _ = args;
+
+                Err(syn::Error::new(
+                    expr.span(),
+                    "capturing errors is only possible when the `std` Cargo feature is enabled",
+                ))
+            }
+        }) as fn(TokenStream, TokenStream) -> syn::Result<TokenStream>,
+    );
+
+    map
+}
 
 /**
 Format a template.
@@ -253,11 +390,8 @@ pub fn fmt(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    fmt::rename_hook_tokens(fmt::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
+    (hook::get("fmt").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 #[proc_macro_attribute]
@@ -265,11 +399,8 @@ pub fn key(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    key::rename_hook_tokens(key::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
+    (hook::get("key").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 #[proc_macro_attribute]
@@ -277,11 +408,8 @@ pub fn optional(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    optional::rename_hook_tokens(optional::RenameHookTokens {
-        args: TokenStream::from(args),
-        expr: TokenStream::from(item),
-    })
-    .unwrap_or_compile_error()
+    (hook::get("optional").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -292,13 +420,8 @@ pub fn as_value(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture_as(
-        "as_value",
-        TokenStream::from(args),
-        TokenStream::from(item),
-        quote!(__private_capture_as_value),
-        quote!(__private_capture_anon_as_value),
-    )
+    (hook::get("as_value").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -309,13 +432,8 @@ pub fn as_debug(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture_as(
-        "as_debug",
-        TokenStream::from(args),
-        TokenStream::from(item),
-        quote!(__private_capture_as_debug),
-        quote!(__private_capture_anon_as_debug),
-    )
+    (hook::get("as_debug").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -326,13 +444,8 @@ pub fn as_display(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    capture_as(
-        "as_display",
-        TokenStream::from(args),
-        TokenStream::from(item),
-        quote!(__private_capture_as_display),
-        quote!(__private_capture_anon_as_display),
-    )
+    (hook::get("as_display").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -343,25 +456,8 @@ pub fn as_sval(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    #[cfg(feature = "sval")]
-    {
-        capture_as(
-            "as_sval",
-            TokenStream::from(args),
-            TokenStream::from(item),
-            quote!(__private_capture_as_sval),
-            quote!(__private_capture_anon_as_sval),
-        )
-    }
-    #[cfg(not(feature = "sval"))]
-    {
-        let _ = args;
-        let _ = item;
-
-        proc_macro::TokenStream::from(quote!(compile_error!(
-            "capturing with `sval` is only possible when the `sval` Cargo feature is enabled"
-        )))
-    }
+    (hook::get("as_sval").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -372,25 +468,8 @@ pub fn as_serde(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    #[cfg(feature = "serde")]
-    {
-        capture_as(
-            "as_serde",
-            TokenStream::from(args),
-            TokenStream::from(item),
-            quote!(__private_capture_as_serde),
-            quote!(__private_capture_anon_as_serde),
-        )
-    }
-    #[cfg(not(feature = "serde"))]
-    {
-        let _ = args;
-        let _ = item;
-
-        proc_macro::TokenStream::from(quote!(compile_error!(
-            "capturing with `serde` is only possible when the `serde` Cargo feature is enabled"
-        )))
-    }
+    (hook::get("as_serde").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 /**
@@ -401,25 +480,8 @@ pub fn as_error(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    #[cfg(feature = "std")]
-    {
-        capture_as(
-            "as_error",
-            TokenStream::from(args),
-            TokenStream::from(item),
-            quote!(__private_capture_as_error),
-            quote!(__private_capture_as_error),
-        )
-    }
-    #[cfg(not(feature = "std"))]
-    {
-        let _ = args;
-        let _ = item;
-
-        proc_macro::TokenStream::from(quote!(compile_error!(
-            "capturing errors is only possible when the `std` Cargo feature is enabled"
-        )))
-    }
+    (hook::get("as_error").unwrap())(TokenStream::from(args), TokenStream::from(item))
+        .unwrap_or_compile_error()
 }
 
 fn base_emit(level: Option<TokenStream>, item: TokenStream) -> proc_macro::TokenStream {
@@ -448,7 +510,7 @@ fn capture_as(
     expr: TokenStream,
     as_fn: TokenStream,
     as_anon_fn: TokenStream,
-) -> proc_macro::TokenStream {
+) -> syn::Result<TokenStream> {
     capture::rename_hook_tokens(capture::RenameHookTokens {
         name,
         args,
@@ -461,5 +523,4 @@ fn capture_as(
             }
         },
     })
-    .unwrap_or_compile_error()
 }

@@ -76,10 +76,10 @@ pub fn parse2<A: Parse>(
     let template_tokens = {
         let mut template_visitor = TemplateVisitor {
             props: &props,
-            parts: Vec::new(),
+            parts: Ok(Vec::new()),
         };
         template.visit_literal(&mut template_visitor);
-        let template_parts = &template_visitor.parts;
+        let template_parts = template_visitor.parts?;
 
         /*
         Ideally this would be:
@@ -130,11 +130,15 @@ impl Template {
 
 struct TemplateVisitor<'a> {
     props: &'a Props,
-    parts: Vec<TokenStream>,
+    parts: syn::Result<Vec<TokenStream>>,
 }
 
 impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
     fn visit_hole(&mut self, hole: &FieldValue) {
+        let Ok(ref mut parts) = self.parts else {
+            return;
+        };
+
         let label = hole.key_name();
         let hole = hole.key_expr();
 
@@ -142,15 +146,22 @@ impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
 
         debug_assert!(field.interpolated);
 
-        let hole_tokens = fmt::template_hole_with_hook(&field.attrs, &hole, true, field.captured);
-
-        match field.cfg_attr {
-            Some(ref cfg_attr) => self.parts.push(quote!(#cfg_attr { #hole_tokens })),
-            _ => self.parts.push(quote!(#hole_tokens)),
+        match fmt::template_hole_with_hook(&field.attrs, &hole, true, field.captured) {
+            Ok(hole_tokens) => match field.cfg_attr {
+                Some(ref cfg_attr) => parts.push(quote!(#cfg_attr { #hole_tokens })),
+                _ => parts.push(quote!(#hole_tokens)),
+            },
+            Err(e) => {
+                self.parts = Err(e);
+            }
         }
     }
 
     fn visit_text(&mut self, text: &str) {
-        self.parts.push(quote!(emit::template::Part::text(#text)));
+        let Ok(ref mut parts) = self.parts else {
+            return;
+        };
+
+        parts.push(quote!(emit::template::Part::text(#text)));
     }
 }

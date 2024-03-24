@@ -259,7 +259,7 @@ impl<'v, const N: usize> From<&'v [i64; N]> for Value<'v> {
 mod alloc_support {
     use super::*;
 
-    use alloc::{borrow::Cow, vec::Vec};
+    use alloc::borrow::Cow;
 
     impl<'v> Value<'v> {
         pub fn as_f64_sequence(&self) -> Vec<f64> {

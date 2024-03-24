@@ -5,7 +5,7 @@ pub const KEY_TS_START: &'static str = "ts_start";
 pub const KEY_TPL: &'static str = "tpl";
 pub const KEY_MSG: &'static str = "msg";
 
-// Level
+// Log
 pub const KEY_LVL: &'static str = "lvl";
 
 pub const LVL_DEBUG: &'static str = "debug";
@@ -21,7 +21,7 @@ pub const KEY_TRACE_ID: &'static str = "trace_id";
 pub const KEY_SPAN_ID: &'static str = "span_id";
 pub const KEY_SPAN_PARENT: &'static str = "span_parent";
 
-// Metrics
+// Metric
 pub const KEY_METRIC_NAME: &'static str = "metric_name";
 pub const KEY_METRIC_AGG: &'static str = "metric_agg";
 pub const KEY_METRIC_VALUE: &'static str = "metric_value";
