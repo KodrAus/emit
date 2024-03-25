@@ -4,7 +4,10 @@ use core::{borrow::Borrow, fmt, hash, marker::PhantomData};
 use alloc::boxed::Box;
 
 pub struct Str<'k> {
+    // This type is an optimized `Cow<str>`
+    // It avoids the cost of matching the variant to get the inner value
     value: *const str,
+    // Only one of `value_static` or `value_owned` will be set
     value_static: Option<&'static str>,
     #[cfg(feature = "alloc")]
     value_owned: Option<Box<str>>,
