@@ -124,7 +124,7 @@ fn my_function(user: &str) {
 
 ## Completion
 
-The span macros accept an argument called `arg` _before_ the template for an identifier to give the [`timer::TimerGuard`] that can be used to manually complete the span. This can be useful to complete the span differently based on control-flow:
+The span macros accept an argument called `arg` _before_ the template for an identifier that can be used to manually complete the span. This can be useful to complete the span differently based on control-flow:
 
 ```
 # type Error = Box<dyn std::error::Error>;
@@ -141,7 +141,7 @@ fn my_function(id: &str) -> Result<i32, Error> {
 }
 ```
 
-In this example, we use the `arg` field value before the template to assign a local variable `span` that represents the span for our function. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
+In this example, we use the `arg` field value before the template to assign a local variable `span` that represents the span for our function. The type of `span` is a [`timer::TimerGuard`]. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
 
 # Property capturing
 
