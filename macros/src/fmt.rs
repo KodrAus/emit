@@ -6,7 +6,7 @@ use syn::{
 
 use crate::{
     args::{self, Arg},
-    hook,
+    hook, key,
 };
 
 pub fn template_hole_with_hook(
@@ -27,13 +27,15 @@ pub fn template_hole_with_hook(
         quote!(.__private_uncaptured())
     };
 
+    let hole = key::key_with_hook(&[], hole);
+
     hook::eval_hooks(
         &attrs,
         syn::parse_quote_spanned!(hole.span()=>
             #[allow(unused_imports)]
             {
                 use emit::__private::{__PrivateFmtHook as _, __PrivateInterpolatedHook as _};
-                emit::template::Part::hole(#hole).__private_fmt_as_default()#interpolated_expr #captured_expr
+                emit::template::Part::hole_str(#hole).__private_fmt_as_default()#interpolated_expr #captured_expr
             }
         ),
     )

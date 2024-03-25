@@ -379,29 +379,30 @@ pub struct Part<'a>(PartKind<'a>);
 
 impl Part<'static> {
     pub const fn text(text: &'static str) -> Self {
-        Part(PartKind::Text {
-            value: Str::new(text),
-        })
+        Self::text_str(Str::new(text))
     }
 
     pub const fn hole(label: &'static str) -> Self {
-        Part(PartKind::Hole {
-            label: Str::new(label),
-            formatter: None,
-        })
+        Self::hole_str(Str::new(label))
     }
 }
 
 impl<'a> Part<'a> {
     pub const fn text_ref(text: &'a str) -> Self {
-        Part(PartKind::Text {
-            value: Str::new_ref(text),
-        })
+        Self::text_str(Str::new_ref(text))
     }
 
     pub const fn hole_ref(label: &'a str) -> Self {
+        Self::hole_str(Str::new_ref(label))
+    }
+
+    pub const fn text_str(text: Str<'a>) -> Self {
+        Part(PartKind::Text { value: text })
+    }
+
+    pub const fn hole_str(label: Str<'a>) -> Self {
         Part(PartKind::Hole {
-            label: Str::new_ref(label),
+            label,
             formatter: None,
         })
     }

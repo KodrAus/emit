@@ -15,6 +15,42 @@ pub fn emitter<S: tracing::Subscriber>(tracing_subscriber: S) -> TracingEmitter<
     TracingEmitter(tracing_subscriber)
 }
 
+pub struct EmitSubscriber;
+
+impl tracing::Subscriber for EmitSubscriber {
+    fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
+        todo!()
+    }
+
+    fn new_span(&self, span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        todo!()
+    }
+
+    fn record(&self, span: &tracing::span::Id, values: &tracing::span::Record<'_>) {
+        todo!()
+    }
+
+    fn record_follows_from(&self, span: &tracing::span::Id, follows: &tracing::span::Id) {
+        todo!()
+    }
+
+    fn event(&self, event: &tracing::Event<'_>) {
+        todo!()
+    }
+
+    fn enter(&self, span: &tracing::span::Id) {
+        todo!()
+    }
+
+    fn exit(&self, span: &tracing::span::Id) {
+        todo!()
+    }
+}
+
+/*
+TODO: `tracing` -> `emit`
+*/
+
 pub struct TracingCtxt<C, S>(C, S);
 
 pub struct TracingFrame<F>(Option<tracing::Id>, F);
@@ -128,6 +164,7 @@ impl<S: tracing::Subscriber> emit::Emitter for TracingEmitter<S> {
                 &[
                     emit::well_known::KEY_MSG,
                     emit::well_known::KEY_TPL,
+                    // https://github.com/tokio-rs/tracing/pull/2048
                     "props",
                 ],
                 tracing_core::identify_callsite!(&CALLSITE),

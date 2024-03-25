@@ -1,7 +1,7 @@
 /*!
 Structured diagnostics for Rust applications.
 
-Emit is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org). All diagnostics in Emit are represented as _events_. An event is a notable change in the state of a system that is broadcast to outside observers. Events carry both a human-readable description of what triggered them as well as a structured payload that can be used to process them. Events are temporal; they may be anchored to a point in time at which they occurred, or may cover a span of time for which they are active.
+`emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org). All diagnostics in `emit` are represented as [`Event`]s. An event is a notable change in the state of a system that is broadcast to outside observers. Events carry both a human-readable description of what triggered them in the form of a [`Template`]. They also have a structured payload of [`Props`] that can be used to process them. Events have a temporal [`Extent`]; they may be anchored to a point in time at which they occurred, or may cover a span of time for which they are active. Together, this information provides a solid foundation for building tailored diagnostics into your applications.
 
 # Getting started
 
@@ -15,7 +15,7 @@ version = "*"
 version = "*"
 ```
 
-`emit` needs to be configured with an _emitter_ that sends events somewhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
+`emit` needs to be configured with at least an [`Emitter`] that sends events somewhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
 
 At the start of your `main` function, use [`setup()`] to initialize `emit`. At the end of your `main` function, use [`setup::Init::blocking_flush`] to ensure all emitted events are fully flushed to the outside target.
 
@@ -33,18 +33,20 @@ fn main() {
 
 # Logging events
 
-When something significant happens in your application you can emit an _event_ for it. This can be done using the [`emit`], [`debug`], [`info`], [`warn`], and [`error`] macros. The macros accept a string literal _template_ that may have _properties_ captured and interpolated into it using Rust's field value syntax:
+When something significant happens in your application you can emit an event for it using the [`emit`], [`debug`], [`info`], [`warn`], and [`error`] macros. The macros accept a string literal template that may have properties captured and interpolated using Rust's field value syntax between braces:
 
 ```
 let user = "Rust";
+let id = 42;
 
-emit::info!("Hello, {user}");
+emit::info!("Hello, {user}", id);
 ```
 
 This macro expands roughly to:
 
 ```
 let user = "Rust";
+let id = 42;
 
 // emit::info!("Hello, {user}");
 let rt = emit::runtime::shared();
@@ -52,6 +54,7 @@ let rt = emit::runtime::shared();
 let extent = rt.now();
 let props = &[
     ("user", user),
+    ("id", id),
 ];
 
 rt.emit(emit::Event::new(
@@ -65,35 +68,19 @@ rt.emit(emit::Event::new(
 ));
 ```
 
-Properties can also be captured after the template:
+In this example, the template is `"Hello, {user}"`, and the properties are `{"user": "Rust", "id": 42}`.
+
+Properties are field values, so identifiers may be given values inline either in the template itself or after it:
 
 ```
-let user = "Rust";
-
-emit::info!("Hello", user);
+emit::info!("Hello, {user: \"Rust\"}", id: 42);
 ```
 
-Properties may be named or initialized directly in the template:
+Properties can also be mentioned by name in the template, but initialized outside of it:
 
 ```
-emit::info!("Hello, {user: \"Rust\"}");
+emit::info!("Hello, {user}", user: "Rust", id: 42);
 ```
-
-Properties can also be named or initialized after the template:
-
-```
-emit::info!("Hello", user: "Rust");
-```
-
-Field values can also appear _before_ the template to customize how events are constructed and emitted. Field values before the template follow a fixed schema. For example, the macros accept a `module` field value to set the name of the containing module for an event:
-
-```
-let user = "Rust";
-
-emit::info!(module: "my_mod", "Hello", user);
-```
-
-Think of field values before the template like optional function arguments, and field values after the template like a spread of extra parameters.
 
 # Tracing functions
 
@@ -156,11 +143,56 @@ fn my_function(id: &str) -> Result<i32, Error> {
 
 In this example, we use the `arg` field value before the template to assign a local variable `span` that represents the span for our function. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
 
+# Property capturing
+
+By default, properties are required to implement `Display + 'static`. This can be customized using the [`as_debug`], [`as_display`], [`as_sval`], [`as_serde`], and [`as_error`] attribute macros. These attributes can be applied to properties either inside or outside of the template:
+
+```
+#[derive(Serlialize)]
+struct Work {
+    pub id: usize,
+    pub content: String,
+}
+
+let work = Work {
+    id: 42,
+    content: String::from("apply latest migrations"),
+};
+
+emit::info!("Working on {#[emit::as_serde] work}");
+```
+
+In this example, the property `work` is captured as a fully structured object using its `serde::Serialize` implementation.
+
+## Complex key names
+
+Property key names are derived from their identifiers by default, but can be customized using the [`key`] attribute macro:
+
+```
+let user = "Rust";
+
+emit::info!("Hello, {user}", #[emit::key("user.name")] user);
+```
+
+In the above example, the identifier `user` just links the hole in the template with the property supplied afterwards. The name of the property in the template and on the event becomes `"user.name"`.
+
+# Control parameters
+
+Field values supplied in templates and after it are properties that are captured in the event. Field values can also appear _before_ the template too. These field values are _control parameters_ that customize how events are constructed and emitted. For example, the macros accept a `to` field value to supply an alternative emitter for an event:
+
+```
+let user = "Rust";
+
+emit::info!(to: emit::emitter::from_fn(|evt| println!("{}", evt)), "Hello", user);
+```
+
+Think of field values before the template like optional function arguments.
+
 # Extents and timestamps
 
 The extent of an event is the time for which it is relevant. This may be a single point in time if the event was triggered by something happening, or a span of time if the event was started at one point and completed at a later one. Extents are represented by the [`Extent`] type, and timestamps by the [`Timestamp`] type.
 
-Events are automatically assigned an extent with the current timestamp when they're emitted based on a [`Clock`]. This can be customized with the `extent` field value on the macros.
+Events are automatically assigned an extent with the current timestamp when they're emitted based on a [`Clock`]. This can be customized with the `extent` control parameter on the macros.
 
 This is an example of a point event:
 
@@ -182,7 +214,11 @@ let later = now + Duration::from_secs(1000);
 emit::info!(extent: now..later, "A span event");
 ```
 
-Span events can wrap a clock in a [`Timer`] to produce an extent that covers a time range.
+The [`Timer`] type provides a convenient way to produce an extent that covers a time range.
+
+# Ambient context
+
+Emit doesn't require threading loggers through your program directly. You can store ambient state you want events to carry in the current _context_. Emit's context is a stack that can be managed either directly for synchronous operations, or through a future for asynchronous ones.
 
 ## Observability signals
 
@@ -222,14 +258,6 @@ Emit's model for metrics is based on _aggregations_. A metric captures the resul
 - **Metric unit (`metric_unit`):** The unit the sampled value is in.
 
 Emit's metric support can represent common cases of counters and gauges, but can't express the full fidelity of other models.
-
-# Context
-
-Emit doesn't require threading loggers through your program directly. You can store ambient state you want events to carry in the current _context_. Emit's context is a stack that can be managed either directly for synchronous operations, or through a future for asynchronous ones.
-
-# Runtime
-
-The set of components needed to produce, receive, filter, and emit events is encapsulated in a _runtime_. A system will typically configure the built-in shared runtime and use it, but any or multiple runtimes can be used independantly.
 */
 
 #![cfg_attr(not(feature = "std"), no_std)]

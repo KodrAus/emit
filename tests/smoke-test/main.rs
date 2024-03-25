@@ -13,7 +13,7 @@ extern crate serde_derive;
 async fn main() {
     println!(
         "{}",
-        emit::format!("Hello, {x}", #[emit::optional] x: Some("world"))
+        emit::format!("Hello, {x}", #[emit::optional] #[emit::key("x.y")] x: Some("world"))
     );
 
     let internal = emit::setup().emit_to(emit_term::stdout()).init_internal();
