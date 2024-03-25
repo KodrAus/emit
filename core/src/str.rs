@@ -13,13 +13,13 @@ pub struct Str<'k> {
 
 impl<'k> fmt::Debug for Str<'k> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self.as_str(), f)
+        fmt::Debug::fmt(self.get(), f)
     }
 }
 
 impl<'k> fmt::Display for Str<'k> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self.as_str(), f)
+        fmt::Display::fmt(self.get(), f)
     }
 }
 
@@ -100,24 +100,24 @@ impl<'k> Str<'k> {
         }
     }
 
-    pub const fn as_str(&self) -> &str {
+    pub const fn get(&self) -> &str {
         unsafe { &(*self.value) }
     }
 
-    pub const fn as_static_str(&self) -> Option<&'static str> {
+    pub const fn get_static(&self) -> Option<&'static str> {
         self.value_static
     }
 }
 
 impl<'a> hash::Hash for Str<'a> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
+        self.get().hash(state)
     }
 }
 
 impl<'a, 'b> PartialEq<Str<'b>> for Str<'a> {
     fn eq(&self, other: &Str<'b>) -> bool {
-        self.as_str() == other.as_str()
+        self.get() == other.get()
     }
 }
 
@@ -125,49 +125,49 @@ impl<'a> Eq for Str<'a> {}
 
 impl<'a> PartialEq<str> for Str<'a> {
     fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
+        self.get() == other
     }
 }
 
 impl<'a> PartialEq<Str<'a>> for str {
     fn eq(&self, other: &Str<'a>) -> bool {
-        self == other.as_str()
+        self == other.get()
     }
 }
 
 impl<'a, 'b> PartialEq<&'b str> for Str<'a> {
     fn eq(&self, other: &&'b str) -> bool {
-        self.as_str() == *other
+        self.get() == *other
     }
 }
 
 impl<'a, 'b> PartialEq<Str<'b>> for &'a str {
     fn eq(&self, other: &Str<'b>) -> bool {
-        *self == other.as_str()
+        *self == other.get()
     }
 }
 
 impl<'a, 'b> PartialOrd<Str<'b>> for Str<'a> {
     fn partial_cmp(&self, other: &Str<'b>) -> Option<core::cmp::Ordering> {
-        self.as_str().partial_cmp(other.as_str())
+        self.get().partial_cmp(other.get())
     }
 }
 
 impl<'a> Ord for Str<'a> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.as_str().cmp(other.as_str())
+        self.get().cmp(other.get())
     }
 }
 
 impl<'k> Borrow<str> for Str<'k> {
     fn borrow(&self) -> &str {
-        self.as_str()
+        self.get()
     }
 }
 
 impl<'k> AsRef<str> for Str<'k> {
     fn as_ref(&self) -> &str {
-        self.as_str()
+        self.get()
     }
 }
 
@@ -179,7 +179,7 @@ impl<'a> From<&'a str> for Str<'a> {
 
 impl<'k> ToValue for Str<'k> {
     fn to_value(&self) -> Value {
-        Value::from(self.as_str())
+        Value::from(self.get())
     }
 }
 
@@ -230,10 +230,10 @@ impl<'k> sval::Value for Str<'k> {
 #[cfg(feature = "sval")]
 impl<'k> sval_ref::ValueRef<'k> for Str<'k> {
     fn stream_ref<S: sval::Stream<'k> + ?Sized>(&self, stream: &mut S) -> sval::Result {
-        if let Some(k) = self.as_static_str() {
+        if let Some(k) = self.get_static() {
             stream.value(k)
         } else {
-            stream.value_computed(self.as_str())
+            stream.value_computed(self.get())
         }
     }
 }
@@ -241,7 +241,7 @@ impl<'k> sval_ref::ValueRef<'k> for Str<'k> {
 #[cfg(feature = "serde")]
 impl<'k> serde::Serialize for Str<'k> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.as_str().serialize(serializer)
+        self.get().serialize(serializer)
     }
 }
 
@@ -275,14 +275,14 @@ mod alloc_support {
         pub fn to_cow(&self) -> Cow<'static, str> {
             match self.value_static {
                 Some(key) => Cow::Borrowed(key),
-                None => Cow::Owned(self.as_str().to_owned()),
+                None => Cow::Owned(self.get().to_owned()),
             }
         }
 
         pub fn to_owned(&self) -> Str<'static> {
             match self.value_static {
                 Some(key) => Str::new(key),
-                None => Str::new_owned(self.as_str()),
+                None => Str::new_owned(self.get()),
             }
         }
     }

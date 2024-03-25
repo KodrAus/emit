@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, str};
 
 use crate::{
     str::Str,
@@ -34,30 +34,36 @@ impl<'a> FromValue<'a> for Path<'a> {
 
 impl Path<'static> {
     pub const fn new(path: &'static str) -> Self {
-        Path(Str::new(path))
+        Path::new_str(Str::new(path))
     }
 }
 
 impl<'a> Path<'a> {
     pub const fn new_ref(path: &'a str) -> Self {
-        Path(Str::new_ref(path))
+        Self::new_str(Str::new_ref(path))
+    }
+
+    pub const fn new_str(path: Str<'a>) -> Self {
+        Path(path)
     }
 
     pub fn by_ref<'b>(&'b self) -> Path<'b> {
         Path(self.0.by_ref())
     }
 
-    pub fn segments(&self) -> impl Iterator<Item = &str> {
-        self.0.as_str().split("::")
+    pub fn segments(&self) -> Segments {
+        Segments {
+            inner: self.0.get().split("::"),
+        }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
-        Some(self.0.as_str())
+    pub fn as_str(&self) -> Option<&Str<'a>> {
+        Some(&self.0)
     }
 
     pub fn is_child_of<'b>(&self, other: &Path<'b>) -> bool {
-        let child = self.0.as_str();
-        let parent = other.0.as_str();
+        let child = self.0.get();
+        let parent = other.0.get();
 
         if child.len() >= parent.len() && child.is_char_boundary(parent.len()) {
             let (child_prefix, child_suffix) = child.split_at(parent.len());
@@ -66,6 +72,18 @@ impl<'a> Path<'a> {
         } else {
             false
         }
+    }
+}
+
+pub struct Segments<'a> {
+    inner: str::Split<'a, &'static str>,
+}
+
+impl<'a> Iterator for Segments<'a> {
+    type Item = Str<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(Str::new_ref)
     }
 }
 

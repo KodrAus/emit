@@ -22,7 +22,7 @@ enum TemplateKind<'a> {
 }
 
 impl<'a> TemplateKind<'a> {
-    fn parts(&self) -> &[Part] {
+    fn parts(&self) -> &[Part<'a>] {
         match self {
             TemplateKind::Literal(ref parts) => parts,
             TemplateKind::Parts(parts) => parts,
@@ -78,16 +78,9 @@ impl<'a> Template<'a> {
         }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
+    pub fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
         match self.0.parts() {
             [part] => part.as_str(),
-            _ => None,
-        }
-    }
-
-    pub fn as_static_str(&self) -> Option<&'static str> {
-        match self.0.parts() {
-            [Part(PartKind::Text { value, .. })] => value.as_static_str(),
             _ => None,
         }
     }
@@ -103,7 +96,7 @@ impl<'a> Template<'a> {
 impl<'a> ToValue for Template<'a> {
     fn to_value(&self) -> Value {
         if let Some(tpl) = self.as_str() {
-            Value::from(tpl)
+            Value::from_any(tpl)
         } else {
             Value::from_display(self)
         }
@@ -131,8 +124,8 @@ impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
 
             match (&ap.0, &bp.0) {
                 (PartKind::Text { value: ref a }, PartKind::Text { value: ref b }) => {
-                    let a = a.as_str();
-                    let b = b.as_str();
+                    let a = a.get();
+                    let b = b.get();
 
                     let at = &a[ati..];
                     let bt = &b[bti..];
@@ -181,7 +174,7 @@ impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
                 return false;
             };
 
-            if !value.as_str().is_empty() {
+            if !value.get().is_empty() {
                 return false;
             }
         }
@@ -206,12 +199,8 @@ impl<'a, P> Render<'a, P> {
         }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
+    pub fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
         self.tpl.as_str()
-    }
-
-    pub fn as_static_str(&self) -> Option<&'static str> {
-        self.tpl.as_static_str()
     }
 }
 
@@ -228,7 +217,7 @@ impl<'a, P: Props> Render<'a, P> {
 impl<'a, P: Props> ToValue for Render<'a, P> {
     fn to_value(&self) -> Value {
         if let Some(tpl) = self.as_str() {
-            Value::from(tpl)
+            Value::from_any(tpl)
         } else {
             Value::from_display(self)
         }
@@ -407,9 +396,9 @@ impl<'a> Part<'a> {
         })
     }
 
-    pub const fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
         match self.0 {
-            PartKind::Text { ref value, .. } => Some(value.as_str()),
+            PartKind::Text { ref value, .. } => Some(value),
             _ => None,
         }
     }
@@ -444,13 +433,13 @@ impl<'a> Part<'a> {
 
     fn write(&self, mut writer: impl Write, props: impl Props) -> fmt::Result {
         match self.0 {
-            PartKind::Text { ref value, .. } => writer.write_text(value.as_str()),
+            PartKind::Text { ref value, .. } => writer.write_text(value.get()),
             PartKind::Hole {
                 ref label,
                 ref formatter,
                 ..
             } => {
-                let label = label.as_str();
+                let label = label.get();
 
                 if let Some(value) = props.get(label) {
                     if let Some(formatter) = formatter {

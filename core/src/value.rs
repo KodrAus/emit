@@ -20,6 +20,35 @@ impl<'v> Value<'v> {
         Value(value_bag::ValueBag::from_debug(value))
     }
 
+    #[cfg(feature = "serde")]
+    pub fn capture_serde(value: &'v (impl serde::Serialize + 'static)) -> Self {
+        Value(value_bag::ValueBag::capture_serde1(value))
+    }
+
+    #[cfg(feature = "serde")]
+    pub fn from_serde(value: &'v impl serde::Serialize) -> Self {
+        Value(value_bag::ValueBag::from_serde1(value))
+    }
+
+    #[cfg(feature = "sval")]
+    pub fn capture_sval(value: &'v (impl sval::Value + 'static)) -> Self {
+        Value(value_bag::ValueBag::capture_sval2(value))
+    }
+
+    #[cfg(feature = "sval")]
+    pub fn from_sval(value: &'v impl sval::Value) -> Self {
+        Value(value_bag::ValueBag::from_sval2(value))
+    }
+
+    #[cfg(feature = "std")]
+    pub fn capture_error(value: &'v (impl std::error::Error + 'static)) -> Self {
+        Value(value_bag::ValueBag::capture_error(value))
+    }
+
+    pub fn from_any(value: &'v impl ToValue) -> Self {
+        value.to_value()
+    }
+
     pub fn null() -> Self {
         Value(value_bag::ValueBag::empty())
     }
@@ -40,8 +69,19 @@ impl<'v> Value<'v> {
         struct Extract<T>(Option<T>);
 
         impl<'v, T: FromStr> value_bag::visit::Visit<'v> for Extract<T> {
-            fn visit_any(&mut self, _: value_bag::ValueBag) -> Result<(), value_bag::Error> {
-                Ok(())
+            fn visit_any(&mut self, value: value_bag::ValueBag) -> Result<(), value_bag::Error> {
+                #[cfg(feature = "alloc")]
+                {
+                    self.0 = value.to_string().parse().ok();
+
+                    Ok(())
+                }
+                #[cfg(not(feature = "alloc"))]
+                {
+                    let _ = value;
+
+                    Ok(())
+                }
             }
 
             fn visit_str(&mut self, value: &str) -> Result<(), value_bag::Error> {
@@ -147,18 +187,6 @@ impl<'v> FromValue<'v> for Value<'v> {
     }
 }
 
-impl<'v> ToValue for value_bag::ValueBag<'v> {
-    fn to_value(&self) -> Value {
-        Value(self.by_ref())
-    }
-}
-
-impl<'v> From<value_bag::ValueBag<'v>> for Value<'v> {
-    fn from(value: value_bag::ValueBag<'v>) -> Self {
-        Value(value)
-    }
-}
-
 impl ToValue for str {
     fn to_value(&self) -> Value {
         Value::from(self)
@@ -255,6 +283,44 @@ impl<'v, const N: usize> From<&'v [i64; N]> for Value<'v> {
     }
 }
 
+impl ToValue for dyn fmt::Debug {
+    fn to_value(&self) -> Value {
+        Value(value_bag::ValueBag::from_dyn_debug(self))
+    }
+}
+
+impl<'v> From<&'v dyn fmt::Debug> for Value<'v> {
+    fn from(value: &'v dyn fmt::Debug) -> Self {
+        Value(value_bag::ValueBag::from_dyn_debug(value))
+    }
+}
+
+impl ToValue for dyn fmt::Display {
+    fn to_value(&self) -> Value {
+        Value(value_bag::ValueBag::from_dyn_display(self))
+    }
+}
+
+impl<'v> From<&'v dyn fmt::Display> for Value<'v> {
+    fn from(value: &'v dyn fmt::Display) -> Self {
+        Value(value_bag::ValueBag::from_dyn_display(value))
+    }
+}
+
+#[cfg(feature = "std")]
+impl ToValue for (dyn std::error::Error + 'static) {
+    fn to_value(&self) -> Value {
+        Value(value_bag::ValueBag::from_dyn_error(self))
+    }
+}
+
+#[cfg(feature = "std")]
+impl<'v> From<&'v (dyn std::error::Error + 'static)> for Value<'v> {
+    fn from(value: &'v (dyn std::error::Error + 'static)) -> Self {
+        Value(value_bag::ValueBag::from_dyn_error(value))
+    }
+}
+
 #[cfg(feature = "alloc")]
 mod alloc_support {
     use super::*;
@@ -304,21 +370,9 @@ mod alloc_support {
         }
     }
 
-    impl From<value_bag::OwnedValueBag> for OwnedValue {
-        fn from(value: value_bag::OwnedValueBag) -> Self {
-            OwnedValue(value)
-        }
-    }
-
     impl ToValue for OwnedValue {
         fn to_value(&self) -> Value {
             self.by_ref()
-        }
-    }
-
-    impl ToValue for value_bag::OwnedValueBag {
-        fn to_value(&self) -> Value {
-            Value(self.by_ref())
         }
     }
 

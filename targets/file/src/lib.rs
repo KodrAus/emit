@@ -186,9 +186,9 @@ impl<'a, P: emit::Props> sval::Value for EventValue<'a, P> {
 
         self.0.props().for_each(|k, v| {
             match (|| {
-                stream.record_value_begin(None, &sval::Label::new_computed(k.as_str()))?;
+                stream.record_value_begin(None, &sval::Label::new_computed(k.get()))?;
                 stream.value_computed(&v)?;
-                stream.record_value_end(None, &sval::Label::new_computed(k.as_str()))?;
+                stream.record_value_end(None, &sval::Label::new_computed(k.get()))?;
 
                 Ok::<(), sval::Error>(())
             })() {

@@ -218,7 +218,11 @@ The [`Timer`] type provides a convenient way to produce an extent that covers a 
 
 # Ambient context
 
-Emit doesn't require threading loggers through your program directly. You can store ambient state you want events to carry in the current _context_. Emit's context is a stack that can be managed either directly for synchronous operations, or through a future for asynchronous ones.
+`emit` doesn't require threading loggers through your program directly. You can store ambient state you want events to carry in the ambient [`Ctxt`]. `emit`'s context is a stack that can be managed either directly for synchronous operations, or through a future for asynchronous ones.
+
+The [`Frame`] type is a wrapper over a [`Ctxt`] that handles pushing and popping a set of properties automatically.
+
+Any properties captured by the span macros will be pushed onto the current context.
 
 ## Observability signals
 

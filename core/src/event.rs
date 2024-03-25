@@ -121,7 +121,7 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
                 let mut f = f.debug_struct("");
 
                 self.0.for_each(|k, v| {
-                    f.field(k.as_str(), &v);
+                    f.field(k.get(), &v);
 
                     ControlFlow::Continue(())
                 });

@@ -59,7 +59,7 @@ impl log::kv::Source for EmitSource {
     ) -> Result<(), log::kv::Error> {
         for (key, value) in &self.0 {
             visitor.visit_pair(
-                log::kv::Key::from_str(key.as_str()),
+                log::kv::Key::from_str(key.get()),
                 log::kv::Value::from_sval(value),
             )?;
         }

@@ -135,13 +135,13 @@ where
     T: fmt::Display + Any,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::capture_display(self).into())
+        Some(Value::capture_display(self))
     }
 }
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_dyn_display(self).into())
+        Some(Value::from(self))
     }
 }
 
@@ -150,7 +150,7 @@ where
     T: fmt::Display,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_display(self).into())
+        Some(Value::from_display(self))
     }
 }
 
@@ -159,13 +159,13 @@ where
     T: fmt::Debug + Any,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::capture_debug(self).into())
+        Some(Value::capture_debug(self))
     }
 }
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_dyn_debug(self).into())
+        Some(Value::from(self))
     }
 }
 
@@ -174,7 +174,7 @@ where
     T: fmt::Debug,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_debug(self).into())
+        Some(Value::from_debug(self))
     }
 }
 
@@ -202,7 +202,7 @@ where
     T: sval::Value + Any,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::capture_sval2(self).into())
+        Some(Value::capture_sval(self))
     }
 }
 
@@ -212,7 +212,7 @@ where
     T: sval::Value,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_sval2(self).into())
+        Some(Value::from_sval(self))
     }
 }
 
@@ -222,7 +222,7 @@ where
     T: serde::Serialize + Any,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::capture_serde1(self).into())
+        Some(Value::capture_serde(self))
     }
 }
 
@@ -232,7 +232,7 @@ where
     T: serde::Serialize,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_serde1(self).into())
+        Some(Value::from_serde(self))
     }
 }
 
@@ -242,14 +242,14 @@ where
     T: Error + 'static,
 {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::capture_error(self).into())
+        Some(Value::capture_error(self))
     }
 }
 
 #[cfg(feature = "std")]
 impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
     fn capture(&self) -> Option<Value> {
-        Some(value_bag::ValueBag::from_dyn_error(self).into())
+        Some(Value::from(self))
     }
 }
 
