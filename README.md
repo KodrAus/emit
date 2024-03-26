@@ -2,12 +2,6 @@
 
 **Current Status: Proof-of-concept**
 
-This library is a playground for modern structured logging techniques for Rust, based on the work of `log` and `tracing`.
-
-It's just a proof-of-concept that will need a lot more work to be polished into a consumable artifact, but sketches out a lot of design space.
-
-For some idea of what it can do, see the `tests/smoke-test` example.
-
 ```rust
 use std::time::Duration;
 
@@ -26,3 +20,5 @@ fn greet(user: &str) {
     emit::info!("Hello, {user}!");
 }
 ```
+
+![The output of running the above program](https://github.com/KodrAus/emit/blob/main/asset/emit_term.png?raw=true)
