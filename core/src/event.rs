@@ -18,7 +18,6 @@ pub struct Event<'a, P> {
     tpl: Template<'a>,
     // "why"
     props: P,
-    // "how" is your problem
 }
 
 impl<'a, P> Event<'a, P> {
