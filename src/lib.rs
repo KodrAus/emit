@@ -42,32 +42,6 @@ let id = 42;
 emit::info!("Hello, {user}", id);
 ```
 
-This macro expands roughly to:
-
-```
-let user = "Rust";
-let id = 42;
-
-// emit::info!("Hello, {user}");
-let rt = emit::runtime::shared();
-
-let extent = rt.now();
-let props = &[
-    ("user", user),
-    ("id", id),
-];
-
-rt.emit(emit::Event::new(
-    "some_app::some_module",
-    extent,
-    emit::Template::new(&[
-        emit::template::Part::text("Hello, "),
-        emit::template::Part::hole("user"),
-    ]),
-    props,
-));
-```
-
 In this example, the template is `"Hello, {user}"`, and the properties are `{"user": "Rust", "id": 42}`.
 
 Properties are field values, so identifiers may be given values inline either in the template itself or after it:
@@ -93,34 +67,7 @@ fn my_function(user: &str) {
 }
 ```
 
-When `my_function` completes, an event will be emitted with the time it took to execute. This macro expands roughly to:
-
-```
-// #[emit::info_span!("Invoke with {user}")]
-fn my_function(user: &str) {
-    let rt = emit::runtime::shared();
-
-    let timer = emit::Timer::start(rt).on_drop(|extent| {
-        let props = &[
-            ("user", user),
-        ];
-
-        rt.emit(emit::Event::new(
-            "some_app::some_module",
-            extent,
-            emit::Template::new(&[
-                emit::template::Part::text("Invoke with "),
-                emit::template::Part::hole("user"),
-            ]),
-            props,
-        ));
-    });
-
-    // Function body..
-
-    drop(timer);
-}
-```
+When `my_function` completes, an event will be emitted with the time it took to execute.
 
 ## Completion
 
@@ -216,6 +163,14 @@ emit::info!(extent: now..later, "A span event");
 
 The [`Timer`] type provides a convenient way to produce an extent that covers a time range.
 
+## Getting the current timestamp
+
+You can read the current timestamp from a clock using [`Clock::now`]:
+
+```
+let now = emit::runtime::shared().now();
+```
+
 # Ambient context
 
 `emit` doesn't require threading loggers through your program directly. You can store ambient state you want events to carry in the ambient [`Ctxt`]. `emit`'s context is a stack that can be managed either directly for synchronous operations, or through a future for asynchronous ones.
@@ -224,7 +179,82 @@ The [`Frame`] type is a wrapper over a [`Ctxt`] that handles pushing and popping
 
 Any properties captured by the span macros will be pushed onto the current context.
 
-## Observability signals
+## Setting ambient context
+
+The most straightfoward way to push ambient context is using the span macros:
+
+```
+#[emit::span("Greeting", span_id: "86d871f54f5b4e23")]
+{
+    emit::info!("Hello, {user}", user: "Rust", id: 42);
+}
+```
+
+You can also push properties onto the ambient context directly with [`Frame::push`]:
+
+```
+let frame = emit::Frame::push(emit::runtime::shared(), emit::props! {
+    span_id: "86d871f54f5b4e23"
+});
+
+let _guard = frame.enter();
+
+emit::info!("Hello, {user}", user: "Rust", id: 42);
+```
+
+## Reading ambient context
+
+You can read the current properties in the ambient context with [`Frame::with`]:
+
+```
+emit::Frame::current().with(|props| {
+    let span_id = props.get("span_id");
+
+    // ..
+});
+```
+
+This example also uses [`Frame::current`] instead of [`Frame::push`] to get a frame of the current ambient context so its properties can be read.
+
+## Propagating ambient context across threads
+
+Ambient context is not guaranteed to propagate across threads, so when spawning background work that should retain the context of its creator, you'll need to grab the current context to send with the work:
+
+```
+thread::spawn({
+    let frame = emit::Frame::current(emit::runtime::shared());
+
+    move || frame.call(move || {
+        // ..
+    })
+});
+```
+
+In async code, you can typically wrap the future representing the background work in the current context:
+
+```
+tokio::spawn(
+    emit::Frame::current(emit::runtime::shared()).in_future(async {
+        // ..
+    })
+);
+```
+
+# Runtimes
+
+All functionality needed to emit events is encapsulated in a [`runtime::Runtime`]. This type carries the following key components:
+
+- [`Filter`]: Determines whether an event should be emitted.
+- [`Emitter`]: The target of emitted events.
+- [`Ctxt`]: Storage for ambient context.
+- [`Clock`]: Reads the wall-clock time.
+- [`Rng`]: Source of randomness.
+
+When calling the macros, the runtime is implicitly assumed to be [`runtime::shared`], which is what [`Setup::init`] will configure. You can override the runtime with the `rt` control parameter in the macros.
+
+The default context will use thread-local storage to reduce synchronization, so is only available when running on a host that supports it. The clock and randomness also rely on the host platform, so are unavailable in embedded environments unless a bespoke implementation is configured.
+
+# Observability signals
 
 Emit doesn't hard-code common observability concepts into events. It instead relies on the presence well-known properties to carry that information.
 

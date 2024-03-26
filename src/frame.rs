@@ -19,6 +19,7 @@ impl<C: Ctxt> Frame<C> {
     }
 
     #[track_caller]
+    #[must_use = "call `enter`, `call`, or `in_future` to make the pushed properties active"]
     pub fn push(ctxt: C, props: impl Props) -> Self {
         let scope = mem::ManuallyDrop::new(ctxt.open_push(props));
 
@@ -26,10 +27,16 @@ impl<C: Ctxt> Frame<C> {
     }
 
     #[track_caller]
+    #[must_use = "call `enter`, `call`, or `in_future` to make the properties active"]
     pub fn root(ctxt: C, props: impl Props) -> Self {
         let scope = mem::ManuallyDrop::new(ctxt.open_root(props));
 
         Frame { ctxt, scope }
+    }
+
+    #[track_caller]
+    pub fn with(&mut self, with: impl FnOnce(&C::Current)) {
+        self.enter().with(with)
     }
 
     #[track_caller]
@@ -49,6 +56,7 @@ impl<C: Ctxt> Frame<C> {
     }
 
     #[track_caller]
+    #[must_use = "futures do nothing unless polled"]
     pub fn in_future<F>(self, future: F) -> FrameFuture<C, F> {
         FrameFuture {
             frame: self,
@@ -60,6 +68,13 @@ impl<C: Ctxt> Frame<C> {
 pub struct EnterGuard<'a, C: Ctxt> {
     scope: &'a mut Frame<C>,
     _marker: PhantomData<*mut fn()>,
+}
+
+impl<'a, C: Ctxt> EnterGuard<'a, C> {
+    #[track_caller]
+    pub fn with(&mut self, with: impl FnOnce(&C::Current)) {
+        self.scope.ctxt.with_current(with)
+    }
 }
 
 impl<'a, C: Ctxt> Drop for EnterGuard<'a, C> {
