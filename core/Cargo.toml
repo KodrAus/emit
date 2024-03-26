@@ -11,7 +11,7 @@ serde = ["value-bag/serde", "dep:serde"]
 
 [dependencies.value-bag]
 version = "1"
-features = ["seq"]
+features = ["inline-i128", "seq"]
 
 [dependencies.sval]
 version = "2"

@@ -100,20 +100,8 @@ impl<'v> Value<'v> {
         self.0.to_borrowed_str()
     }
 
-    pub fn to_f64(&self) -> Option<f64> {
-        self.0.to_f64()
-    }
-
     pub fn as_f64(&self) -> f64 {
         self.0.as_f64()
-    }
-
-    pub fn to_usize(&self) -> Option<usize> {
-        self.0.to_u64()?.try_into().ok()
-    }
-
-    pub fn to_i64(&self) -> Option<i64> {
-        self.0.to_i64()
     }
 }
 
@@ -187,111 +175,85 @@ impl<'v> FromValue<'v> for Value<'v> {
     }
 }
 
-impl ToValue for str {
-    fn to_value(&self) -> Value {
-        Value::from(self)
-    }
+macro_rules! impl_primitive {
+    ($($t:ty,)*) => {
+        $(
+            impl ToValue for $t {
+                fn to_value(&self) -> Value {
+                    Value(self.into())
+                }
+            }
+
+            impl<const N: usize> ToValue for [$t; N] {
+                fn to_value(&self) -> Value {
+                    Value(self.into())
+                }
+            }
+
+            impl<'v> FromValue<'v> for $t {
+                fn from_value(value: Value<'v>) -> Option<Self> {
+                    value.0.try_into().ok()
+                }
+            }
+
+            impl<'v> From<$t> for Value<'v> {
+                fn from(value: $t) -> Self {
+                    Value(value.into())
+                }
+            }
+
+            impl<'v> From<Option<$t>> for Value<'v> {
+                fn from(value: Option<$t>) -> Self {
+                    Value(value_bag::ValueBag::from_option(value))
+                }
+            }
+        )*
+    };
 }
 
-impl<'v> From<&'v str> for Value<'v> {
-    fn from(value: &'v str) -> Self {
-        Value(value.into())
-    }
+macro_rules! impl_ref {
+    ($(& $l:lifetime $t:ty,)*) => {
+        $(
+            impl ToValue for $t {
+                fn to_value(&self) -> Value {
+                    Value(self.into())
+                }
+            }
+
+            impl<$l, const N: usize> ToValue for [&$l $t; N] {
+                fn to_value(&self) -> Value {
+                    Value(self.into())
+                }
+            }
+
+            impl<$l> FromValue<$l> for &$l $t {
+                fn from_value(value: Value<$l>) -> Option<Self> {
+                    value.0.try_into().ok()
+                }
+            }
+
+            impl<$l> From<&$l $t> for Value<$l> {
+                fn from(value: &$l $t) -> Self {
+                    Value(value.into())
+                }
+            }
+
+            impl<$l> From<Option<&$l $t>> for Value<$l> {
+                fn from(value: Option<&$l $t>) -> Self {
+                    Value(value_bag::ValueBag::from_option(value))
+                }
+            }
+        )*
+    };
 }
 
-impl<'v> FromValue<'v> for &'v str {
-    fn from_value(value: Value<'v>) -> Option<Self> {
-        value.to_borrowed_str()
-    }
-}
+impl_primitive!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f64, bool,);
 
-impl ToValue for usize {
-    fn to_value(&self) -> Value {
-        Value::from(*self)
-    }
-}
-
-impl<'v> From<usize> for Value<'v> {
-    fn from(value: usize) -> Self {
-        Value(value.into())
-    }
-}
-
-impl<'v> FromValue<'v> for usize {
-    fn from_value(value: Value<'v>) -> Option<Self> {
-        value.to_usize()
-    }
-}
-
-impl ToValue for f64 {
-    fn to_value(&self) -> Value {
-        Value::from(*self)
-    }
-}
-
-impl<'v> From<f64> for Value<'v> {
-    fn from(value: f64) -> Self {
-        Value(value.into())
-    }
-}
-
-impl<'v> FromValue<'v> for f64 {
-    fn from_value(value: Value<'v>) -> Option<Self> {
-        value.to_f64()
-    }
-}
-
-impl<const N: usize> ToValue for [f64; N] {
-    fn to_value(&self) -> Value {
-        Value::from(self)
-    }
-}
-
-impl<'v, const N: usize> From<&'v [f64; N]> for Value<'v> {
-    fn from(value: &'v [f64; N]) -> Self {
-        Value(value.into())
-    }
-}
-
-impl ToValue for i64 {
-    fn to_value(&self) -> Value {
-        Value::from(*self)
-    }
-}
-
-impl<'v> From<i64> for Value<'v> {
-    fn from(value: i64) -> Self {
-        Value(value.into())
-    }
-}
-
-impl<'v> FromValue<'v> for i64 {
-    fn from_value(value: Value<'v>) -> Option<Self> {
-        value.to_i64()
-    }
-}
-
-impl<const N: usize> ToValue for [i64; N] {
-    fn to_value(&self) -> Value {
-        Value::from(self)
-    }
-}
-
-impl<'v, const N: usize> From<&'v [i64; N]> for Value<'v> {
-    fn from(value: &'v [i64; N]) -> Self {
-        Value(value.into())
-    }
-}
+impl_ref!(&'v str,);
 
 impl ToValue for dyn fmt::Debug {
     fn to_value(&self) -> Value {
         Value(value_bag::ValueBag::from_dyn_debug(self))
-    }
-}
-
-impl<'v> From<&'v dyn fmt::Debug> for Value<'v> {
-    fn from(value: &'v dyn fmt::Debug) -> Self {
-        Value(value_bag::ValueBag::from_dyn_debug(value))
     }
 }
 
@@ -301,23 +263,10 @@ impl ToValue for dyn fmt::Display {
     }
 }
 
-impl<'v> From<&'v dyn fmt::Display> for Value<'v> {
-    fn from(value: &'v dyn fmt::Display) -> Self {
-        Value(value_bag::ValueBag::from_dyn_display(value))
-    }
-}
-
 #[cfg(feature = "std")]
 impl ToValue for (dyn std::error::Error + 'static) {
     fn to_value(&self) -> Value {
         Value(value_bag::ValueBag::from_dyn_error(self))
-    }
-}
-
-#[cfg(feature = "std")]
-impl<'v> From<&'v (dyn std::error::Error + 'static)> for Value<'v> {
-    fn from(value: &'v (dyn std::error::Error + 'static)) -> Self {
-        Value(value_bag::ValueBag::from_dyn_error(value))
     }
 }
 

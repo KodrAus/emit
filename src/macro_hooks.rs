@@ -90,7 +90,7 @@ impl CaptureStr for CaptureValue {}
 
 impl<T: CaptureStr + ?Sized> Capture<T> for str {
     fn capture(&self) -> Option<Value> {
-        Some(Value::from(self))
+        Some(self.to_value())
     }
 }
 
@@ -141,7 +141,7 @@ where
 
 impl Capture<CaptureDisplay> for dyn fmt::Display {
     fn capture(&self) -> Option<Value> {
-        Some(Value::from(self))
+        Some(self.to_value())
     }
 }
 
@@ -165,7 +165,7 @@ where
 
 impl Capture<CaptureDebug> for dyn fmt::Debug {
     fn capture(&self) -> Option<Value> {
-        Some(Value::from(self))
+        Some(self.to_value())
     }
 }
 
@@ -249,7 +249,7 @@ where
 #[cfg(feature = "std")]
 impl<'a> Capture<CaptureError> for (dyn Error + 'static) {
     fn capture(&self) -> Option<Value> {
-        Some(Value::from(self))
+        Some(self.to_value())
     }
 }
 

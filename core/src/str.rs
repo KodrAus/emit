@@ -182,7 +182,7 @@ impl<'a> From<&'a str> for Str<'a> {
 
 impl<'k> ToValue for Str<'k> {
     fn to_value(&self) -> Value {
-        Value::from(self.get())
+        self.get().to_value()
     }
 }
 
