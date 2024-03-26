@@ -126,7 +126,7 @@ impl<C: emit::Ctxt, S: tracing::Subscriber> emit::Ctxt for TracingCtxt<C, S> {
         self.0.enter(&mut frame.1)
     }
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         self.0.with_current(with)
     }
 

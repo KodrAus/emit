@@ -231,7 +231,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> 
         self.ctxt.enter(scope)
     }
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         self.ctxt.with_current(with)
     }
 
@@ -294,7 +294,7 @@ impl<T: Ctxt> Ctxt for AssertInternal<T> {
         self.0.enter(local)
     }
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         self.0.with_current(with)
     }
 

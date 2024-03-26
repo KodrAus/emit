@@ -44,7 +44,7 @@ impl Ctxt for ThreadLocalCtxt {
     type Current = ThreadLocalSpan;
     type Frame = ThreadLocalSpan;
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         ACTIVE.with(|span| with(&*span.borrow()))
     }
 

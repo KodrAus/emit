@@ -7,17 +7,12 @@ pub trait Ctxt {
     fn open_root<P: Props>(&self, props: P) -> Self::Frame;
 
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
-        let mut frame = None;
-        self.with_current(|current| {
-            frame = Some(self.open_root(props.chain(current)));
-        });
-
-        frame.expect("`with` closure not called")
+        self.with_current(|current| self.open_root(props.chain(current)))
     }
 
     fn enter(&self, local: &mut Self::Frame);
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F);
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R;
 
     fn exit(&self, local: &mut Self::Frame);
 
@@ -44,7 +39,7 @@ impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
         (**self).enter(frame)
     }
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         (**self).with_current(with)
     }
 
@@ -61,7 +56,7 @@ impl<C: Ctxt> Ctxt for Option<C> {
     type Current = Option<internal::Slot<C::Current>>;
     type Frame = Option<C::Frame>;
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         match self {
             Some(ctxt) => {
                 ctxt.with_current(|props| unsafe { with(&Some(internal::Slot::new(props))) })
@@ -102,7 +97,7 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
     type Current = C::Current;
     type Frame = C::Frame;
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         (**self).with_current(with)
     }
 
@@ -146,7 +141,7 @@ impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
         self.0.enter(frame)
     }
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         self.0.with_current(with)
     }
 
@@ -163,7 +158,7 @@ impl Ctxt for Empty {
     type Current = Empty;
     type Frame = Empty;
 
-    fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         with(&Empty)
     }
 
@@ -327,12 +322,15 @@ mod alloc_support {
         type Current = internal::ErasedCurrent;
         type Frame = ErasedFrame;
 
-        fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+        fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
             let mut f = Some(with);
+            let mut r = None;
 
             self.erase_ctxt().0.dispatch_with_current(&mut |props| {
-                f.take().expect("called multiple times")(&props)
+                r = Some(f.take().expect("called multiple times")(&props));
             });
+
+            r.expect("ctxt didn't call `with`")
         }
 
         fn open_root<P: Props>(&self, props: P) -> Self::Frame {
@@ -360,7 +358,7 @@ mod alloc_support {
         type Current = <dyn ErasedCtxt + 'a as Ctxt>::Current;
         type Frame = <dyn ErasedCtxt + 'a as Ctxt>::Frame;
 
-        fn with_current<F: FnOnce(&Self::Current)>(&self, with: F) {
+        fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
             (self as &(dyn ErasedCtxt + 'a)).with_current(with)
         }
 

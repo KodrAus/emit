@@ -35,7 +35,7 @@ impl<C: Ctxt> Frame<C> {
     }
 
     #[track_caller]
-    pub fn with(&mut self, with: impl FnOnce(&C::Current)) {
+    pub fn with<R>(&mut self, with: impl FnOnce(&C::Current) -> R) -> R {
         self.enter().with(with)
     }
 
@@ -72,7 +72,7 @@ pub struct EnterGuard<'a, C: Ctxt> {
 
 impl<'a, C: Ctxt> EnterGuard<'a, C> {
     #[track_caller]
-    pub fn with(&mut self, with: impl FnOnce(&C::Current)) {
+    pub fn with<R>(&mut self, with: impl FnOnce(&C::Current) -> R) -> R {
         self.scope.ctxt.with_current(with)
     }
 }

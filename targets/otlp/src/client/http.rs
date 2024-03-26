@@ -154,12 +154,11 @@ async fn send_request(
             }
 
             // Propagate traceparent for the batch
-            let mut trace_id = None;
-            let mut span_id = None;
-
-            rt.ctxt().with_current(|props| {
-                trace_id = props.pull::<emit::trace::TraceId, _>(KEY_TRACE_ID);
-                span_id = props.pull::<emit::trace::SpanId, _>(KEY_SPAN_ID);
+            let (trace_id, span_id) = rt.ctxt().with_current(|props| {
+                (
+                    props.pull::<emit::trace::TraceId, _>(KEY_TRACE_ID),
+                    props.pull::<emit::trace::SpanId, _>(KEY_SPAN_ID),
+                )
             });
 
             req = if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {

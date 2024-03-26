@@ -561,12 +561,11 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
         }
     }
 
-    let mut trace_id = None;
-    let mut span_parent = None;
-
-    rt.with_current(|current| {
-        trace_id = current.pull::<TraceId, _>(KEY_TRACE_ID);
-        span_parent = current.pull::<SpanId, _>(KEY_SPAN_ID);
+    let (mut trace_id, span_parent) = rt.with_current(|current| {
+        (
+            current.pull::<TraceId, _>(KEY_TRACE_ID),
+            current.pull::<SpanId, _>(KEY_SPAN_ID),
+        )
     });
 
     trace_id = trace_id.or_else(|| TraceId::random(rt));
