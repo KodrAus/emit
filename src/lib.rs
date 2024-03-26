@@ -58,7 +58,7 @@ emit::info!("Hello, {user}", user: "Rust", id: 42);
 
 # Tracing functions
 
-When significant operations are invoked in your application you can use _span events_ to time them while also corrolating any other events they emit into a trace hierarchy. This can be done using the [`span`], [`debug_span`], [`info_span`], [`warn_span`], and [`error_span`] macros. The macros use the same syntax as those for regular events:
+When significant operations are invoked in your application you can use _span events_ to time them, also linking any other events they emit into a correlated hierarchy. This can be done using the [`span`], [`debug_span`], [`info_span`], [`warn_span`], and [`error_span`] macros. The macros use the same syntax as those for regular events:
 
 ```
 #[emit::info_span!("Invoke with {user}")]
@@ -89,6 +89,79 @@ fn my_function(id: &str) -> Result<i32, Error> {
 ```
 
 In this example, we use the `arg` field value before the template to assign a local variable `span` that represents the span for our function. The type of `span` is a [`timer::TimerGuard`]. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
+
+# Aggregating metrics
+
+You can periodically aggregate and emit events for metrics tracked by your applications. This can be done using the [`emit`] macro along with some well-known properties. An event is considered a metric if it carries:
+
+- `metric_name`: The source of the metric.
+- `metric_agg`: The aggregation applied to the source to produce its value.
+- `metric_value`: The value of the metric.
+
+In SQL terms, you can think of a metric as:
+
+```sql
+select metric_agg(x) as metric_value from metric_name
+```
+
+`emit` doesn't have any infrastructure for collecting and storing metrics themselves; this is left up to the application.
+
+## Cumulative metrics
+
+Events with a point extent are considered cumulative metrics. The value is the result of applying the aggregation over the entire lifetime of the metric up to that timestamp.
+
+```
+emit::emit!(
+    "{metric_agg} of {metric_name} is {metric_value}",
+    metric_agg: "count",
+    metric_name: "requests_received",
+    metric_value: 17,
+);
+```
+
+In this example, the total number of requests received over the lifetime of the application is `17`.
+
+## Delta metrics
+
+Events with a span extent are considered delta metrics. The value is the result of applying the aggregation over that time range.
+
+```
+let now = emit::runtime::shared().now();
+
+emit::emit!(
+    extent: now..now + Duration::from_secs(60),
+    "{metric_agg} of {metric_name} is {metric_value}",
+    metric_agg: "count",
+    metric_name: "requests_received",
+    metric_value: 3,
+);
+```
+
+In this example, there have been `3` new requests received over the last minute.
+
+## Histogram metrics
+
+Events with a span extent where the metric value is also a sequence are considered histograms. Each element in the sequence is a bucket. The width of each bucket is implied as `extent.len() / metric_value.len()`.
+
+```
+let now = emit::runtime::shared().now();
+
+emit::emit!(
+    extent: now..now + Duration::from_secs(60),
+    "{metric_agg} of {metric_name} is {metric_value}",
+    metric_agg: "count",
+    metric_name: "requests_received",
+    #[emit::as_value]
+    metric_value: &[
+        3,
+        6,
+        0,
+        8,
+    ],
+);
+```
+
+In this example, the requests received are collected into 15 second buckets (`60s / 4`).
 
 # Property capturing
 
@@ -253,45 +326,6 @@ All functionality needed to emit events is encapsulated in a [`runtime::Runtime`
 When calling the macros, the runtime is implicitly assumed to be [`runtime::shared`], which is what [`Setup::init`] will configure. You can override the runtime with the `rt` control parameter in the macros.
 
 The default context will use thread-local storage to reduce synchronization, so is only available when running on a host that supports it. The clock and randomness also rely on the host platform, so are unavailable in embedded environments unless a bespoke implementation is configured.
-
-# Observability signals
-
-Emit doesn't hard-code common observability concepts into events. It instead relies on the presence well-known properties to carry that information.
-
-### Logs
-
-Events with a point extent can represent log records. Well-known properties related to logs include:
-
-- **Level (`lvl`):** A traditional log level that describes the relative severity of an event for coarse-grained filtering.
-    - **Debug:** A high-frequency point in the execution of an operation.
-    - **Info:** A significant point in the execution of an operation.
-    - **Warn:** An erroneous event that didn't cause its operation to fail.
-    - **Error:** An erroneous event that caused its operation to fail.
-- **Error (`err`):** An error that caused the event.
-
-### Traces
-
-Events with a span extent can represent spans in a distributed trace. Events in a distributed trace also need to carry a _trace id_ and _span id_. Well-known properties related to traces include:
-
-- **Trace id (`trace_id`):** An identifier that marks an event as belonging to a distributed trace.
-- **Span id (`span_id`):** An identifier that marks an event as belonging to a span of execution in a distributed trace.
-- **Parent span id (`span_parent`):** An identifier that links the span id of an event to the span id of its parent.
-
-Emit doesn't define any direct APIs for trace propagation or sampling. That responsibility is left up to the caller.
-
-### Metrics
-
-Emit's model for metrics is based on _aggregations_. A metric captures the result of applying an aggregation over an underlying timeseries data source within the extent to produce a sample. Events with a point extent can represent cumulative metric samples. Events with a span extent can represent delta metric samples. Well-known properties related to metrics include:
-
-- **Metric name (`metric_name`):** The name of a data source that marks an event as representing a metric sampled from that source.
-- **Metric aggregation (`metric_agg`):** The aggregation over the data source the metric sample was computed with.
-    - **Last:** The latest value in the underlying source.
-    - **Sum:** The sum of all values in the underlying source.
-    - **Count:** The count of all values in the underlying source. A count is a monotonic sum of ones.
-- **Metric value (`metric_value`):** The sampled value from the metric source.
-- **Metric unit (`metric_unit`):** The unit the sampled value is in.
-
-Emit's metric support can represent common cases of counters and gauges, but can't express the full fidelity of other models.
 */
 
 #![cfg_attr(not(feature = "std"), no_std)]
