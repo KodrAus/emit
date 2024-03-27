@@ -33,20 +33,21 @@ impl Otlp {
 impl emit::emitter::Emitter for Otlp {
     fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
         if let Some(ref encoder) = self.otlp_metrics {
-            if let Some(encoded) = encoder.encode_event(evt) {
+            if let Some(encoded) = encoder.encode_event::<data::Proto>(evt) {
                 return self.sender.send(ChannelItem::Metric(encoded));
             }
         }
 
         if let Some(ref encoder) = self.otlp_traces {
-            if let Some(encoded) = encoder.encode_event(evt) {
+            if let Some(encoded) = encoder.encode_event::<data::Proto>(evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
             }
         }
 
         if let Some(ref encoder) = self.otlp_logs {
-            self.sender
-                .send(ChannelItem::LogRecord(encoder.encode_event(evt)));
+            self.sender.send(ChannelItem::LogRecord(
+                encoder.encode_event::<data::Proto>(evt),
+            ));
             return;
         }
 
@@ -445,7 +446,7 @@ impl OtlpBuilder {
                 if otlp_logs.len() > 0 {
                     if let Some(client) = client.otlp_logs {
                         if let Err(e) = client
-                            .send(otlp_logs, logs::encode_request, {
+                            .send(otlp_logs, logs::encode_request::<data::Proto>, {
                                 #[cfg(feature = "decode_responses")]
                                 {
                                     if emit::runtime::internal_slot().is_enabled() {
@@ -473,7 +474,7 @@ impl OtlpBuilder {
                 if otlp_traces.len() > 0 {
                     if let Some(client) = client.otlp_traces {
                         if let Err(e) = client
-                            .send(otlp_traces, traces::encode_request, {
+                            .send(otlp_traces, traces::encode_request::<data::Proto>, {
                                 #[cfg(feature = "decode_responses")]
                                 {
                                     if emit::runtime::internal_slot().is_enabled() {
@@ -508,7 +509,7 @@ impl OtlpBuilder {
                 if otlp_metrics.len() > 0 {
                     if let Some(client) = client.otlp_metrics {
                         if let Err(e) = client
-                            .send(otlp_metrics, metrics::encode_request, {
+                            .send(otlp_metrics, metrics::encode_request::<data::Proto>, {
                                 #[cfg(feature = "decode_responses")]
                                 {
                                     if emit::runtime::internal_slot().is_enabled() {

@@ -17,6 +17,52 @@ pub(crate) mod generated;
 
 pub use self::{any_value::*, instrumentation_scope::*, resource::*};
 
+pub(crate) trait Encoding {
+    type TraceId: From<emit::trace::TraceId> + sval::Value;
+    type SpanId: From<emit::trace::SpanId> + sval::Value;
+
+    fn encode<V: sval::Value>(value: V) -> PreEncoded;
+}
+
+pub(crate) struct Proto;
+
+pub(crate) struct BinaryTraceId(emit::trace::TraceId);
+
+impl From<emit::trace::TraceId> for BinaryTraceId {
+    fn from(id: emit::trace::TraceId) -> BinaryTraceId {
+        BinaryTraceId(id)
+    }
+}
+
+impl sval::Value for BinaryTraceId {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream.value_computed(&sval::BinaryArray::new(&self.0.to_u128().to_be_bytes()))
+    }
+}
+
+pub(crate) struct BinarySpanId(emit::trace::SpanId);
+
+impl From<emit::trace::SpanId> for BinarySpanId {
+    fn from(id: emit::trace::SpanId) -> BinarySpanId {
+        BinarySpanId(id)
+    }
+}
+
+impl sval::Value for BinarySpanId {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream.value_computed(&sval::BinaryArray::new(&self.0.to_u64().to_be_bytes()))
+    }
+}
+
+impl Encoding for Proto {
+    type TraceId = BinaryTraceId;
+    type SpanId = BinarySpanId;
+
+    fn encode<V: sval::Value>(value: V) -> PreEncoded {
+        PreEncoded::Proto(sval_protobuf::stream_to_protobuf(value))
+    }
+}
+
 #[derive(Value, Clone)]
 #[sval(dynamic)]
 pub(crate) enum PreEncoded {

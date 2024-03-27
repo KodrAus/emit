@@ -38,6 +38,7 @@ pub struct Sum<'a, DP: ?Sized = [NumberDataPoint<'a>]> {
 
 #[derive(Value)]
 #[repr(i32)]
+#[sval(unlabeled_variants)]
 pub enum AggregationTemporality {
     Unspecified = 0,
     Delta = 1,

@@ -13,7 +13,7 @@ use emit::{
 use emit_batcher::BatchError;
 use sval::Value;
 
-use super::{MessageFormatter, MessageRenderer, PreEncoded};
+use super::{Encoding, MessageFormatter, MessageRenderer, PreEncoded};
 
 pub(crate) struct EventEncoder {
     pub name: Box<MessageFormatter>,
@@ -38,7 +38,7 @@ fn default_name_formatter() -> Box<MessageFormatter> {
 }
 
 impl EventEncoder {
-    pub(crate) fn encode_event(
+    pub(crate) fn encode_event<E: Encoding>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
@@ -70,8 +70,8 @@ impl EventEncoder {
 
             let metric_unit = evt.props().get(KEY_METRIC_UNIT);
 
-            let protobuf = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
-                Some(METRIC_AGG_SUM) => sval_protobuf::stream_to_protobuf(Metric::<_, _, _> {
+            let encoded = match metric_agg.and_then(|kind| kind.to_cow_str()).as_deref() {
+                Some(METRIC_AGG_SUM) => E::encode(Metric::<_, _, _> {
                     name: &sval::Display::new(metric_name),
                     unit: &metric_unit.map(sval::Display::new),
                     data: &MetricData::Sum::<_>(Sum::<_> {
@@ -84,7 +84,7 @@ impl EventEncoder {
                         )?,
                     }),
                 }),
-                Some(METRIC_AGG_COUNT) => sval_protobuf::stream_to_protobuf(Metric::<_, _, _> {
+                Some(METRIC_AGG_COUNT) => E::encode(Metric::<_, _, _> {
                     name: &sval::Display::new(metric_name),
                     unit: &metric_unit.map(sval::Display::new),
                     data: &MetricData::Sum::<_>(Sum::<_> {
@@ -97,7 +97,7 @@ impl EventEncoder {
                         )?,
                     }),
                 }),
-                _ => sval_protobuf::stream_to_protobuf(Metric::<_, _, _> {
+                _ => E::encode(Metric::<_, _, _> {
                     name: &sval::Display::new(metric_name),
                     unit: &metric_unit.map(sval::Display::new),
                     data: &MetricData::Gauge(Gauge::<_> {
@@ -110,7 +110,7 @@ impl EventEncoder {
                 }),
             };
 
-            return Some(PreEncoded::Proto(protobuf));
+            return Some(encoded);
         }
 
         None
@@ -319,24 +319,22 @@ impl DataPointBuilder for RawPointSet {
     }
 }
 
-pub(crate) fn encode_request(
+pub(crate) fn encode_request<E: Encoding>(
     resource: Option<&PreEncoded>,
     scope: Option<&PreEncoded>,
     metrics: &[PreEncoded],
 ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
-    Ok(PreEncoded::Proto(sval_protobuf::stream_to_protobuf(
-        ExportMetricsServiceRequest {
-            resource_metrics: &[ResourceMetrics {
-                resource: &resource,
-                scope_metrics: &[ScopeMetrics {
-                    scope: &scope,
-                    metrics,
-                    schema_url: "",
-                }],
+    Ok(E::encode(ExportMetricsServiceRequest {
+        resource_metrics: &[ResourceMetrics {
+            resource: &resource,
+            scope_metrics: &[ScopeMetrics {
+                scope: &scope,
+                metrics,
                 schema_url: "",
             }],
-        },
-    )))
+            schema_url: "",
+        }],
+    }))
 }
 
 #[cfg(feature = "decode_responses")]

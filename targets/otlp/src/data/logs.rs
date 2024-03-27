@@ -5,7 +5,9 @@ use emit_batcher::BatchError;
 
 pub use self::{export_logs_service::*, log_record::*};
 
-use super::{default_message_formatter, AnyValue, MessageFormatter, MessageRenderer, PreEncoded};
+use super::{
+    default_message_formatter, AnyValue, Encoding, MessageFormatter, MessageRenderer, PreEncoded,
+};
 
 pub(crate) struct EventEncoder {
     pub body: Box<MessageFormatter>,
@@ -20,7 +22,7 @@ impl Default for EventEncoder {
 }
 
 impl EventEncoder {
-    pub(crate) fn encode_event(
+    pub(crate) fn encode_event<E: Encoding>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> PreEncoded {
@@ -31,7 +33,7 @@ impl EventEncoder {
 
         let observed_time_unix_nano = time_unix_nano;
 
-        let protobuf = sval_protobuf::stream_to_protobuf(LogRecord {
+        E::encode(LogRecord {
             time_unix_nano,
             observed_time_unix_nano,
             body: &Some(AnyValue::<_, (), (), ()>::String(&sval::Display::new(
@@ -40,33 +42,29 @@ impl EventEncoder {
                     evt,
                 },
             ))),
-            attributes: &PropsLogRecordAttributes(evt.props()),
+            attributes: &PropsLogRecordAttributes::<E::TraceId, E::SpanId, _>::new(evt.props()),
             dropped_attributes_count: 0,
             flags: Default::default(),
-        });
-
-        PreEncoded::Proto(protobuf)
+        })
     }
 }
 
-pub(crate) fn encode_request(
+pub(crate) fn encode_request<E: Encoding>(
     resource: Option<&PreEncoded>,
     scope: Option<&PreEncoded>,
     log_records: &[PreEncoded],
 ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
-    Ok(PreEncoded::Proto(sval_protobuf::stream_to_protobuf(
-        ExportLogsServiceRequest {
-            resource_logs: &[ResourceLogs {
-                resource: &resource,
-                scope_logs: &[ScopeLogs {
-                    scope: &scope,
-                    log_records,
-                    schema_url: "",
-                }],
+    Ok(E::encode(ExportLogsServiceRequest {
+        resource_logs: &[ResourceLogs {
+            resource: &resource,
+            scope_logs: &[ScopeLogs {
+                scope: &scope,
+                log_records,
                 schema_url: "",
             }],
-        },
-    )))
+            schema_url: "",
+        }],
+    }))
 }
 
 #[cfg(feature = "decode_responses")]

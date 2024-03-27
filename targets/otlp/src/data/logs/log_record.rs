@@ -1,9 +1,12 @@
+use std::marker::PhantomData;
+
 use sval_derive::Value;
 
 use crate::data::{stream_attributes, stream_field, AnyValue, KeyValue};
 
 #[derive(Value)]
 #[repr(i32)]
+#[sval(unlabeled_variants)]
 pub enum SeverityNumber {
     Debug = 5,
     Info = 9,
@@ -57,7 +60,11 @@ const LOG_RECORD_TRACE_ID_INDEX: sval::Index = sval::Index::new(9);
 const LOG_RECORD_SPAN_ID_INDEX: sval::Index = sval::Index::new(10);
 
 #[derive(Value)]
-pub struct InlineLogRecordAttributes<'a> {
+pub struct InlineLogRecordAttributes<
+    'a,
+    T: ?Sized = sval::BinaryArray<16>,
+    S: ?Sized = sval::BinaryArray<8>,
+> {
     #[sval(label = LOG_RECORD_SEVERITY_NUMBER_LABEL, index = LOG_RECORD_SEVERITY_NUMBER_INDEX)]
     pub severity_number: SeverityNumber,
     #[sval(label = LOG_RECORD_SEVERITY_TEXT_LABEL, index = LOG_RECORD_SEVERITY_TEXT_INDEX)]
@@ -65,17 +72,28 @@ pub struct InlineLogRecordAttributes<'a> {
     #[sval(label = LOG_RECORD_ATTRIBUTES_LABEL, index = LOG_RECORD_ATTRIBUTES_INDEX)]
     pub attributes: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
     #[sval(label = LOG_RECORD_TRACE_ID_LABEL, index = LOG_RECORD_TRACE_ID_INDEX)]
-    pub trace_id: &'a sval::BinaryArray<16>,
+    pub trace_id: &'a T,
     #[sval(label = LOG_RECORD_SPAN_ID_LABEL, index = LOG_RECORD_SPAN_ID_INDEX)]
-    pub span_id: &'a sval::BinaryArray<8>,
+    pub span_id: &'a S,
 }
 
-pub struct PropsLogRecordAttributes<P>(pub P);
+pub struct PropsLogRecordAttributes<T, S, P>(P, PhantomData<(T, S)>);
 
-impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
+impl<T, S, P> PropsLogRecordAttributes<T, S, P> {
+    pub fn new(props: P) -> Self {
+        PropsLogRecordAttributes(props, PhantomData)
+    }
+}
+
+impl<
+        TR: From<emit::trace::TraceId> + sval::Value,
+        SP: From<emit::trace::SpanId> + sval::Value,
+        P: emit::props::Props,
+    > sval::Value for PropsLogRecordAttributes<TR, SP, P>
+{
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
-        let mut trace_id = [0; 16];
-        let mut span_id = [0; 8];
+        let mut trace_id = None;
+        let mut span_id = None;
         let mut level = emit::level::Level::default();
 
         stream.record_tuple_begin(None, None, None, None)?;
@@ -94,16 +112,14 @@ impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
                         span_id = v
                             .by_ref()
                             .cast::<emit::trace::SpanId>()
-                            .map(|span_id| span_id.to_u64().to_be_bytes())
-                            .unwrap_or_default();
+                            .map(|span_id| SP::from(span_id));
                         true
                     }
                     emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
                             .cast::<emit::trace::TraceId>()
-                            .map(|trace_id| trace_id.to_u128().to_be_bytes())
-                            .unwrap_or_default();
+                            .map(|trace_id| TR::from(trace_id));
                         true
                     }
                     _ => false,
@@ -132,21 +148,21 @@ impl<P: emit::props::Props> sval::Value for PropsLogRecordAttributes<P> {
             |stream| sval::stream_display(stream, level),
         )?;
 
-        if trace_id != [0; 16] {
+        if let Some(trace_id) = trace_id {
             stream_field(
                 &mut *stream,
                 &LOG_RECORD_TRACE_ID_LABEL,
                 &LOG_RECORD_TRACE_ID_INDEX,
-                |stream| stream.value_computed(&sval::BinaryArray::new(&trace_id)),
+                |stream| stream.value_computed(&trace_id),
             )?;
         }
 
-        if span_id != [0; 8] {
+        if let Some(span_id) = span_id {
             stream_field(
                 &mut *stream,
                 &LOG_RECORD_SPAN_ID_LABEL,
                 &LOG_RECORD_SPAN_ID_INDEX,
-                |stream| stream.value_computed(&sval::BinaryArray::new(&span_id)),
+                |stream| stream.value_computed(&span_id),
             )?;
         }
 

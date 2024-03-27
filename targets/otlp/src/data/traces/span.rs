@@ -1,9 +1,12 @@
+use std::marker::PhantomData;
+
 use sval_derive::Value;
 
 use crate::data::{stream_attributes, stream_field, AnyValue, KeyValue};
 
 #[derive(Value)]
 #[repr(i32)]
+#[sval(unlabeled_variants)]
 pub enum StatusCode {
     Unset = 0,
     Ok = 1,
@@ -12,6 +15,7 @@ pub enum StatusCode {
 
 #[derive(Value)]
 #[repr(i32)]
+#[sval(unlabeled_variants)]
 pub enum SpanKind {
     Unspecified = 0,
     Internal = 1,
@@ -67,31 +71,52 @@ const SPAN_STATUS_INDEX: sval::Index = sval::Index::new(15);
 const SPAN_EVENTS_INDEX: sval::Index = sval::Index::new(11);
 
 #[derive(Value)]
-pub struct InlineSpanAttributes<'a, E: ?Sized = [Event<'a>]> {
+pub struct InlineSpanAttributes<
+    'a,
+    T: ?Sized = sval::BinaryArray<16>,
+    S: ?Sized = sval::BinaryArray<8>,
+    E: ?Sized = [Event<'a>],
+> {
     #[sval(label = SPAN_ATTRIBUTES_LABEL, index = SPAN_ATTRIBUTES_INDEX)]
     pub attributes: &'a [KeyValue<&'a str, &'a AnyValue<'a>>],
     #[sval(label = SPAN_TRACE_ID_LABEL, index = SPAN_TRACE_ID_INDEX)]
-    pub trace_id: &'a sval::BinaryArray<16>,
+    pub trace_id: &'a T,
     #[sval(label = SPAN_SPAN_ID_LABEL, index = SPAN_SPAN_ID_INDEX)]
-    pub span_id: &'a sval::BinaryArray<8>,
+    pub span_id: &'a S,
     #[sval(label = SPAN_PARENT_SPAN_ID_LABEL, index = SPAN_PARENT_SPAN_ID_INDEX)]
-    pub parent_span_id: &'a sval::BinaryArray<8>,
+    pub parent_span_id: &'a S,
     #[sval(label = SPAN_STATUS_LABEL, index = SPAN_STATUS_INDEX)]
     pub status: Status<'a>,
     #[sval(label = SPAN_EVENTS_LABEL, index = SPAN_EVENTS_INDEX)]
     pub events: &'a E,
 }
 
-pub struct PropsSpanAttributes<P> {
-    pub time_unix_nano: u64,
-    pub props: P,
+pub struct PropsSpanAttributes<T, S, P> {
+    time_unix_nano: u64,
+    props: P,
+    _marker: PhantomData<(T, S)>,
 }
 
-impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
+impl<T, S, P> PropsSpanAttributes<T, S, P> {
+    pub fn new(time_unix_nano: u64, props: P) -> Self {
+        PropsSpanAttributes {
+            time_unix_nano,
+            props,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<
+        TR: From<emit::trace::TraceId> + sval::Value,
+        SP: From<emit::trace::SpanId> + sval::Value,
+        P: emit::props::Props,
+    > sval::Value for PropsSpanAttributes<TR, SP, P>
+{
     fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
-        let mut trace_id = [0; 16];
-        let mut span_id = [0; 8];
-        let mut parent_span_id = [0; 8];
+        let mut trace_id = None;
+        let mut span_id = None;
+        let mut parent_span_id = None;
         let mut level = emit::level::Level::default();
         let mut has_err = false;
 
@@ -111,24 +136,21 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
                         span_id = v
                             .by_ref()
                             .cast::<emit::trace::SpanId>()
-                            .map(|span_id| span_id.to_u64().to_be_bytes())
-                            .unwrap_or_default();
+                            .map(|span_id| SP::from(span_id));
                         true
                     }
                     emit::well_known::KEY_SPAN_PARENT => {
                         parent_span_id = v
                             .by_ref()
                             .cast::<emit::trace::SpanId>()
-                            .map(|parent_span_id| parent_span_id.to_u64().to_be_bytes())
-                            .unwrap_or_default();
+                            .map(|parent_span_id| SP::from(parent_span_id));
                         true
                     }
                     emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
                             .cast::<emit::trace::TraceId>()
-                            .map(|trace_id| trace_id.to_u128().to_be_bytes())
-                            .unwrap_or_default();
+                            .map(|trace_id| TR::from(trace_id));
                         true
                     }
                     emit::well_known::KEY_ERR => {
@@ -140,30 +162,30 @@ impl<P: emit::props::Props> sval::Value for PropsSpanAttributes<P> {
             },
         )?;
 
-        if trace_id != [0; 16] {
+        if let Some(trace_id) = trace_id {
             stream_field(
                 &mut *stream,
                 &SPAN_TRACE_ID_LABEL,
                 &SPAN_TRACE_ID_INDEX,
-                |stream| stream.value_computed(&sval::BinaryArray::new(&trace_id)),
+                |stream| stream.value_computed(&trace_id),
             )?;
         }
 
-        if span_id != [0; 8] {
+        if let Some(span_id) = span_id {
             stream_field(
                 &mut *stream,
                 &SPAN_SPAN_ID_LABEL,
                 &SPAN_SPAN_ID_INDEX,
-                |stream| stream.value_computed(&sval::BinaryArray::new(&span_id)),
+                |stream| stream.value_computed(&span_id),
             )?;
         }
 
-        if parent_span_id != [0; 8] {
+        if let Some(parent_span_id) = parent_span_id {
             stream_field(
                 &mut *stream,
                 &SPAN_PARENT_SPAN_ID_LABEL,
                 &SPAN_PARENT_SPAN_ID_INDEX,
-                |stream| stream.value_computed(&sval::BinaryArray::new(&parent_span_id)),
+                |stream| stream.value_computed(&parent_span_id),
             )?;
         }
 
