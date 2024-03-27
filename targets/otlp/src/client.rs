@@ -393,7 +393,7 @@ impl OtlpBuilder {
         let mut metrics_event_encoder = None;
 
         let client = OtlpClient {
-            otlp_logs: match self.otlp_logs {
+            logs: match self.otlp_logs {
                 Some(OtlpLogsBuilder {
                     event_encoder,
                     request_encoder,
@@ -403,14 +403,14 @@ impl OtlpBuilder {
                     logs_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
                     Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(resource_proto),
-                        self.scope.as_ref().map(scope_proto),
+                        self.resource.as_ref().map(encode_resource::<data::Proto>),
+                        self.scope.as_ref().map(encode_scope::<data::Proto>),
                         ClientRequestEncoder::new(encoding, request_encoder),
                     )?))
                 }
                 None => None,
             },
-            otlp_traces: match self.otlp_traces {
+            traces: match self.otlp_traces {
                 Some(OtlpTracesBuilder {
                     event_encoder,
                     request_encoder,
@@ -420,14 +420,14 @@ impl OtlpBuilder {
                     traces_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
                     Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(resource_proto),
-                        self.scope.as_ref().map(scope_proto),
+                        self.resource.as_ref().map(encode_resource::<data::Proto>),
+                        self.scope.as_ref().map(encode_scope::<data::Proto>),
                         ClientRequestEncoder::new(encoding, request_encoder),
                     )?))
                 }
                 None => None,
             },
-            otlp_metrics: match self.otlp_metrics {
+            metrics: match self.otlp_metrics {
                 Some(OtlpMetricsBuilder {
                     event_encoder,
                     request_encoder,
@@ -437,8 +437,8 @@ impl OtlpBuilder {
                     metrics_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
                     Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(resource_proto),
-                        self.scope.as_ref().map(scope_proto),
+                        self.resource.as_ref().map(encode_resource::<data::Proto>),
+                        self.scope.as_ref().map(encode_scope::<data::Proto>),
                         ClientRequestEncoder::new(encoding, request_encoder),
                     )?))
                 }
@@ -461,7 +461,7 @@ impl OtlpBuilder {
                 let mut r = Ok(());
 
                 if otlp_logs.len() > 0 {
-                    if let Some(client) = client.otlp_logs {
+                    if let Some(client) = client.logs {
                         if let Err(e) = client
                             .send(otlp_logs, {
                                 #[cfg(feature = "decode_responses")]
@@ -489,7 +489,7 @@ impl OtlpBuilder {
                 }
 
                 if otlp_traces.len() > 0 {
-                    if let Some(client) = client.otlp_traces {
+                    if let Some(client) = client.traces {
                         if let Err(e) = client
                             .send(otlp_traces, {
                                 #[cfg(feature = "decode_responses")]
@@ -524,7 +524,7 @@ impl OtlpBuilder {
                 }
 
                 if otlp_metrics.len() > 0 {
-                    if let Some(client) = client.otlp_metrics {
+                    if let Some(client) = client.metrics {
                         if let Err(e) = client
                             .send(otlp_metrics, {
                                 #[cfg(feature = "decode_responses")]
@@ -620,31 +620,27 @@ impl<R: data::RequestEncoder> ClientRequestEncoder<R> {
     }
 }
 
-fn resource_proto(resource: &Resource) -> PreEncoded {
-    let protobuf = sval_protobuf::stream_to_protobuf(data::Resource {
+fn encode_resource<E: data::RawEncoder>(resource: &Resource) -> PreEncoded {
+    E::encode(data::Resource {
         attributes: &data::PropsResourceAttributes(&resource.attributes),
         dropped_attribute_count: 0,
-    });
-
-    PreEncoded::Proto(protobuf)
+    })
 }
 
-fn scope_proto(scope: &Scope) -> PreEncoded {
-    let protobuf = sval_protobuf::stream_to_protobuf(data::InstrumentationScope {
+fn encode_scope<E: data::RawEncoder>(scope: &Scope) -> PreEncoded {
+    E::encode(data::InstrumentationScope {
         name: &scope.name,
         version: &scope.version,
         attributes: &data::PropsInstrumentationScopeAttributes(&scope.attributes),
         dropped_attribute_count: 0,
-    });
-
-    PreEncoded::Proto(protobuf)
+    })
 }
 
 #[derive(Clone)]
 pub struct OtlpClient {
-    otlp_logs: Option<Arc<OtlpTransport<logs::LogsRequestEncoder>>>,
-    otlp_traces: Option<Arc<OtlpTransport<traces::TracesRequestEncoder>>>,
-    otlp_metrics: Option<Arc<OtlpTransport<metrics::MetricsRequestEncoder>>>,
+    logs: Option<Arc<OtlpTransport<logs::LogsRequestEncoder>>>,
+    traces: Option<Arc<OtlpTransport<traces::TracesRequestEncoder>>>,
+    metrics: Option<Arc<OtlpTransport<metrics::MetricsRequestEncoder>>>,
 }
 
 enum OtlpTransport<R> {
