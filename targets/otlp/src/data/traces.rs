@@ -5,22 +5,25 @@ use emit_batcher::BatchError;
 
 pub use self::{export_trace_service::*, span::*};
 
-use super::{default_message_formatter, Encoding, MessageFormatter, MessageRenderer, PreEncoded};
+use super::{
+    default_message_formatter, EventEncoder, MessageFormatter, MessageRenderer, PreEncoded,
+    RawEncoder, RequestEncoder,
+};
 
-pub(crate) struct EventEncoder {
+pub(crate) struct TracesEventEncoder {
     pub name: Box<MessageFormatter>,
 }
 
-impl Default for EventEncoder {
+impl Default for TracesEventEncoder {
     fn default() -> Self {
-        EventEncoder {
+        TracesEventEncoder {
             name: default_message_formatter(),
         }
     }
 }
 
-impl EventEncoder {
-    pub(crate) fn encode_event<E: Encoding>(
+impl EventEncoder for TracesEventEncoder {
+    fn encode_event<E: RawEncoder>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
@@ -51,22 +54,28 @@ impl EventEncoder {
     }
 }
 
-pub(crate) fn encode_request<E: Encoding>(
-    resource: Option<&PreEncoded>,
-    scope: Option<&PreEncoded>,
-    spans: &[PreEncoded],
-) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
-    Ok(E::encode(ExportTraceServiceRequest {
-        resource_spans: &[ResourceSpans {
-            resource: &resource,
-            scope_spans: &[ScopeSpans {
-                scope: &scope,
-                spans,
+#[derive(Default)]
+pub(crate) struct TracesRequestEncoder;
+
+impl RequestEncoder for TracesRequestEncoder {
+    fn encode_request<E: RawEncoder>(
+        &self,
+        resource: Option<&PreEncoded>,
+        scope: Option<&PreEncoded>,
+        items: &[PreEncoded],
+    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
+        Ok(E::encode(ExportTraceServiceRequest {
+            resource_spans: &[ResourceSpans {
+                resource: &resource,
+                scope_spans: &[ScopeSpans {
+                    scope: &scope,
+                    spans: items,
+                    schema_url: "",
+                }],
                 schema_url: "",
             }],
-            schema_url: "",
-        }],
-    }))
+        }))
+    }
 }
 
 #[cfg(feature = "decode_responses")]

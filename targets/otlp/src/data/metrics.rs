@@ -13,13 +13,15 @@ use emit::{
 use emit_batcher::BatchError;
 use sval::Value;
 
-use super::{Encoding, MessageFormatter, MessageRenderer, PreEncoded};
+use super::{
+    EventEncoder, MessageFormatter, MessageRenderer, PreEncoded, RawEncoder, RequestEncoder,
+};
 
-pub(crate) struct EventEncoder {
+pub(crate) struct MetricsEventEncoder {
     pub name: Box<MessageFormatter>,
 }
 
-impl Default for EventEncoder {
+impl Default for MetricsEventEncoder {
     fn default() -> Self {
         Self {
             name: default_name_formatter(),
@@ -37,8 +39,8 @@ fn default_name_formatter() -> Box<MessageFormatter> {
     })
 }
 
-impl EventEncoder {
-    pub(crate) fn encode_event<E: Encoding>(
+impl EventEncoder for MetricsEventEncoder {
+    fn encode_event<E: RawEncoder>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
@@ -319,22 +321,28 @@ impl DataPointBuilder for RawPointSet {
     }
 }
 
-pub(crate) fn encode_request<E: Encoding>(
-    resource: Option<&PreEncoded>,
-    scope: Option<&PreEncoded>,
-    metrics: &[PreEncoded],
-) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
-    Ok(E::encode(ExportMetricsServiceRequest {
-        resource_metrics: &[ResourceMetrics {
-            resource: &resource,
-            scope_metrics: &[ScopeMetrics {
-                scope: &scope,
-                metrics,
+#[derive(Default)]
+pub(crate) struct MetricsRequestEncoder;
+
+impl RequestEncoder for MetricsRequestEncoder {
+    fn encode_request<E: RawEncoder>(
+        &self,
+        resource: Option<&PreEncoded>,
+        scope: Option<&PreEncoded>,
+        items: &[PreEncoded],
+    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
+        Ok(E::encode(ExportMetricsServiceRequest {
+            resource_metrics: &[ResourceMetrics {
+                resource: &resource,
+                scope_metrics: &[ScopeMetrics {
+                    scope: &scope,
+                    metrics: items,
+                    schema_url: "",
+                }],
                 schema_url: "",
             }],
-            schema_url: "",
-        }],
-    }))
+        }))
+    }
 }
 
 #[cfg(feature = "decode_responses")]

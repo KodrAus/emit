@@ -1,6 +1,7 @@
 use std::{collections::HashSet, fmt, ops::ControlFlow};
 
 use bytes::Buf;
+use emit_batcher::BatchError;
 use sval_derive::Value;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
 
@@ -17,7 +18,23 @@ pub(crate) mod generated;
 
 pub use self::{any_value::*, instrumentation_scope::*, resource::*};
 
-pub(crate) trait Encoding {
+pub(crate) trait EventEncoder {
+    fn encode_event<E: RawEncoder>(
+        &self,
+        evt: &emit::event::Event<impl emit::props::Props>,
+    ) -> Option<PreEncoded>;
+}
+
+pub(crate) trait RequestEncoder {
+    fn encode_request<E: RawEncoder>(
+        &self,
+        resource: Option<&PreEncoded>,
+        scope: Option<&PreEncoded>,
+        items: &[PreEncoded],
+    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>;
+}
+
+pub(crate) trait RawEncoder {
     type TraceId: From<emit::trace::TraceId> + sval::Value;
     type SpanId: From<emit::trace::SpanId> + sval::Value;
 
@@ -54,7 +71,7 @@ impl sval::Value for BinarySpanId {
     }
 }
 
-impl Encoding for Proto {
+impl RawEncoder for Proto {
     type TraceId = BinaryTraceId;
     type SpanId = BinarySpanId;
 
