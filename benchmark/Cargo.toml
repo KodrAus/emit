@@ -13,8 +13,13 @@ path = "emit.rs"
 harness = false
 
 [[bench]]
-name = "span"
-path = "span.rs"
+name = "log"
+path = "log.rs"
+harness = false
+
+[[bench]]
+name = "tracing"
+path = "tracing.rs"
 harness = false
 
 [[bench]]
@@ -23,7 +28,14 @@ path = "batcher.rs"
 harness = false
 
 [features]
-full = ["emit/std", "emit/rng", "emit/serde", "emit/sval"]
+full = ["emit/std", "emit/rng", "emit/serde", "emit/sval", "log/std", "log/kv_std"]
+
+[dependencies.log]
+version = "0.4.21"
+features = ["kv"]
+
+[dependencies.tracing]
+version = "0.1"
 
 [dependencies.emit]
 path = "../"

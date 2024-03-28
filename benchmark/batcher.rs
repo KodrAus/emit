@@ -5,7 +5,7 @@ use std::thread;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let (sender, receiver) = emit_batcher::bounded::<u64>(1024);
+    let (sender, receiver) = emit_batcher::bounded::<Vec<u64>>(1024);
 
     thread::spawn(move || {
         receiver
