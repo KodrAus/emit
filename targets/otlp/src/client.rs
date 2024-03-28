@@ -2,7 +2,7 @@ use emit_batcher::BatchError;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, logs, metrics, traces, PreEncoded},
+    data::{self, logs, metrics, traces, PreEncoded, RawEncoder},
     internal_metrics::InternalMetrics,
     Error,
 };
@@ -150,6 +150,7 @@ struct Scope {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Encoding {
     Proto,
+    Json,
 }
 
 pub struct OtlpLogsBuilder {
@@ -160,17 +161,29 @@ pub struct OtlpLogsBuilder {
 }
 
 impl OtlpLogsBuilder {
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
         OtlpLogsBuilder {
             event_encoder: logs::LogsEventEncoder::default(),
             request_encoder: logs::LogsRequestEncoder::default(),
-            encoding: Encoding::Proto,
+            encoding,
             transport,
         }
     }
 
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Proto, transport)
+    }
+
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn json(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Json, transport)
+    }
+
+    pub fn http_json(dst: impl Into<String>) -> Self {
+        Self::json(OtlpTransportBuilder::http(dst))
     }
 
     pub fn body(
@@ -196,17 +209,29 @@ pub struct OtlpTracesBuilder {
 }
 
 impl OtlpTracesBuilder {
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
         OtlpTracesBuilder {
             event_encoder: traces::TracesEventEncoder::default(),
             request_encoder: traces::TracesRequestEncoder::default(),
-            encoding: Encoding::Proto,
+            encoding,
             transport,
         }
     }
 
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Proto, transport)
+    }
+
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn json(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Json, transport)
+    }
+
+    pub fn http_json(dst: impl Into<String>) -> Self {
+        Self::json(OtlpTransportBuilder::http(dst))
     }
 
     pub fn name(
@@ -232,17 +257,29 @@ pub struct OtlpMetricsBuilder {
 }
 
 impl OtlpMetricsBuilder {
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
         OtlpMetricsBuilder {
             event_encoder: metrics::MetricsEventEncoder::default(),
             request_encoder: metrics::MetricsRequestEncoder::default(),
-            encoding: Encoding::Proto,
+            encoding,
             transport,
         }
     }
 
+    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Proto, transport)
+    }
+
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn json(transport: OtlpTransportBuilder) -> Self {
+        Self::new(Encoding::Json, transport)
+    }
+
+    pub fn http_json(dst: impl Into<String>) -> Self {
+        Self::json(OtlpTransportBuilder::http(dst))
     }
 
     pub fn name(
@@ -397,16 +434,22 @@ impl OtlpBuilder {
                 Some(OtlpLogsBuilder {
                     event_encoder,
                     request_encoder,
-                    encoding: encoding @ Encoding::Proto,
+                    encoding,
                     transport,
                 }) => {
                     logs_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
-                    Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(encode_resource::<data::Proto>),
-                        self.scope.as_ref().map(encode_scope::<data::Proto>),
-                        ClientRequestEncoder::new(encoding, request_encoder),
-                    )?))
+                    Some(Arc::new(
+                        transport.build(
+                            self.resource
+                                .as_ref()
+                                .map(|resource| encode_resource(encoding, resource)),
+                            self.scope
+                                .as_ref()
+                                .map(|scope| encode_scope(encoding, scope)),
+                            ClientRequestEncoder::new(encoding, request_encoder),
+                        )?,
+                    ))
                 }
                 None => None,
             },
@@ -414,16 +457,22 @@ impl OtlpBuilder {
                 Some(OtlpTracesBuilder {
                     event_encoder,
                     request_encoder,
-                    encoding: encoding @ Encoding::Proto,
+                    encoding,
                     transport,
                 }) => {
                     traces_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
-                    Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(encode_resource::<data::Proto>),
-                        self.scope.as_ref().map(encode_scope::<data::Proto>),
-                        ClientRequestEncoder::new(encoding, request_encoder),
-                    )?))
+                    Some(Arc::new(
+                        transport.build(
+                            self.resource
+                                .as_ref()
+                                .map(|resource| encode_resource(encoding, resource)),
+                            self.scope
+                                .as_ref()
+                                .map(|scope| encode_scope(encoding, scope)),
+                            ClientRequestEncoder::new(encoding, request_encoder),
+                        )?,
+                    ))
                 }
                 None => None,
             },
@@ -431,16 +480,22 @@ impl OtlpBuilder {
                 Some(OtlpMetricsBuilder {
                     event_encoder,
                     request_encoder,
-                    encoding: encoding @ Encoding::Proto,
+                    encoding,
                     transport,
                 }) => {
                     metrics_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
 
-                    Some(Arc::new(transport.build(
-                        self.resource.as_ref().map(encode_resource::<data::Proto>),
-                        self.scope.as_ref().map(encode_scope::<data::Proto>),
-                        ClientRequestEncoder::new(encoding, request_encoder),
-                    )?))
+                    Some(Arc::new(
+                        transport.build(
+                            self.resource
+                                .as_ref()
+                                .map(|resource| encode_resource(encoding, resource)),
+                            self.scope
+                                .as_ref()
+                                .map(|scope| encode_scope(encoding, scope)),
+                            ClientRequestEncoder::new(encoding, request_encoder),
+                        )?,
+                    ))
                 }
                 None => None,
             },
@@ -590,6 +645,7 @@ impl<E: data::EventEncoder> ClientEventEncoder<E> {
     ) -> Option<PreEncoded> {
         match self.encoding {
             Encoding::Proto => self.encoder.encode_event::<data::Proto>(evt),
+            Encoding::Json => self.encoder.encode_event::<data::Json>(evt),
         }
     }
 }
@@ -616,24 +672,41 @@ impl<R: data::RequestEncoder> ClientRequestEncoder<R> {
             Encoding::Proto => self
                 .encoder
                 .encode_request::<data::Proto>(resource, scope, items),
+            Encoding::Json => self
+                .encoder
+                .encode_request::<data::Json>(resource, scope, items),
         }
     }
 }
 
-fn encode_resource<E: data::RawEncoder>(resource: &Resource) -> PreEncoded {
-    E::encode(data::Resource {
-        attributes: &data::PropsResourceAttributes(&resource.attributes),
+fn encode_resource(encoding: Encoding, resource: &Resource) -> PreEncoded {
+    let attributes = data::PropsResourceAttributes(&resource.attributes);
+
+    let resource = data::Resource {
+        attributes: &attributes,
         dropped_attribute_count: 0,
-    })
+    };
+
+    match encoding {
+        Encoding::Proto => data::Proto::encode(&resource),
+        Encoding::Json => data::Json::encode(&resource),
+    }
 }
 
-fn encode_scope<E: data::RawEncoder>(scope: &Scope) -> PreEncoded {
-    E::encode(data::InstrumentationScope {
+fn encode_scope(encoding: Encoding, scope: &Scope) -> PreEncoded {
+    let attributes = data::PropsInstrumentationScopeAttributes(&scope.attributes);
+
+    let scope = data::InstrumentationScope {
         name: &scope.name,
         version: &scope.version,
-        attributes: &data::PropsInstrumentationScopeAttributes(&scope.attributes),
+        attributes: &attributes,
         dropped_attribute_count: 0,
-    })
+    };
+
+    match encoding {
+        Encoding::Proto => data::Proto::encode(&scope),
+        Encoding::Json => data::Json::encode(&scope),
+    }
 }
 
 #[derive(Clone)]

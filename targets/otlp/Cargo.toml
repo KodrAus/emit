@@ -33,6 +33,10 @@ features = ["std", "flatten"]
 version = "0.1"
 features = ["bytes"]
 
+[dependencies.sval_json]
+version = "2"
+features = ["std"]
+
 [dependencies.sval_buffer]
 version = "2"
 features = ["std"]

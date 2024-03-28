@@ -3,6 +3,7 @@ use std::{collections::HashSet, fmt, ops::ControlFlow};
 use bytes::Buf;
 use emit_batcher::BatchError;
 use sval_derive::Value;
+use sval_json::JsonStr;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
 
 pub mod logs;
@@ -80,40 +81,100 @@ impl RawEncoder for Proto {
     }
 }
 
-#[derive(Value, Clone)]
+pub(crate) struct Json;
+
+pub(crate) struct TextTraceId(emit::trace::TraceId);
+
+impl From<emit::trace::TraceId> for TextTraceId {
+    fn from(id: emit::trace::TraceId) -> TextTraceId {
+        TextTraceId(id)
+    }
+}
+
+impl sval::Value for TextTraceId {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream.value_computed(&sval::Display::new(&self.0))
+    }
+}
+
+pub(crate) struct TextSpanId(emit::trace::SpanId);
+
+impl From<emit::trace::SpanId> for TextSpanId {
+    fn from(id: emit::trace::SpanId) -> TextSpanId {
+        TextSpanId(id)
+    }
+}
+
+impl sval::Value for TextSpanId {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream.value_computed(&sval::Display::new(&self.0))
+    }
+}
+
+impl RawEncoder for Json {
+    type TraceId = TextTraceId;
+    type SpanId = TextSpanId;
+
+    fn encode<V: sval::Value>(value: V) -> PreEncoded {
+        PreEncoded::Json(JsonStr::boxed(
+            sval_json::stream_to_string(value).expect("failed to stream"),
+        ))
+    }
+}
+
+#[derive(Value)]
 #[sval(dynamic)]
 pub(crate) enum PreEncoded {
     Proto(ProtoBuf),
+    Json(Box<JsonStr>),
 }
 
 impl PreEncoded {
     pub fn into_cursor(self) -> PreEncodedCursor {
         match self {
             PreEncoded::Proto(buf) => PreEncodedCursor::Proto(buf.into_cursor()),
+            PreEncoded::Json(buf) => PreEncodedCursor::Json(JsonCursor { buf, idx: 0 }),
         }
     }
 }
 
 pub(crate) enum PreEncodedCursor {
     Proto(ProtoBufCursor),
+    Json(JsonCursor),
+}
+
+pub(crate) struct JsonCursor {
+    buf: Box<JsonStr>,
+    idx: usize,
 }
 
 impl Buf for PreEncodedCursor {
     fn remaining(&self) -> usize {
         match self {
             PreEncodedCursor::Proto(cursor) => cursor.remaining(),
+            PreEncodedCursor::Json(cursor) => cursor.buf.as_str().len() - cursor.idx,
         }
     }
 
     fn chunk(&self) -> &[u8] {
         match self {
             PreEncodedCursor::Proto(cursor) => cursor.chunk(),
+            PreEncodedCursor::Json(cursor) => &cursor.buf.as_str().as_bytes()[cursor.idx..],
         }
     }
 
     fn advance(&mut self, cnt: usize) {
         match self {
             PreEncodedCursor::Proto(cursor) => cursor.advance(cnt),
+            PreEncodedCursor::Json(cursor) => {
+                let new_idx = cursor.idx + cnt;
+
+                if new_idx > cursor.buf.as_str().len() {
+                    panic!("attempt to advance out of bounds");
+                }
+
+                cursor.idx = new_idx;
+            }
         }
     }
 }

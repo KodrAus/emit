@@ -146,6 +146,7 @@ async fn send_request(
                     "content-type",
                     match body {
                         PreEncoded::Proto(_) => "application/x-protobuf",
+                        PreEncoded::Json(_) => "application/json",
                     },
                 );
 
