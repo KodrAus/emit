@@ -178,6 +178,7 @@ fn sample_metrics() {
             metric_agg,
             metric_name,
             metric_value: metric_value.load(Ordering::Relaxed),
+            x: "data",
         );
     }
 }
