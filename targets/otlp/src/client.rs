@@ -147,10 +147,24 @@ struct Scope {
     attributes: HashMap<emit::Str<'static>, emit::value::OwnedValue>,
 }
 
+enum Protocol {
+    Http,
+    Grpc,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Encoding {
     Proto,
     Json,
+}
+
+impl Encoding {
+    pub fn of(buf: &PreEncoded) -> Self {
+        match buf {
+            PreEncoded::Proto(_) => Encoding::Proto,
+            PreEncoded::Json(_) => Encoding::Json,
+        }
+    }
 }
 
 pub struct OtlpLogsBuilder {
@@ -170,7 +184,11 @@ impl OtlpLogsBuilder {
         }
     }
 
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
+        if let Protocol::Grpc = transport.protocol {
+            transport.url_path = Some("opentelemetry.proto.collector.logs.v1.LogsService/Export");
+        }
+
         Self::new(Encoding::Proto, transport)
     }
 
@@ -218,7 +236,11 @@ impl OtlpTracesBuilder {
         }
     }
 
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
+        if let Protocol::Grpc = transport.protocol {
+            transport.url_path = Some("opentelemetry.proto.collector.trace.v1.TraceService/Export");
+        }
+
         Self::new(Encoding::Proto, transport)
     }
 
@@ -266,7 +288,12 @@ impl OtlpMetricsBuilder {
         }
     }
 
-    pub fn proto(transport: OtlpTransportBuilder) -> Self {
+    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
+        if let Protocol::Grpc = transport.protocol {
+            transport.url_path =
+                Some("opentelemetry.proto.collector.metrics.v1.MetricsService/Export");
+        }
+
         Self::new(Encoding::Proto, transport)
     }
 
@@ -297,13 +324,10 @@ impl OtlpMetricsBuilder {
     }
 }
 
-enum Protocol {
-    Http,
-}
-
 pub struct OtlpTransportBuilder {
     protocol: Protocol,
-    url: String,
+    url_base: String,
+    url_path: Option<&'static str>,
     headers: Vec<(String, String)>,
 }
 
@@ -311,7 +335,17 @@ impl OtlpTransportBuilder {
     pub fn http(dst: impl Into<String>) -> Self {
         OtlpTransportBuilder {
             protocol: Protocol::Http,
-            url: dst.into(),
+            url_base: dst.into(),
+            url_path: None,
+            headers: Vec::new(),
+        }
+    }
+
+    pub fn grpc(dst: impl Into<String>) -> Self {
+        OtlpTransportBuilder {
+            protocol: Protocol::Grpc,
+            url_base: dst.into(),
+            url_path: None,
             headers: Vec::new(),
         }
     }
@@ -330,13 +364,30 @@ impl OtlpTransportBuilder {
 
     fn build<R>(
         self,
+        metrics: Arc<InternalMetrics>,
         resource: Option<PreEncoded>,
         scope: Option<PreEncoded>,
         request_encoder: ClientRequestEncoder<R>,
     ) -> Result<OtlpTransport<R>, Error> {
+        let mut url = self.url_base;
+
+        if let Some(path) = self.url_path {
+            if !url.ends_with("/") && !path.starts_with("/") {
+                url.push('/');
+            }
+
+            url.push_str(&path);
+        }
+
         Ok(match self.protocol {
             Protocol::Http => OtlpTransport::Http {
-                http: HttpConnection::new(self.url, self.headers)?,
+                http: HttpConnection::new(metrics, url, self.headers, http::HttpBody::raw)?,
+                resource,
+                scope,
+                request_encoder,
+            },
+            Protocol::Grpc => OtlpTransport::Http {
+                http: HttpConnection::new(metrics, url, self.headers, http::HttpBody::grpc)?,
                 resource,
                 scope,
                 request_encoder,
@@ -423,6 +474,8 @@ impl OtlpBuilder {
     }
 
     pub fn spawn(self) -> Result<Otlp, Error> {
+        let metrics = Arc::new(InternalMetrics::default());
+
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
         let mut logs_event_encoder = None;
@@ -441,6 +494,7 @@ impl OtlpBuilder {
 
                     Some(Arc::new(
                         transport.build(
+                            metrics.clone(),
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
@@ -464,6 +518,7 @@ impl OtlpBuilder {
 
                     Some(Arc::new(
                         transport.build(
+                            metrics.clone(),
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
@@ -487,6 +542,7 @@ impl OtlpBuilder {
 
                     Some(Arc::new(
                         transport.build(
+                            metrics.clone(),
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
@@ -500,8 +556,6 @@ impl OtlpBuilder {
                 None => None,
             },
         };
-
-        let metrics = Arc::new(InternalMetrics::default());
 
         emit_batcher::tokio::spawn(receiver, move |batch: Channel<PreEncoded>| {
             let client = client.clone();

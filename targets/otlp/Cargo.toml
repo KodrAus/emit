@@ -4,9 +4,8 @@ version = "0.0.0"
 edition = "2021"
 
 [features]
-default = ["http"]
-http = ["dep:hyper", "dep:hyper-util"]
-grpc = ["dep:prost", "dep:prost-types", "dep:serde", "emit/serde"]
+default = ["tls"]
+tls = ["tokio-rustls", "rustls-native-certs"]
 decode_responses = ["dep:prost", "dep:prost-types"]
 
 [dependencies.emit]
@@ -43,17 +42,21 @@ features = ["std"]
 
 [dependencies.tokio]
 version = "1"
-features = ["rt-multi-thread", "sync"]
+features = ["rt-multi-thread", "sync", "net"]
 
 [dependencies.hyper]
-optional = true
 version = "1"
-features = ["client", "http1"]
+features = ["client", "http1", "http2"]
 
-[dependencies.hyper-util]
+[dependencies.tokio-rustls]
+version = "0.26"
 optional = true
-version = "0.1"
-features = ["tokio"]
+default-features = false
+features = ["ring"]
+
+[dependencies.rustls-native-certs]
+version = "0.7"
+optional = true
 
 [dependencies.bytes]
 version = "1"

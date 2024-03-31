@@ -136,6 +136,13 @@ impl PreEncoded {
             PreEncoded::Json(buf) => PreEncodedCursor::Json(JsonCursor { buf, idx: 0 }),
         }
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            PreEncoded::Proto(buf) => buf.len(),
+            PreEncoded::Json(buf) => buf.as_str().len(),
+        }
+    }
 }
 
 pub(crate) enum PreEncodedCursor {
