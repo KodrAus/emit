@@ -23,18 +23,18 @@ async fn main() {
             emit_otlp::new()
                 .logs(
                     emit_otlp::logs_json(
-                        emit_otlp::http("http://localhost:4318/v1/logs")
+                        emit_otlp::http("https://localhost:4318/v1/logs")
                             .headers([("X-ApiKey", "1234")]),
                     )
                     .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
                 )
                 .traces(
-                    emit_otlp::traces_http_json("http://localhost:4318/v1/traces").name(
+                    emit_otlp::traces_http_json("https://localhost:4318/v1/traces").name(
                         |evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced()),
                     ),
                 )
                 .metrics(emit_otlp::metrics_http_json(
-                    "http://localhost:4318/v1/metrics",
+                    "https://localhost:4318/v1/metrics",
                 ))
                 .resource(emit::props! {
                     #[emit::key("service.name")]
