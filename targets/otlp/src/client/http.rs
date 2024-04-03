@@ -11,7 +11,7 @@ use bytes::Buf;
 use emit::well_known::{KEY_SPAN_ID, KEY_TRACE_ID};
 use hyper::{
     body::{self, Body, Frame, SizeHint},
-    client::conn::http1::{self, SendRequest},
+    client::conn::{http1, http2},
     Method, Request, Uri,
 };
 
@@ -22,7 +22,11 @@ use crate::{
     Error,
 };
 
-async fn connect(metrics: &InternalMetrics, uri: &HttpUri) -> Result<SendRequest<HttpBody>, Error> {
+async fn connect(
+    metrics: &InternalMetrics,
+    version: HttpVersion,
+    uri: &HttpUri,
+) -> Result<HttpSender, Error> {
     let io = tokio::net::TcpStream::connect((uri.host(), uri.port()))
         .await
         .map_err(|e| {
@@ -38,16 +42,14 @@ async fn connect(metrics: &InternalMetrics, uri: &HttpUri) -> Result<SendRequest
         {
             let io = tls_handshake(metrics, io, uri).await?;
 
-            metrics.otlp_http_conn_tls_handshake.increment();
-
-            http_handshake(metrics, io).await
+            http_handshake(metrics, version, io).await
         }
         #[cfg(not(feature = "tls"))]
         {
             return Err(Error::new("https support requires the `tls` Cargo feature"));
         }
     } else {
-        http_handshake(metrics, io).await
+        http_handshake(metrics, version, io).await
     }
 }
 
@@ -83,46 +85,82 @@ async fn tls_handshake(
 
     let conn = TlsConnector::from(tls);
 
-    conn.connect(domain, io).await.map_err(|e| {
+    let io = conn.connect(domain, io).await.map_err(|e| {
         metrics.otlp_http_conn_tls_failed.increment();
 
         Error::new("failed to connect TLS stream", e)
-    })
+    })?;
+
+    metrics.otlp_http_conn_tls_handshake.increment();
+
+    Ok(io)
 }
 
 async fn http_handshake(
     metrics: &InternalMetrics,
+    version: HttpVersion,
     io: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + Unpin + 'static,
-) -> Result<SendRequest<HttpBody>, Error> {
+) -> Result<HttpSender, Error> {
+    match version {
+        HttpVersion::Http1 => http1_handshake(metrics, io).await,
+        HttpVersion::Http2 => http2_handshake(metrics, io).await,
+    }
+}
+
+async fn http1_handshake(
+    metrics: &InternalMetrics,
+    io: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + Unpin + 'static,
+) -> Result<HttpSender, Error> {
     let (sender, conn) = http1::handshake(HttpIo(io)).await.map_err(|e| {
         metrics.otlp_http_conn_failed.increment();
 
-        Error::new("failed to perform HTTP handshake", e)
+        Error::new("failed to perform HTTP1 handshake", e)
     })?;
 
     tokio::task::spawn(async move {
         let _ = conn.await;
     });
 
-    Ok(sender)
+    Ok(HttpSender::Http1(sender))
+}
+
+async fn http2_handshake(
+    metrics: &InternalMetrics,
+    io: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + Unpin + 'static,
+) -> Result<HttpSender, Error> {
+    let (sender, conn) = http2::handshake(TokioAmbientExecutor, HttpIo(io))
+        .await
+        .map_err(|e| {
+            metrics.otlp_http_conn_failed.increment();
+
+            Error::new("failed to perform HTTP2 handshake", e)
+        })?;
+
+    tokio::task::spawn(async move {
+        let _ = conn.await;
+    });
+
+    Ok(HttpSender::Http2(sender))
 }
 
 async fn send_request(
     metrics: &InternalMetrics,
-    sender: &mut SendRequest<HttpBody>,
+    sender: &mut HttpSender,
     uri: &HttpUri,
     headers: impl Iterator<Item = (&str, &str)>,
     body: HttpBody,
-) -> Result<hyper::Response<body::Incoming>, Error> {
+) -> Result<HttpResponse, Error> {
     let rt = emit::runtime::internal();
 
     let res = sender
-        .send_request({
+        .send_request(metrics, {
             use emit::{Ctxt as _, Props as _};
 
             let body = {
                 #[cfg(all(feature = "tls", feature = "gzip"))]
                 {
+                    // TODO: This is happening at the wrong level
+                    // gzip should be done _before_ framing
                     if !uri.is_https() {
                         body.gzip()?
                     } else {
@@ -174,23 +212,17 @@ async fn send_request(
                 Error::new("failed to stream HTTP body", e)
             })?
         })
-        .await
-        .map_err(|e| {
-            metrics.otlp_http_request_failed.increment();
-
-            Error::new("failed to send HTTP request", e)
-        })?;
-
-    metrics.otlp_http_request_sent.increment();
+        .await?;
 
     Ok(res)
 }
 
 pub(crate) struct HttpConnection {
+    version: HttpVersion,
     uri: HttpUri,
     headers: Vec<(String, String)>,
     body: fn(PreEncoded) -> HttpBody,
-    sender: Mutex<Option<SendRequest<HttpBody>>>,
+    sender: Mutex<Option<HttpSender>>,
     metrics: Arc<InternalMetrics>,
 }
 
@@ -199,7 +231,26 @@ pub(crate) struct HttpResponse {
 }
 
 impl HttpConnection {
-    pub fn new(
+    pub fn http1(
+        metrics: Arc<InternalMetrics>,
+        url: impl AsRef<str>,
+        headers: impl Into<Vec<(String, String)>>,
+        body: fn(PreEncoded) -> HttpBody,
+    ) -> Result<Self, Error> {
+        Self::new(HttpVersion::Http1, metrics, url, headers, body)
+    }
+
+    pub fn http2(
+        metrics: Arc<InternalMetrics>,
+        url: impl AsRef<str>,
+        headers: impl Into<Vec<(String, String)>>,
+        body: fn(PreEncoded) -> HttpBody,
+    ) -> Result<Self, Error> {
+        Self::new(HttpVersion::Http2, metrics, url, headers, body)
+    }
+
+    fn new(
+        version: HttpVersion,
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
@@ -212,6 +263,7 @@ impl HttpConnection {
                 url.parse()
                     .map_err(|e| Error::new(format_args!("failed to parse {url}"), e))?,
             ),
+            version,
             body,
             headers: headers.into(),
             sender: Mutex::new(None),
@@ -219,18 +271,18 @@ impl HttpConnection {
         })
     }
 
-    fn poison(&self) -> Option<SendRequest<HttpBody>> {
+    fn poison(&self) -> Option<HttpSender> {
         self.sender.lock().unwrap().take()
     }
 
-    fn unpoison(&self, sender: SendRequest<HttpBody>) {
+    fn unpoison(&self, sender: HttpSender) {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
     pub async fn send(&self, body: PreEncoded) -> Result<HttpResponse, Error> {
         let mut sender = match self.poison() {
             Some(sender) => sender,
-            None => connect(&self.metrics, &self.uri).await?,
+            None => connect(&self.metrics, self.version, &self.uri).await?,
         };
 
         let res = send_request(
@@ -243,6 +295,39 @@ impl HttpConnection {
         .await?;
 
         self.unpoison(sender);
+
+        Ok(res)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum HttpVersion {
+    Http1,
+    Http2,
+}
+
+enum HttpSender {
+    Http1(http1::SendRequest<HttpBody>),
+    Http2(http2::SendRequest<HttpBody>),
+}
+
+impl HttpSender {
+    async fn send_request(
+        &mut self,
+        metrics: &InternalMetrics,
+        req: Request<HttpBody>,
+    ) -> Result<HttpResponse, Error> {
+        let res = match self {
+            HttpSender::Http1(sender) => sender.send_request(req).await,
+            HttpSender::Http2(sender) => sender.send_request(req).await,
+        }
+        .map_err(|e| {
+            metrics.otlp_http_request_failed.increment();
+
+            Error::new("failed to send HTTP request", e)
+        })?;
+
+        metrics.otlp_http_request_sent.increment();
 
         Ok(HttpResponse { res })
     }
@@ -344,7 +429,7 @@ impl HttpBody {
         }
     }
 
-    pub fn grpc(payload: PreEncoded) -> Self {
+    pub fn grpc_framed(payload: PreEncoded) -> Self {
         let encoding = Encoding::of(&payload);
 
         let payload = HttpBodyPayload::Grpc {
@@ -579,5 +664,17 @@ impl<T: tokio::io::AsyncWrite> hyper::rt::Write for HttpIo<T> {
         let io = unsafe { self.map_unchecked_mut(|io| &mut io.0) };
 
         tokio::io::AsyncWrite::poll_shutdown(io, cx)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TokioAmbientExecutor;
+
+impl<F: Future + Send + 'static> hyper::rt::Executor<F> for TokioAmbientExecutor
+where
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::spawn(fut);
     }
 }

@@ -393,13 +393,18 @@ impl OtlpTransportBuilder {
 
         Ok(match self.protocol {
             Protocol::Http => OtlpTransport::Http {
-                http: HttpConnection::new(metrics, url, self.headers, http::HttpBody::raw)?,
+                http: HttpConnection::http1(metrics, url, self.headers, http::HttpBody::raw)?,
                 resource,
                 scope,
                 request_encoder,
             },
             Protocol::Grpc => OtlpTransport::Http {
-                http: HttpConnection::new(metrics, url, self.headers, http::HttpBody::grpc)?,
+                http: HttpConnection::http2(
+                    metrics,
+                    url,
+                    self.headers,
+                    http::HttpBody::grpc_framed,
+                )?,
                 resource,
                 scope,
                 request_encoder,
