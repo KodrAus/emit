@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     future::Future,
     io::{Cursor, Write},
     pin::Pin,
@@ -21,18 +22,18 @@ use crate::{
     Error,
 };
 
-async fn connect(metrics: &InternalMetrics, uri: &Uri) -> Result<SendRequest<HttpBody>, Error> {
-    let io = tokio::net::TcpStream::connect((uri.host().unwrap(), uri.port_u16().unwrap_or(80)))
+async fn connect(metrics: &InternalMetrics, uri: &HttpUri) -> Result<SendRequest<HttpBody>, Error> {
+    let io = tokio::net::TcpStream::connect((uri.host(), uri.port()))
         .await
         .map_err(|e| {
             metrics.otlp_http_conn_failed.increment();
 
-            Error::new(e)
+            Error::new("failed to connect TCP stream", e)
         })?;
 
     metrics.otlp_http_conn_established.increment();
 
-    if uri.scheme().unwrap() == &hyper::http::uri::Scheme::HTTPS {
+    if uri.is_https() {
         #[cfg(feature = "tls")]
         {
             let io = tls_handshake(metrics, io, uri).await?;
@@ -53,14 +54,14 @@ async fn connect(metrics: &InternalMetrics, uri: &Uri) -> Result<SendRequest<Htt
 async fn tls_handshake(
     metrics: &InternalMetrics,
     io: tokio::net::TcpStream,
-    uri: &Uri,
+    uri: &HttpUri,
 ) -> Result<tokio_rustls::client::TlsStream<tokio::net::TcpStream>, Error> {
     use tokio_rustls::{rustls, TlsConnector};
 
-    let domain = uri.host().unwrap().to_owned().try_into().map_err(|e| {
+    let domain = uri.host().to_owned().try_into().map_err(|e| {
         metrics.otlp_http_conn_tls_failed.increment();
 
-        Error::new(e)
+        Error::new(format_args!("could not extract a DNS name from {uri}"), e)
     })?;
 
     let tls = {
@@ -68,13 +69,9 @@ async fn tls_handshake(
 
         for cert in rustls_native_certs::load_native_certs().map_err(|e| {
             metrics.otlp_http_conn_tls_failed.increment();
-            Error::new(e)
+            Error::new("failed to load native certificates", e)
         })? {
-            root_store.add(cert).map_err(|e| {
-                metrics.otlp_http_conn_tls_failed.increment();
-
-                Error::new(e)
-            })?;
+            let _ = root_store.add(cert);
         }
 
         Arc::new(
@@ -89,7 +86,7 @@ async fn tls_handshake(
     conn.connect(domain, io).await.map_err(|e| {
         metrics.otlp_http_conn_tls_failed.increment();
 
-        Error::new(e)
+        Error::new("failed to connect TLS stream", e)
     })
 }
 
@@ -100,7 +97,7 @@ async fn http_handshake(
     let (sender, conn) = http1::handshake(HttpIo(io)).await.map_err(|e| {
         metrics.otlp_http_conn_failed.increment();
 
-        Error::new(e)
+        Error::new("failed to perform HTTP handshake", e)
     })?;
 
     tokio::task::spawn(async move {
@@ -113,7 +110,7 @@ async fn http_handshake(
 async fn send_request(
     metrics: &InternalMetrics,
     sender: &mut SendRequest<HttpBody>,
-    uri: &Uri,
+    uri: &HttpUri,
     headers: impl Iterator<Item = (&str, &str)>,
     body: HttpBody,
 ) -> Result<hyper::Response<body::Incoming>, Error> {
@@ -124,7 +121,15 @@ async fn send_request(
             use emit::{Ctxt as _, Props as _};
 
             let body = {
-                #[cfg(feature = "gzip")]
+                #[cfg(all(feature = "tls", feature = "gzip"))]
+                {
+                    if !uri.is_https() {
+                        body.gzip()?
+                    } else {
+                        body
+                    }
+                }
+                #[cfg(all(not(feature = "tls"), feature = "gzip"))]
                 {
                     body.gzip()?
                 }
@@ -135,9 +140,9 @@ async fn send_request(
             };
 
             let mut req = Request::builder()
-                .uri(uri)
+                .uri(&uri.0)
                 .method(Method::POST)
-                .header("host", uri.authority().unwrap().as_str())
+                .header("host", uri.authority())
                 .header("content-length", body.content_length)
                 .header("content-type", body.content_type);
 
@@ -166,14 +171,14 @@ async fn send_request(
             req.body(body).map_err(|e| {
                 metrics.otlp_http_request_failed.increment();
 
-                Error::new(e)
+                Error::new("failed to stream HTTP body", e)
             })?
         })
         .await
         .map_err(|e| {
             metrics.otlp_http_request_failed.increment();
 
-            Error::new(e)
+            Error::new("failed to send HTTP request", e)
         })?;
 
     metrics.otlp_http_request_sent.increment();
@@ -182,7 +187,7 @@ async fn send_request(
 }
 
 pub(crate) struct HttpConnection {
-    uri: Uri,
+    uri: HttpUri,
     headers: Vec<(String, String)>,
     body: fn(PreEncoded) -> HttpBody,
     sender: Mutex<Option<SendRequest<HttpBody>>>,
@@ -200,8 +205,13 @@ impl HttpConnection {
         headers: impl Into<Vec<(String, String)>>,
         body: fn(PreEncoded) -> HttpBody,
     ) -> Result<Self, Error> {
+        let url = url.as_ref();
+
         Ok(HttpConnection {
-            uri: url.as_ref().parse().map_err(Error::new)?,
+            uri: HttpUri(
+                url.parse()
+                    .map_err(|e| Error::new(format_args!("failed to parse {url}"), e))?,
+            ),
             body,
             headers: headers.into(),
             sender: Mutex::new(None),
@@ -235,6 +245,32 @@ impl HttpConnection {
         self.unpoison(sender);
 
         Ok(HttpResponse { res })
+    }
+}
+
+struct HttpUri(Uri);
+
+impl fmt::Display for HttpUri {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl HttpUri {
+    fn is_https(&self) -> bool {
+        self.0.scheme().unwrap() == &hyper::http::uri::Scheme::HTTPS
+    }
+
+    fn host(&self) -> &str {
+        self.0.host().unwrap()
+    }
+
+    fn authority(&self) -> &str {
+        self.0.authority().unwrap().as_str()
+    }
+
+    fn port(&self) -> u16 {
+        self.0.port_u16().unwrap_or(80)
     }
 }
 
@@ -347,12 +383,15 @@ impl HttpBody {
                     break;
                 }
 
-                enc.write_all(chunk).map_err(Error::new)?;
+                enc.write_all(chunk)
+                    .map_err(|e| Error::new("failed to compress a chunk of bytes", e))?;
                 data.advance(chunk.len());
             }
         }
 
-        let buf = enc.finish().map_err(Error::new)?;
+        let buf = enc
+            .finish()
+            .map_err(|e| Error::new("failed to finalize compression", e))?;
 
         let payload = HttpBodyPayload::Gzip(Some(Cursor::new(buf.into_boxed_slice())));
 
@@ -474,7 +513,9 @@ impl HttpResponse {
                         Poll::Ready(Ok(true))
                     }
                     Poll::Ready(None) => Poll::Ready(Ok(false)),
-                    Poll::Ready(Some(Err(e))) => Poll::Ready(Err(Error::new(e))),
+                    Poll::Ready(Some(Err(e))) => {
+                        Poll::Ready(Err(Error::new("failed to read HTTP response body", e)))
+                    }
                     Poll::Pending => Poll::Pending,
                 }
             }

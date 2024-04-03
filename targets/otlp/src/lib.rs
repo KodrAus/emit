@@ -12,8 +12,16 @@ pub fn new() -> OtlpBuilder {
     OtlpBuilder::new()
 }
 
+pub fn grpc(dst: impl Into<String>) -> OtlpTransportBuilder {
+    OtlpTransportBuilder::grpc(dst)
+}
+
 pub fn http(dst: impl Into<String>) -> OtlpTransportBuilder {
     OtlpTransportBuilder::http(dst)
+}
+
+pub fn logs_grpc_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
+    OtlpLogsBuilder::grpc_proto(dst)
 }
 
 pub fn logs_http_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
@@ -32,6 +40,10 @@ pub fn logs_json(transport: OtlpTransportBuilder) -> OtlpLogsBuilder {
     OtlpLogsBuilder::json(transport)
 }
 
+pub fn traces_grpc_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
+    OtlpTracesBuilder::grpc_proto(dst)
+}
+
 pub fn traces_http_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http_proto(dst)
 }
@@ -46,6 +58,10 @@ pub fn traces_proto(transport: OtlpTransportBuilder) -> OtlpTracesBuilder {
 
 pub fn traces_json(transport: OtlpTransportBuilder) -> OtlpTracesBuilder {
     OtlpTracesBuilder::json(transport)
+}
+
+pub fn metrics_grpc_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
+    OtlpMetricsBuilder::grpc_proto(dst)
 }
 
 pub fn metrics_http_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {

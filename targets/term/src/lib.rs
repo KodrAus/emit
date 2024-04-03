@@ -1,9 +1,11 @@
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
 use core::{fmt, str, time::Duration};
-use std::{cell::RefCell, cmp, io::Write};
+use std::{cell::RefCell, cmp, io::Write, iter};
 
-use emit::well_known::{KEY_LVL, KEY_METRIC_NAME, KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_TRACE_ID};
+use emit::well_known::{
+    KEY_ERR, KEY_LVL, KEY_METRIC_NAME, KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_TRACE_ID,
+};
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 pub fn stdout() -> Stdout {
@@ -233,17 +235,32 @@ fn print_event(
         write_plain(buf, " ");
     }
 
+    let mut lvl = None;
     if let Some(level) = evt.props().pull::<emit::Level, _>(KEY_LVL) {
-        if let Some(level_color) = level_color(&level) {
-            write_fg(buf, level, Color::Ansi256(level_color));
-            write_plain(buf, " ");
-        }
+        lvl = level_color(&level).map(Color::Ansi256);
+
+        try_write_fg(buf, level, lvl);
+        write_plain(buf, " ");
     }
 
     write_fg(buf, format_args!("{} ", evt.module()), MODULE);
 
     let _ = evt.msg().write(Writer { buf });
     write_plain(buf, "\n");
+
+    if let Some(err) = evt.props().get(KEY_ERR) {
+        if let Some(err) = err.to_borrowed_err() {
+            write_plain(buf, "  ");
+            try_write_fg(buf, "err", lvl);
+            write_plain(buf, format_args!(": {err}\n"));
+
+            for cause in iter::successors(err.source(), |err| (*err).source()) {
+                write_plain(buf, "  ");
+                try_write_fg(buf, "caused by", lvl);
+                write_plain(buf, format_args!(": {cause}\n"));
+            }
+        }
+    }
 
     if let Some(value) = evt.props().get(KEY_METRIC_VALUE) {
         let buckets = value.as_f64_sequence();
@@ -357,6 +374,14 @@ fn write_fg(buf: &mut Buffer, v: impl fmt::Display, color: Color) {
     let _ = buf.set_color(ColorSpec::new().set_fg(Some(color)));
     let _ = write!(buf, "{}", v);
     let _ = buf.reset();
+}
+
+fn try_write_fg(buf: &mut Buffer, v: impl fmt::Display, color: Option<Color>) {
+    if let Some(color) = color {
+        write_fg(buf, v, color);
+    } else {
+        write_plain(buf, v);
+    }
 }
 
 fn write_plain(buf: &mut Buffer, v: impl fmt::Display) {

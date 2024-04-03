@@ -4,51 +4,62 @@ use core::{fmt, str::FromStr};
 pub struct Value<'v>(value_bag::ValueBag<'v>);
 
 impl<'v> Value<'v> {
+    #[track_caller]
     pub fn capture_display(value: &'v (impl fmt::Display + 'static)) -> Self {
         Value(value_bag::ValueBag::capture_display(value))
     }
 
+    #[track_caller]
     pub fn from_display(value: &'v impl fmt::Display) -> Self {
         Value(value_bag::ValueBag::from_display(value))
     }
 
+    #[track_caller]
     pub fn capture_debug(value: &'v (impl fmt::Debug + 'static)) -> Self {
         Value(value_bag::ValueBag::capture_debug(value))
     }
 
+    #[track_caller]
     pub fn from_debug(value: &'v impl fmt::Debug) -> Self {
         Value(value_bag::ValueBag::from_debug(value))
     }
 
     #[cfg(feature = "serde")]
+    #[track_caller]
     pub fn capture_serde(value: &'v (impl serde::Serialize + 'static)) -> Self {
         Value(value_bag::ValueBag::capture_serde1(value))
     }
 
     #[cfg(feature = "serde")]
+    #[track_caller]
     pub fn from_serde(value: &'v impl serde::Serialize) -> Self {
         Value(value_bag::ValueBag::from_serde1(value))
     }
 
     #[cfg(feature = "sval")]
+    #[track_caller]
     pub fn capture_sval(value: &'v (impl sval::Value + 'static)) -> Self {
         Value(value_bag::ValueBag::capture_sval2(value))
     }
 
     #[cfg(feature = "sval")]
+    #[track_caller]
     pub fn from_sval(value: &'v impl sval::Value) -> Self {
         Value(value_bag::ValueBag::from_sval2(value))
     }
 
     #[cfg(feature = "std")]
+    #[track_caller]
     pub fn capture_error(value: &'v (impl std::error::Error + 'static)) -> Self {
         Value(value_bag::ValueBag::capture_error(value))
     }
 
+    #[track_caller]
     pub fn from_any(value: &'v impl ToValue) -> Self {
         value.to_value()
     }
 
+    #[track_caller]
     pub fn null() -> Self {
         Value(value_bag::ValueBag::empty())
     }
@@ -98,6 +109,11 @@ impl<'v> Value<'v> {
 
     pub fn to_borrowed_str(&self) -> Option<&'v str> {
         self.0.to_borrowed_str()
+    }
+
+    #[cfg(feature = "std")]
+    pub fn to_borrowed_err(&self) -> Option<&'v (dyn std::error::Error + 'static)> {
+        self.0.to_borrowed_error()
     }
 
     pub fn as_f64(&self) -> f64 {

@@ -196,6 +196,10 @@ impl OtlpLogsBuilder {
         Self::proto(OtlpTransportBuilder::http(dst))
     }
 
+    pub fn grpc_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::grpc(dst))
+    }
+
     pub fn json(transport: OtlpTransportBuilder) -> Self {
         Self::new(Encoding::Json, transport)
     }
@@ -246,6 +250,10 @@ impl OtlpTracesBuilder {
 
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn grpc_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::grpc(dst))
     }
 
     pub fn json(transport: OtlpTransportBuilder) -> Self {
@@ -299,6 +307,10 @@ impl OtlpMetricsBuilder {
 
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
+    }
+
+    pub fn grpc_proto(dst: impl Into<String>) -> Self {
+        Self::proto(OtlpTransportBuilder::grpc(dst))
     }
 
     pub fn json(transport: OtlpTransportBuilder) -> Self {
@@ -411,6 +423,14 @@ impl OtlpBuilder {
         self.logs(OtlpLogsBuilder::http_proto(dst))
     }
 
+    pub fn logs_grpc_proto(self, dst: impl Into<String>) -> Self {
+        self.logs(OtlpLogsBuilder::grpc_proto(dst))
+    }
+
+    pub fn logs_http_json(self, dst: impl Into<String>) -> Self {
+        self.logs(OtlpLogsBuilder::http_json(dst))
+    }
+
     pub fn logs(mut self, builder: OtlpLogsBuilder) -> Self {
         self.otlp_logs = Some(builder);
         self
@@ -420,6 +440,14 @@ impl OtlpBuilder {
         self.traces(OtlpTracesBuilder::http_proto(dst))
     }
 
+    pub fn traces_grpc_proto(self, dst: impl Into<String>) -> Self {
+        self.traces(OtlpTracesBuilder::grpc_proto(dst))
+    }
+
+    pub fn traces_http_json(self, dst: impl Into<String>) -> Self {
+        self.traces(OtlpTracesBuilder::http_json(dst))
+    }
+
     pub fn traces(mut self, builder: OtlpTracesBuilder) -> Self {
         self.otlp_traces = Some(builder);
         self
@@ -427,6 +455,14 @@ impl OtlpBuilder {
 
     pub fn metrics_http_proto(self, dst: impl Into<String>) -> Self {
         self.metrics(OtlpMetricsBuilder::http_proto(dst))
+    }
+
+    pub fn metrics_grpc_proto(self, dst: impl Into<String>) -> Self {
+        self.metrics(OtlpMetricsBuilder::grpc_proto(dst))
+    }
+
+    pub fn metrics_http_json(self, dst: impl Into<String>) -> Self {
+        self.metrics(OtlpMetricsBuilder::http_json(dst))
     }
 
     pub fn metrics(mut self, builder: OtlpMetricsBuilder) -> Self {

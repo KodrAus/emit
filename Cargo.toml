@@ -6,13 +6,9 @@ members = [
     "targets/file",
     "targets/otlp",
     "targets/otlp/gen",
-    "targets/tracing",
-    "targets/log",
     "macros",
     "benchmark",
     "tests/smoke-test",
-    "tests/tracing-test",
-    "tests/log-test",
 ]
 
 [package]
