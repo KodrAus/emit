@@ -393,7 +393,21 @@ impl OtlpTransportBuilder {
 
         Ok(match self.protocol {
             Protocol::Http => OtlpTransport::Http {
-                http: HttpConnection::http1(metrics, url, self.headers, http::HttpBody::raw)?,
+                http: HttpConnection::http1(
+                    metrics,
+                    url,
+                    self.headers,
+                    http::HttpContent::raw,
+                    |res| async move {
+                        let status = res.http_status();
+
+                        if status >= 200 && status < 300 {
+                            Ok(vec![])
+                        } else {
+                            Err(Error::msg(format_args!("OTLP HTTP server responded {status}")))
+                        }
+                    },
+                )?,
                 resource,
                 scope,
                 request_encoder,
@@ -403,7 +417,35 @@ impl OtlpTransportBuilder {
                     metrics,
                     url,
                     self.headers,
-                    http::HttpBody::grpc_framed,
+                    http::HttpContent::grpc,
+                    |res| async move {
+                        let mut status = 0;
+                        let mut msg = String::new();
+
+                        res.stream_payload(
+                            |_| {},
+                            |k, v| match k {
+                                "grpc-status" => {
+                                    status = v.parse().unwrap_or(0);
+                                }
+                                "grpc-message" => {
+                                    msg = v.into();
+                                }
+                                _ => {}
+                            },
+                        )
+                        .await?;
+
+                        if status == 0 {
+                            Ok(vec![])
+                        } else {
+                            if msg.len() > 0 {
+                                Err(Error::msg(format_args!("OTLP gRPC server responded {status} {msg}")))
+                            } else {
+                                Err(Error::msg(format_args!("OTLP gRPC server responded {status}")))
+                            }
+                        }
+                    },
                 )?,
                 resource,
                 scope,
@@ -612,23 +654,7 @@ impl OtlpBuilder {
 
                 if otlp_logs.len() > 0 {
                     if let Some(client) = client.logs {
-                        if let Err(e) = client
-                            .send(otlp_logs, {
-                                #[cfg(feature = "decode_responses")]
-                                {
-                                    if emit::runtime::internal_slot().is_enabled() {
-                                        Some(logs::decode_response)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                #[cfg(not(feature = "decode_responses"))]
-                                {
-                                    None::<fn(Result<&[u8], &[u8]>)>
-                                }
-                            })
-                            .await
-                        {
+                        if let Err(e) = client.send(otlp_logs).await {
                             r = Err(e.map(|logs| Channel {
                                 otlp_logs: logs,
                                 otlp_traces: Vec::new(),
@@ -640,23 +666,7 @@ impl OtlpBuilder {
 
                 if otlp_traces.len() > 0 {
                     if let Some(client) = client.traces {
-                        if let Err(e) = client
-                            .send(otlp_traces, {
-                                #[cfg(feature = "decode_responses")]
-                                {
-                                    if emit::runtime::internal_slot().is_enabled() {
-                                        Some(traces::decode_response)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                #[cfg(not(feature = "decode_responses"))]
-                                {
-                                    None::<fn(Result<&[u8], &[u8]>)>
-                                }
-                            })
-                            .await
-                        {
+                        if let Err(e) = client.send(otlp_traces).await {
                             r = if let Err(re) = r {
                                 Err(re.map(|mut channel| {
                                     channel.otlp_traces = e.into_retryable();
@@ -675,23 +685,7 @@ impl OtlpBuilder {
 
                 if otlp_metrics.len() > 0 {
                     if let Some(client) = client.metrics {
-                        if let Err(e) = client
-                            .send(otlp_metrics, {
-                                #[cfg(feature = "decode_responses")]
-                                {
-                                    if emit::runtime::internal_slot().is_enabled() {
-                                        Some(metrics::decode_response)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                #[cfg(not(feature = "decode_responses"))]
-                                {
-                                    None::<fn(Result<&[u8], &[u8]>)>
-                                }
-                            })
-                            .await
-                        {
+                        if let Err(e) = client.send(otlp_metrics).await {
                             r = if let Err(re) = r {
                                 Err(re.map(|mut channel| {
                                     channel.otlp_metrics = e.into_retryable();
@@ -825,7 +819,6 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
     pub(crate) async fn send(
         &self,
         batch: Vec<PreEncoded>,
-        decode: Option<impl FnOnce(Result<&[u8], &[u8]>)>,
     ) -> Result<(), BatchError<Vec<PreEncoded>>> {
         match self {
             OtlpTransport::Http {
@@ -836,7 +829,7 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
             } => {
                 let batch_size = batch.len();
 
-                let res = match http
+                match http
                     .send(request_encoder.encode_request(
                         resource.as_ref(),
                         scope.as_ref(),
@@ -850,9 +843,8 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                                 rt: emit::runtime::internal(),
                                 when: emit::filter::always(),
                                 extent,
-                                "OTLP batch of {batch_size} events responded {status_code}",
+                                "OTLP batch of {batch_size} events",
                                 batch_size,
-                                status_code: res.status(),
                             )
                         });
 
@@ -864,7 +856,7 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                                 rt: emit::runtime::internal(),
                                 when: emit::filter::always(),
                                 extent,
-                                "OTLP batch of {batch_size} events failed to send: {err}",
+                                "OTLP batch of {batch_size} events failed: {err}",
                                 batch_size,
                                 err,
                             )
@@ -873,25 +865,6 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                         return Err(BatchError::retry(err, batch));
                     }
                 };
-
-                if let Some(decode) = decode {
-                    let status = res.status();
-                    let body = res.read_to_vec().await.map_err(|err| {
-                        emit::warn!(
-                            rt: emit::runtime::internal(),
-                            "failed to read OTLP response: {err}",
-                            err,
-                        );
-
-                        BatchError::no_retry(err)
-                    })?;
-
-                    if status >= 200 && status < 300 {
-                        decode(Ok(&body));
-                    } else {
-                        decode(Err(&body));
-                    }
-                }
             }
         }
 

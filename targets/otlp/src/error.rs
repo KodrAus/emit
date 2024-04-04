@@ -2,24 +2,33 @@ use std::{error, fmt};
 
 pub struct Error {
     msg: String,
-    cause: Box<dyn error::Error + Send + Sync>,
+    cause: Option<Box<dyn error::Error + Send + Sync>>,
 }
 
 impl Error {
+    pub(crate) fn msg(msg: impl fmt::Display) -> Self {
+        Error {
+            msg: msg.to_string(),
+            cause: None,
+        }
+    }
+
     pub(crate) fn new(
         msg: impl fmt::Display,
         e: impl error::Error + Send + Sync + 'static,
     ) -> Self {
         Error {
             msg: msg.to_string(),
-            cause: Box::new(e),
+            cause: Some(Box::new(e)),
         }
     }
 }
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        Some(&*self.cause)
+        self.cause
+            .as_ref()
+            .map(|source| &**source as &(dyn error::Error + 'static))
     }
 }
 

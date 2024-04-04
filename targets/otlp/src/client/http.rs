@@ -148,7 +148,7 @@ async fn send_request(
     sender: &mut HttpSender,
     uri: &HttpUri,
     headers: impl Iterator<Item = (&str, &str)>,
-    body: HttpBody,
+    body: HttpContent,
 ) -> Result<HttpResponse, Error> {
     let rt = emit::runtime::internal();
 
@@ -159,8 +159,6 @@ async fn send_request(
             let body = {
                 #[cfg(all(feature = "tls", feature = "gzip"))]
                 {
-                    // TODO: This is happening at the wrong level
-                    // gzip should be done _before_ framing
                     if !uri.is_https() {
                         body.gzip()?
                     } else {
@@ -181,7 +179,7 @@ async fn send_request(
                 .uri(&uri.0)
                 .method(Method::POST)
                 .header("host", uri.authority())
-                .header("content-length", body.content_length)
+                .header("content-length", body.len())
                 .header("content-type", body.content_type);
 
             if let Some(content_encoding) = body.content_encoding {
@@ -218,12 +216,17 @@ async fn send_request(
 }
 
 pub(crate) struct HttpConnection {
+    metrics: Arc<InternalMetrics>,
     version: HttpVersion,
     uri: HttpUri,
     headers: Vec<(String, String)>,
-    body: fn(PreEncoded) -> HttpBody,
+    request: Box<dyn Fn(PreEncoded) -> HttpContent + Send + Sync>,
+    response: Box<
+        dyn Fn(HttpResponse) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>>
+            + Send
+            + Sync,
+    >,
     sender: Mutex<Option<HttpSender>>,
-    metrics: Arc<InternalMetrics>,
 }
 
 pub(crate) struct HttpResponse {
@@ -231,30 +234,33 @@ pub(crate) struct HttpResponse {
 }
 
 impl HttpConnection {
-    pub fn http1(
+    pub fn http1<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        body: fn(PreEncoded) -> HttpBody,
+        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
-        Self::new(HttpVersion::Http1, metrics, url, headers, body)
+        Self::new(HttpVersion::Http1, metrics, url, headers, request, response)
     }
 
-    pub fn http2(
+    pub fn http2<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        body: fn(PreEncoded) -> HttpBody,
+        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
-        Self::new(HttpVersion::Http2, metrics, url, headers, body)
+        Self::new(HttpVersion::Http2, metrics, url, headers, request, response)
     }
 
-    fn new(
+    fn new<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         version: HttpVersion,
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        body: fn(PreEncoded) -> HttpBody,
+        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
         let url = url.as_ref();
 
@@ -264,7 +270,8 @@ impl HttpConnection {
                     .map_err(|e| Error::new(format_args!("failed to parse {url}"), e))?,
             ),
             version,
-            body,
+            request: Box::new(request),
+            response: Box::new(move |res| Box::pin(response(res))),
             headers: headers.into(),
             sender: Mutex::new(None),
             metrics,
@@ -279,7 +286,7 @@ impl HttpConnection {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
-    pub async fn send(&self, body: PreEncoded) -> Result<HttpResponse, Error> {
+    pub async fn send(&self, body: PreEncoded) -> Result<Vec<u8>, Error> {
         let mut sender = match self.poison() {
             Some(sender) => sender,
             None => connect(&self.metrics, self.version, &self.uri).await?,
@@ -290,13 +297,13 @@ impl HttpConnection {
             &mut sender,
             &self.uri,
             self.headers.iter().map(|(k, v)| (&**k, &**v)),
-            (self.body)(body),
+            (self.request)(body),
         )
         .await?;
 
         self.unpoison(sender);
 
-        Ok(res)
+        (self.response)(res).await
     }
 }
 
@@ -307,15 +314,15 @@ enum HttpVersion {
 }
 
 enum HttpSender {
-    Http1(http1::SendRequest<HttpBody>),
-    Http2(http2::SendRequest<HttpBody>),
+    Http1(http1::SendRequest<HttpContent>),
+    Http2(http2::SendRequest<HttpContent>),
 }
 
 impl HttpSender {
     async fn send_request(
         &mut self,
         metrics: &InternalMetrics,
-        req: Request<HttpBody>,
+        req: Request<HttpContent>,
     ) -> Result<HttpResponse, Error> {
         let res = match self {
             HttpSender::Http1(sender) => sender.send_request(req).await,
@@ -359,182 +366,92 @@ impl HttpUri {
     }
 }
 
-pub(crate) struct HttpBody {
-    payload: HttpBodyPayload,
-    content_length: usize,
+pub(crate) struct HttpContent {
+    header: Option<HttpContentHeader>,
+    payload: Option<HttpContentPayload>,
     content_type: &'static str,
     content_encoding: Option<&'static str>,
 }
 
-enum HttpBodyPayload {
-    Raw(Option<PreEncodedCursor>),
-    Grpc {
-        header: Option<Cursor<[u8; 5]>>,
-        payload: Option<PreEncodedCursor>,
-    },
-    #[cfg(feature = "gzip")]
-    Gzip(Option<Cursor<Box<[u8]>>>),
-}
-
-pub(crate) enum HttpBodyData {
-    GrpcHeader(Cursor<[u8; 5]>),
-    Payload(PreEncodedCursor),
-    #[cfg(feature = "gzip")]
-    Gzip(Cursor<Box<[u8]>>),
-}
-
-impl Buf for HttpBodyData {
-    fn remaining(&self) -> usize {
-        match self {
-            HttpBodyData::Payload(buf) => buf.remaining(),
-            HttpBodyData::GrpcHeader(buf) => buf.remaining(),
-            #[cfg(feature = "gzip")]
-            HttpBodyData::Gzip(buf) => buf.remaining(),
-        }
-    }
-
-    fn chunk(&self) -> &[u8] {
-        match self {
-            HttpBodyData::Payload(buf) => buf.chunk(),
-            HttpBodyData::GrpcHeader(buf) => buf.chunk(),
-            #[cfg(feature = "gzip")]
-            HttpBodyData::Gzip(buf) => buf.chunk(),
-        }
-    }
-
-    fn advance(&mut self, cnt: usize) {
-        match self {
-            HttpBodyData::Payload(buf) => buf.advance(cnt),
-            HttpBodyData::GrpcHeader(buf) => buf.advance(cnt),
-            #[cfg(feature = "gzip")]
-            HttpBodyData::Gzip(buf) => buf.advance(cnt),
-        }
-    }
-}
-
-impl HttpBody {
+impl HttpContent {
     pub fn raw(payload: PreEncoded) -> Self {
-        let encoding = Encoding::of(&payload);
-
-        let payload = HttpBodyPayload::Raw(Some(payload.into_cursor()));
-
-        HttpBody {
-            content_type: match encoding {
+        HttpContent {
+            header: None,
+            content_type: match Encoding::of(&payload) {
                 Encoding::Proto => "application/x-protobuf",
                 Encoding::Json => "application/json",
             },
             content_encoding: None,
-            content_length: payload.remaining(),
-            payload,
+            payload: Some(HttpContentPayload::PreEncoded(payload)),
         }
     }
 
-    pub fn grpc_framed(payload: PreEncoded) -> Self {
-        let encoding = Encoding::of(&payload);
-
-        let payload = HttpBodyPayload::Grpc {
-            header: Some({
-                let compressed = 0u8;
-                let len = (payload.len() as u32).to_be_bytes();
-
-                Cursor::new([compressed, len[0], len[1], len[2], len[3]])
-            }),
-            payload: Some(payload.into_cursor()),
-        };
-
-        HttpBody {
-            content_type: match encoding {
+    pub fn grpc(payload: PreEncoded) -> Self {
+        HttpContent {
+            header: Some(HttpContentHeader::Grpc(GrpcHeader {
+                compressed: false,
+                msg_len: payload.len() as u32,
+            })),
+            content_type: match Encoding::of(&payload) {
                 Encoding::Proto => "application/grpc+proto",
                 Encoding::Json => "application/grpc+json",
             },
             content_encoding: None,
-            content_length: payload.remaining(),
-            payload,
+            payload: Some(HttpContentPayload::PreEncoded(payload)),
         }
     }
 
     #[cfg(feature = "gzip")]
-    fn gzip(mut self) -> Result<Self, Error> {
+    fn gzip(self) -> Result<Self, Error> {
+        let payload = self.payload.expect("attempt to compress in-flight request");
+
         let mut enc = flate2::write::GzEncoder::new(
-            Vec::with_capacity(self.payload.remaining()),
+            Vec::with_capacity(payload.len()),
             flate2::Compression::fast(),
         );
 
-        // Read the gzipped content
-        while let Some(mut data) = self.payload.next_chunk() {
-            loop {
-                let chunk = data.chunk();
-                if chunk.len() == 0 {
-                    break;
-                }
-
-                enc.write_all(chunk)
-                    .map_err(|e| Error::new("failed to compress a chunk of bytes", e))?;
-                data.advance(chunk.len());
+        let mut payload = payload.into_cursor();
+        loop {
+            let chunk = payload.chunk();
+            if chunk.len() == 0 {
+                break;
             }
+
+            enc.write_all(chunk)
+                .map_err(|e| Error::new("failed to compress a chunk of bytes", e))?;
+            payload.advance(chunk.len());
         }
 
         let buf = enc
             .finish()
             .map_err(|e| Error::new("failed to finalize compression", e))?;
 
-        let payload = HttpBodyPayload::Gzip(Some(Cursor::new(buf.into_boxed_slice())));
-
-        Ok(HttpBody {
+        Ok(HttpContent {
             content_type: self.content_type,
             content_encoding: Some("gzip"),
-            content_length: payload.remaining(),
-            payload,
+            header: match self.header {
+                Some(HttpContentHeader::Grpc(_)) => Some(HttpContentHeader::Grpc(GrpcHeader {
+                    compressed: true,
+                    msg_len: buf.len() as u32,
+                })),
+                None => None,
+            },
+            payload: Some(HttpContentPayload::Bytes(buf.into_boxed_slice())),
         })
     }
-}
 
-impl HttpBodyPayload {
-    fn next_chunk(&mut self) -> Option<HttpBodyData> {
-        match self {
-            HttpBodyPayload::Raw(ref mut payload) => payload.take().map(HttpBodyData::Payload),
-            HttpBodyPayload::Grpc {
-                ref mut header,
-                ref mut payload,
-            } => header
-                .take()
-                .map(HttpBodyData::GrpcHeader)
-                .or_else(|| payload.take().map(HttpBodyData::Payload)),
-            #[cfg(feature = "gzip")]
-            HttpBodyPayload::Gzip(ref mut payload) => payload.take().map(HttpBodyData::Gzip),
-        }
-    }
-
-    fn remaining(&self) -> usize {
-        match self {
-            HttpBodyPayload::Raw(ref payload) => payload
+    fn len(&self) -> usize {
+        self.header.as_ref().map(|header| header.len()).unwrap_or(0)
+            + self
+                .payload
                 .as_ref()
-                .map(|payload| payload.remaining())
-                .unwrap_or(0),
-            HttpBodyPayload::Grpc {
-                ref header,
-                ref payload,
-            } => {
-                header
-                    .as_ref()
-                    .map(|header| header.remaining())
-                    .unwrap_or(0)
-                    + payload
-                        .as_ref()
-                        .map(|payload| payload.remaining())
-                        .unwrap_or(0)
-            }
-            #[cfg(feature = "gzip")]
-            HttpBodyPayload::Gzip(ref payload) => payload
-                .as_ref()
-                .map(|payload| payload.remaining())
-                .unwrap_or(0),
-        }
+                .map(|payload| payload.len())
+                .unwrap_or(0)
     }
 }
 
-impl Body for HttpBody {
-    type Data = HttpBodyData;
+impl Body for HttpContent {
+    type Data = HttpContentCursor;
 
     type Error = std::convert::Infallible;
 
@@ -542,57 +459,159 @@ impl Body for HttpBody {
         self: Pin<&mut Self>,
         _: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        if let Some(buf) = self.get_mut().payload.next_chunk() {
-            Poll::Ready(Some(Ok(Frame::data(buf))))
-        } else {
-            Poll::Ready(None)
+        let unpinned = self.get_mut();
+
+        if let Some(header) = unpinned.header.take() {
+            return Poll::Ready(Some(Ok(Frame::data(header.into_cursor()))));
         }
+
+        let Some(payload) = unpinned.payload.take() else {
+            return Poll::Ready(None);
+        };
+
+        Poll::Ready(Some(Ok(Frame::data(payload.into_cursor()))))
     }
 
     fn is_end_stream(&self) -> bool {
-        match self.payload {
-            HttpBodyPayload::Raw(None) => true,
-            HttpBodyPayload::Grpc {
-                header: None,
-                payload: None,
-            } => true,
-            HttpBodyPayload::Raw(_) => false,
-            HttpBodyPayload::Grpc { .. } => false,
-            #[cfg(feature = "gzip")]
-            HttpBodyPayload::Gzip(None) => true,
-            #[cfg(feature = "gzip")]
-            HttpBodyPayload::Gzip(_) => false,
+        match (&self.header, &self.payload) {
+            (Some(_), _) | (_, Some(_)) => false,
+            _ => true,
         }
     }
 
     fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.payload.remaining() as u64)
+        SizeHint::with_exact(self.len() as u64)
+    }
+}
+
+enum HttpContentHeader {
+    Grpc(GrpcHeader),
+}
+
+enum HttpContentPayload {
+    PreEncoded(PreEncoded),
+    #[cfg(feature = "gzip")]
+    Bytes(Box<[u8]>),
+}
+
+impl HttpContentHeader {
+    fn len(&self) -> usize {
+        match self {
+            HttpContentHeader::Grpc(header) => header.len(),
+        }
+    }
+
+    fn into_cursor(self) -> HttpContentCursor {
+        match self {
+            HttpContentHeader::Grpc(header) => HttpContentCursor::SmallBytes(header.into_cursor()),
+        }
+    }
+}
+
+impl HttpContentPayload {
+    fn len(&self) -> usize {
+        match self {
+            HttpContentPayload::PreEncoded(payload) => payload.len(),
+            HttpContentPayload::Bytes(payload) => payload.len(),
+        }
+    }
+
+    fn into_cursor(self) -> HttpContentCursor {
+        match self {
+            HttpContentPayload::PreEncoded(payload) => {
+                HttpContentCursor::PreEncoded(payload.into_cursor())
+            }
+            HttpContentPayload::Bytes(payload) => HttpContentCursor::Bytes(Cursor::new(payload)),
+        }
+    }
+}
+
+struct GrpcHeader {
+    compressed: bool,
+    msg_len: u32,
+}
+
+impl GrpcHeader {
+    fn len(&self) -> usize {
+        5
+    }
+
+    fn into_cursor(self) -> Cursor<[u8; 5]> {
+        let compressed = if self.compressed { 1 } else { 0 };
+        let len = self.msg_len.to_be_bytes();
+
+        Cursor::new([compressed, len[0], len[1], len[2], len[3]])
+    }
+}
+
+pub(crate) enum HttpContentCursor {
+    PreEncoded(PreEncodedCursor),
+    #[cfg(feature = "gzip")]
+    Bytes(Cursor<Box<[u8]>>),
+    SmallBytes(Cursor<[u8; 5]>),
+}
+
+impl Buf for HttpContentCursor {
+    fn remaining(&self) -> usize {
+        match self {
+            HttpContentCursor::PreEncoded(buf) => buf.remaining(),
+            #[cfg(feature = "gzip")]
+            HttpContentCursor::Bytes(buf) => buf.remaining(),
+            HttpContentCursor::SmallBytes(buf) => buf.remaining(),
+        }
+    }
+
+    fn chunk(&self) -> &[u8] {
+        match self {
+            HttpContentCursor::PreEncoded(buf) => buf.chunk(),
+            #[cfg(feature = "gzip")]
+            HttpContentCursor::Bytes(buf) => buf.chunk(),
+            HttpContentCursor::SmallBytes(buf) => buf.chunk(),
+        }
+    }
+
+    fn advance(&mut self, cnt: usize) {
+        match self {
+            HttpContentCursor::PreEncoded(buf) => buf.advance(cnt),
+            #[cfg(feature = "gzip")]
+            HttpContentCursor::Bytes(buf) => buf.advance(cnt),
+            HttpContentCursor::SmallBytes(buf) => buf.advance(cnt),
+        }
     }
 }
 
 impl HttpResponse {
-    pub fn status(&self) -> u16 {
+    pub fn http_status(&self) -> u16 {
         self.res.status().as_u16()
     }
 
-    pub async fn read_to_vec(mut self) -> Result<Vec<u8>, Error> {
-        struct BufNext<'a>(&'a mut body::Incoming, &'a mut Vec<u8>);
+    pub async fn stream_payload(
+        mut self,
+        mut body: impl FnMut(&[u8]),
+        mut trailer: impl FnMut(&str, &str),
+    ) -> Result<(), Error> {
+        struct BufNext<'a, B, T>(&'a mut body::Incoming, &'a mut B, &'a mut T);
 
-        impl<'a> Future for BufNext<'a> {
+        impl<'a, B: FnMut(&[u8]), T: FnMut(&str, &str)> Future for BufNext<'a, B, T> {
             type Output = Result<bool, Error>;
 
-            fn poll(
-                mut self: Pin<&mut Self>,
-                ctx: &mut task::Context<'_>,
-            ) -> task::Poll<Self::Output> {
-                match Pin::new(&mut self.0).poll_frame(ctx) {
+            fn poll(self: Pin<&mut Self>, ctx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
+                let BufNext(incoming, body, trailer) = unsafe { Pin::get_unchecked_mut(self) };
+
+                match Pin::new(incoming).poll_frame(ctx) {
                     Poll::Ready(Some(Ok(frame))) => {
                         if let Some(frame) = frame.data_ref() {
-                            self.1.extend_from_slice(frame);
+                            (body)(frame);
                         }
 
                         if let Some(trailers) = frame.trailers_ref() {
-                            todo!()
+                            for (k, v) in trailers {
+                                let k = k.as_str();
+
+                                if let Ok(v) = v.to_str() {
+                                    (trailer)(k, v)
+                                }
+                            }
                         }
 
                         Poll::Ready(Ok(true))
@@ -607,11 +626,10 @@ impl HttpResponse {
         }
 
         let frame = self.res.body_mut();
-        let mut body = Vec::new();
 
-        while BufNext(frame, &mut body).await? {}
+        while BufNext(frame, &mut body, &mut trailer).await? {}
 
-        Ok(body)
+        Ok(())
     }
 }
 
