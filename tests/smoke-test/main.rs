@@ -23,16 +23,16 @@ async fn main() {
             emit_otlp::new()
                 .logs(
                     emit_otlp::logs_proto(
-                        emit_otlp::grpc("https://localhost:4319").headers([("X-ApiKey", "1234")]),
+                        emit_otlp::grpc("http://localhost:4319").headers([("X-ApiKey", "1234")]),
                     )
                     .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
                 )
                 .traces(
-                    emit_otlp::traces_grpc_proto("https://localhost:4319").name(|evt, f| {
+                    emit_otlp::traces_grpc_proto("http://localhost:4319").name(|evt, f| {
                         write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())
                     }),
                 )
-                .metrics(emit_otlp::metrics_grpc_proto("https://localhost:4319"))
+                .metrics(emit_otlp::metrics_grpc_proto("http://localhost:4319"))
                 .resource(emit::props! {
                     #[emit::key("service.name")]
                     service_name: "smoke-test-rs",

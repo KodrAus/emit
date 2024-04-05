@@ -148,7 +148,7 @@ async fn send_request(
     sender: &mut HttpSender,
     uri: &HttpUri,
     headers: impl Iterator<Item = (&str, &str)>,
-    body: HttpContent,
+    content: HttpContent,
 ) -> Result<HttpResponse, Error> {
     let rt = emit::runtime::internal();
 
@@ -156,33 +156,18 @@ async fn send_request(
         .send_request(metrics, {
             use emit::{Ctxt as _, Props as _};
 
-            let body = {
-                #[cfg(all(feature = "tls", feature = "gzip"))]
-                {
-                    if !uri.is_https() {
-                        body.gzip()?
-                    } else {
-                        body
-                    }
-                }
-                #[cfg(all(not(feature = "tls"), feature = "gzip"))]
-                {
-                    body.gzip()?
-                }
-                #[cfg(not(feature = "gzip"))]
-                {
-                    body
-                }
-            };
+            let mut req = Request::builder().uri(&uri.0).method(Method::POST);
 
-            let mut req = Request::builder()
-                .uri(&uri.0)
-                .method(Method::POST)
+            for (k, v) in content.custom_headers {
+                req = req.header(*k, *v);
+            }
+
+            req = req
                 .header("host", uri.authority())
-                .header("content-length", body.len())
-                .header("content-type", body.content_type);
+                .header("content-length", content.len())
+                .header("content-type", content.content_type_header);
 
-            if let Some(content_encoding) = body.content_encoding {
+            if let Some(content_encoding) = content.content_encoding_header {
                 req = req.header("content-encoding", content_encoding);
             }
 
@@ -204,7 +189,7 @@ async fn send_request(
                 req
             };
 
-            req.body(body).map_err(|e| {
+            req.body(content).map_err(|e| {
                 metrics.otlp_http_request_failed.increment();
 
                 Error::new("failed to stream HTTP body", e)
@@ -220,7 +205,7 @@ pub(crate) struct HttpConnection {
     version: HttpVersion,
     uri: HttpUri,
     headers: Vec<(String, String)>,
-    request: Box<dyn Fn(PreEncoded) -> HttpContent + Send + Sync>,
+    request: Box<dyn Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync>,
     response: Box<
         dyn Fn(HttpResponse) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>> + Send>>
             + Send
@@ -238,7 +223,7 @@ impl HttpConnection {
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
         Self::new(HttpVersion::Http1, metrics, url, headers, request, response)
@@ -248,7 +233,7 @@ impl HttpConnection {
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
         Self::new(HttpVersion::Http2, metrics, url, headers, request, response)
@@ -259,7 +244,7 @@ impl HttpConnection {
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
         headers: impl Into<Vec<(String, String)>>,
-        request: impl Fn(PreEncoded) -> HttpContent + Send + Sync + 'static,
+        request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
         let url = url.as_ref();
@@ -286,10 +271,31 @@ impl HttpConnection {
         *self.sender.lock().unwrap() = Some(sender);
     }
 
+    pub fn uri(&self) -> &HttpUri {
+        &self.uri
+    }
+
     pub async fn send(&self, body: PreEncoded) -> Result<Vec<u8>, Error> {
         let mut sender = match self.poison() {
             Some(sender) => sender,
             None => connect(&self.metrics, self.version, &self.uri).await?,
+        };
+
+        let body = {
+            #[cfg(feature = "gzip")]
+            {
+                if !self.uri.is_https() {
+                    self.metrics.otlp_http_compress_gzip.increment();
+
+                    HttpContent::gzip(body)?
+                } else {
+                    HttpContent::raw(body)
+                }
+            }
+            #[cfg(not(feature = "gzip"))]
+            {
+                HttpContent::raw(body)
+            }
         };
 
         let res = send_request(
@@ -297,7 +303,7 @@ impl HttpConnection {
             &mut sender,
             &self.uri,
             self.headers.iter().map(|(k, v)| (&**k, &**v)),
-            (self.request)(body),
+            (self.request)(body)?,
         )
         .await?;
 
@@ -340,7 +346,7 @@ impl HttpSender {
     }
 }
 
-struct HttpUri(Uri);
+pub(super) struct HttpUri(Uri);
 
 impl fmt::Display for HttpUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -349,61 +355,52 @@ impl fmt::Display for HttpUri {
 }
 
 impl HttpUri {
-    fn is_https(&self) -> bool {
+    pub fn is_https(&self) -> bool {
         self.0.scheme().unwrap() == &hyper::http::uri::Scheme::HTTPS
     }
 
-    fn host(&self) -> &str {
+    pub fn host(&self) -> &str {
         self.0.host().unwrap()
     }
 
-    fn authority(&self) -> &str {
+    pub fn authority(&self) -> &str {
         self.0.authority().unwrap().as_str()
     }
 
-    fn port(&self) -> u16 {
+    pub fn port(&self) -> u16 {
         self.0.port_u16().unwrap_or(80)
     }
 }
 
 pub(crate) struct HttpContent {
-    header: Option<HttpContentHeader>,
-    payload: Option<HttpContentPayload>,
-    content_type: &'static str,
-    content_encoding: Option<&'static str>,
+    custom_headers: &'static [(&'static str, &'static str)],
+    content_frame: Option<HttpContentHeader>,
+    content_payload: Option<HttpContentPayload>,
+    content_type_header: &'static str,
+    content_encoding_header: Option<&'static str>,
+}
+
+fn content_type_of(payload: &PreEncoded) -> &'static str {
+    match Encoding::of(payload) {
+        Encoding::Proto => "application/x-protobuf",
+        Encoding::Json => "application/json",
+    }
 }
 
 impl HttpContent {
-    pub fn raw(payload: PreEncoded) -> Self {
+    fn raw(payload: PreEncoded) -> Self {
         HttpContent {
-            header: None,
-            content_type: match Encoding::of(&payload) {
-                Encoding::Proto => "application/x-protobuf",
-                Encoding::Json => "application/json",
-            },
-            content_encoding: None,
-            payload: Some(HttpContentPayload::PreEncoded(payload)),
-        }
-    }
-
-    pub fn grpc(payload: PreEncoded) -> Self {
-        HttpContent {
-            header: Some(HttpContentHeader::Grpc(GrpcHeader {
-                compressed: false,
-                msg_len: payload.len() as u32,
-            })),
-            content_type: match Encoding::of(&payload) {
-                Encoding::Proto => "application/grpc+proto",
-                Encoding::Json => "application/grpc+json",
-            },
-            content_encoding: None,
-            payload: Some(HttpContentPayload::PreEncoded(payload)),
+            content_frame: None,
+            content_type_header: content_type_of(&payload),
+            content_encoding_header: None,
+            custom_headers: &[],
+            content_payload: Some(HttpContentPayload::PreEncoded(payload)),
         }
     }
 
     #[cfg(feature = "gzip")]
-    fn gzip(self) -> Result<Self, Error> {
-        let payload = self.payload.expect("attempt to compress in-flight request");
+    fn gzip(payload: PreEncoded) -> Result<Self, Error> {
+        let content_type = content_type_of(&payload);
 
         let mut enc = flate2::write::GzEncoder::new(
             Vec::with_capacity(payload.len()),
@@ -427,26 +424,49 @@ impl HttpContent {
             .map_err(|e| Error::new("failed to finalize compression", e))?;
 
         Ok(HttpContent {
-            content_type: self.content_type,
-            content_encoding: Some("gzip"),
-            header: match self.header {
-                Some(HttpContentHeader::Grpc(_)) => Some(HttpContentHeader::Grpc(GrpcHeader {
-                    compressed: true,
-                    msg_len: buf.len() as u32,
-                })),
-                None => None,
-            },
-            payload: Some(HttpContentPayload::Bytes(buf.into_boxed_slice())),
+            content_type_header: content_type,
+            content_encoding_header: Some("gzip"),
+            custom_headers: &[],
+            content_frame: None,
+            content_payload: Some(HttpContentPayload::Bytes(buf.into_boxed_slice())),
         })
     }
 
-    fn len(&self) -> usize {
-        self.header.as_ref().map(|header| header.len()).unwrap_or(0)
-            + self
-                .payload
-                .as_ref()
-                .map(|payload| payload.len())
-                .unwrap_or(0)
+    pub fn with_frame_header(mut self, header: [u8; 5]) -> Self {
+        self.content_frame = Some(HttpContentHeader::SmallBytes(header));
+        self
+    }
+
+    pub fn with_content_type_header(mut self, content_type: &'static str) -> Self {
+        self.content_type_header = content_type;
+        self
+    }
+
+    pub fn len(&self) -> usize {
+        self.header_len() + self.payload_len()
+    }
+
+    pub fn header_len(&self) -> usize {
+        self.content_frame
+            .as_ref()
+            .map(|header| header.len())
+            .unwrap_or(0)
+    }
+
+    pub fn payload_len(&self) -> usize {
+        self.content_payload
+            .as_ref()
+            .map(|payload| payload.len())
+            .unwrap_or(0)
+    }
+
+    pub fn take_content_encoding(&mut self) -> Option<&'static str> {
+        self.content_encoding_header.take()
+    }
+
+    pub fn with_headers(mut self, headers: &'static [(&'static str, &'static str)]) -> Self {
+        self.custom_headers = headers;
+        self
     }
 }
 
@@ -461,11 +481,11 @@ impl Body for HttpContent {
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let unpinned = self.get_mut();
 
-        if let Some(header) = unpinned.header.take() {
+        if let Some(header) = unpinned.content_frame.take() {
             return Poll::Ready(Some(Ok(Frame::data(header.into_cursor()))));
         }
 
-        let Some(payload) = unpinned.payload.take() else {
+        let Some(payload) = unpinned.content_payload.take() else {
             return Poll::Ready(None);
         };
 
@@ -473,7 +493,7 @@ impl Body for HttpContent {
     }
 
     fn is_end_stream(&self) -> bool {
-        match (&self.header, &self.payload) {
+        match (&self.content_frame, &self.content_payload) {
             (Some(_), _) | (_, Some(_)) => false,
             _ => true,
         }
@@ -485,7 +505,8 @@ impl Body for HttpContent {
 }
 
 enum HttpContentHeader {
-    Grpc(GrpcHeader),
+    // NOTE: Basically hardcodes gRPC header, but could be generalized if it was worth it
+    SmallBytes([u8; 5]),
 }
 
 enum HttpContentPayload {
@@ -497,13 +518,15 @@ enum HttpContentPayload {
 impl HttpContentHeader {
     fn len(&self) -> usize {
         match self {
-            HttpContentHeader::Grpc(header) => header.len(),
+            HttpContentHeader::SmallBytes(header) => header.len(),
         }
     }
 
     fn into_cursor(self) -> HttpContentCursor {
         match self {
-            HttpContentHeader::Grpc(header) => HttpContentCursor::SmallBytes(header.into_cursor()),
+            HttpContentHeader::SmallBytes(header) => {
+                HttpContentCursor::SmallBytes(Cursor::new(header))
+            }
         }
     }
 }
@@ -523,24 +546,6 @@ impl HttpContentPayload {
             }
             HttpContentPayload::Bytes(payload) => HttpContentCursor::Bytes(Cursor::new(payload)),
         }
-    }
-}
-
-struct GrpcHeader {
-    compressed: bool,
-    msg_len: u32,
-}
-
-impl GrpcHeader {
-    fn len(&self) -> usize {
-        5
-    }
-
-    fn into_cursor(self) -> Cursor<[u8; 5]> {
-        let compressed = if self.compressed { 1 } else { 0 };
-        let len = self.msg_len.to_be_bytes();
-
-        Cursor::new([compressed, len[0], len[1], len[2], len[3]])
     }
 }
 

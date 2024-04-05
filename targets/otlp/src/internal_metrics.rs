@@ -9,6 +9,7 @@ pub(crate) struct InternalMetrics {
     pub(crate) otlp_http_conn_tls_failed: Counter,
     pub(crate) otlp_http_request_sent: Counter,
     pub(crate) otlp_http_request_failed: Counter,
+    pub(crate) otlp_http_compress_gzip: Counter,
 }
 
 #[derive(Default)]
@@ -40,6 +41,7 @@ impl InternalMetrics {
             otlp_http_conn_tls_failed,
             otlp_http_request_sent,
             otlp_http_request_failed,
+            otlp_http_compress_gzip,
         } = self;
 
         [
@@ -97,6 +99,14 @@ impl InternalMetrics {
                 stringify!(otlp_http_request_failed),
                 emit::well_known::METRIC_AGG_COUNT,
                 otlp_http_request_failed.sample(),
+                emit::empty::Empty,
+            ),
+            emit::metric::Metric::new(
+                "emit_otlp",
+                emit::empty::Empty,
+                stringify!(otlp_http_compress_gzip),
+                emit::well_known::METRIC_AGG_COUNT,
+                otlp_http_compress_gzip.sample(),
                 emit::empty::Empty,
             ),
         ]
