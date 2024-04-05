@@ -420,23 +420,34 @@ impl OtlpTransportBuilder {
                     url,
                     self.headers,
                     |mut req| {
-                        let len = (u32::try_from(req.payload_len()).unwrap()).to_be_bytes();
+                        let content_type_header = match req.content_type_header() {
+                            "application/x-protobuf" => "application/grpc+proto",
+                            content_type => {
+                                return Err(Error::msg(format_args!(
+                                    "unsupported content type '{content_type}'"
+                                )))
+                            }
+                        };
 
-                        Ok(if let Some(compression) = req.take_content_encoding() {
-                            req.with_content_type_header("application/grpc+proto")
-                                .with_headers(match compression {
-                                    "gzip" => &[("grpc-encoding", "gzip")],
-                                    compression => {
-                                        return Err(Error::msg(format_args!(
-                                            "unsupported compression '{compression}'"
-                                        )))
-                                    }
-                                })
-                                .with_frame_header([1, len[0], len[1], len[2], len[3]])
-                        } else {
-                            req.with_content_type_header("application/grpc+proto")
-                                .with_frame_header([0, len[0], len[1], len[2], len[3]])
-                        })
+                        let len = (u32::try_from(req.content_payload_len()).unwrap()).to_be_bytes();
+
+                        Ok(
+                            if let Some(compression) = req.take_content_encoding_header() {
+                                req.with_content_type_header(content_type_header)
+                                    .with_headers(match compression {
+                                        "gzip" => &[("grpc-encoding", "gzip")],
+                                        compression => {
+                                            return Err(Error::msg(format_args!(
+                                                "unsupported compression '{compression}'"
+                                            )))
+                                        }
+                                    })
+                                    .with_content_frame([1, len[0], len[1], len[2], len[3]])
+                            } else {
+                                req.with_content_type_header(content_type_header)
+                                    .with_content_frame([0, len[0], len[1], len[2], len[3]])
+                            },
+                        )
                     },
                     |res| async move {
                         let mut status = 0;

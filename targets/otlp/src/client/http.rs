@@ -432,9 +432,13 @@ impl HttpContent {
         })
     }
 
-    pub fn with_frame_header(mut self, header: [u8; 5]) -> Self {
+    pub fn with_content_frame(mut self, header: [u8; 5]) -> Self {
         self.content_frame = Some(HttpContentHeader::SmallBytes(header));
         self
+    }
+
+    pub fn content_type_header(&self) -> &'static str {
+        self.content_type_header
     }
 
     pub fn with_content_type_header(mut self, content_type: &'static str) -> Self {
@@ -442,31 +446,31 @@ impl HttpContent {
         self
     }
 
-    pub fn len(&self) -> usize {
-        self.header_len() + self.payload_len()
-    }
-
-    pub fn header_len(&self) -> usize {
-        self.content_frame
-            .as_ref()
-            .map(|header| header.len())
-            .unwrap_or(0)
-    }
-
-    pub fn payload_len(&self) -> usize {
-        self.content_payload
-            .as_ref()
-            .map(|payload| payload.len())
-            .unwrap_or(0)
-    }
-
-    pub fn take_content_encoding(&mut self) -> Option<&'static str> {
+    pub fn take_content_encoding_header(&mut self) -> Option<&'static str> {
         self.content_encoding_header.take()
     }
 
     pub fn with_headers(mut self, headers: &'static [(&'static str, &'static str)]) -> Self {
         self.custom_headers = headers;
         self
+    }
+
+    pub fn len(&self) -> usize {
+        self.content_frame_len() + self.content_payload_len()
+    }
+
+    pub fn content_frame_len(&self) -> usize {
+        self.content_frame
+            .as_ref()
+            .map(|header| header.len())
+            .unwrap_or(0)
+    }
+
+    pub fn content_payload_len(&self) -> usize {
+        self.content_payload
+            .as_ref()
+            .map(|payload| payload.len())
+            .unwrap_or(0)
     }
 }
 
