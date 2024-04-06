@@ -3,20 +3,28 @@ name = "emit_term"
 version = "0.0.0"
 edition = "2021"
 
+[features]
+default = ["default_writer"]
+default_writer = ["emit/sval", "termcolor", "time", "sval", "sval_fmt"]
+
 [dependencies.emit]
 path = "../../"
 default-features = false
-features = ["std", "sval"]
+features = ["std"]
 
 [dependencies.sval]
 version = "2"
+optional = true
 
 [dependencies.sval_fmt]
 version = "2"
+optional = true
 
 [dependencies.time]
 version = "0.3"
 features = ["local-offset"]
+optional = true
 
 [dependencies.termcolor]
 version = "1"
+optional = true

@@ -54,4 +54,5 @@ metrics!(InternalMetrics {
     file_write_failed: Counter,
     file_delete: Counter,
     file_delete_failed: Counter,
+    file_format_failed: Counter,
 });

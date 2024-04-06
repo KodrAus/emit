@@ -670,6 +670,11 @@ impl OtlpBuilder {
         emit_batcher::tokio::spawn(receiver, move |batch: Channel<PreEncoded>| {
             let client = client.clone();
 
+            /*
+            NOTE: Possible degenerate behavior here where one signal blocks others;
+            the logs endpoint is flaky and fails a lot, so it means traces also get
+            backed up waiting for retries of logs to succeed.
+            */
             async move {
                 let Channel {
                     otlp_logs,
