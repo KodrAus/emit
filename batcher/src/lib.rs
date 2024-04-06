@@ -444,7 +444,7 @@ impl<T: Channel> Shared<T> {
         let queue_length = { self.state.lock().unwrap().next_batch.channel.remaining() };
 
         self.metrics.sample().chain(Some(emit::metric::Metric::new(
-            "emit_batcher",
+            env!("CARGO_PKG_NAME"),
             emit::empty::Empty,
             "queue_length",
             emit::well_known::METRIC_AGG_LAST,

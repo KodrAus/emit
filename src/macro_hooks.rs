@@ -518,7 +518,7 @@ pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
         source.into(),
         FirstDefined(when, rt.filter()),
         rt.ctxt(),
-        extent.to_extent().or_else(|| rt.now().to_extent()),
+        extent.to_extent().or_else(|| rt.clock().now().to_extent()),
         tpl,
         props,
     );
@@ -561,15 +561,15 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
         }
     }
 
-    let (mut trace_id, span_parent) = rt.with_current(|current| {
+    let (mut trace_id, span_parent) = rt.ctxt().with_current(|current| {
         (
             current.pull::<TraceId, _>(KEY_TRACE_ID),
             current.pull::<SpanId, _>(KEY_SPAN_ID),
         )
     });
 
-    trace_id = trace_id.or_else(|| TraceId::random(rt));
-    let span_id = SpanId::random(rt);
+    trace_id = trace_id.or_else(|| TraceId::random(rt.rng()));
+    let span_id = SpanId::random(rt.rng());
 
     let trace_ctxt = TraceContext {
         trace_id,

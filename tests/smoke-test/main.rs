@@ -62,7 +62,7 @@ async fn main() {
 
     sample_metrics();
 
-    let timer = emit::timer::Timer::start(emit::runtime::shared());
+    let timer = emit::timer::Timer::start(emit::runtime::shared().clock());
 
     let _ = in_trace().await;
 
@@ -98,7 +98,7 @@ async fn in_trace() -> Result<(), io::Error> {
 
     for i in 0..100 {
         futures.push(tokio::spawn(
-            emit::frame::Frame::current(emit::runtime::shared()).in_future(in_ctxt(i)),
+            emit::frame::Frame::current(emit::runtime::shared().ctxt()).in_future(in_ctxt(i)),
         ));
     }
 
@@ -162,7 +162,7 @@ fn increment(metric: &AtomicUsize) {
 }
 
 fn sample_metrics() {
-    let now = emit::runtime::shared().now();
+    let now = emit::runtime::shared().clock().now();
 
     for (metric_value, metric_agg, metric_name) in [(
         &COUNT,

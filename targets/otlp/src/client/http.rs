@@ -164,7 +164,7 @@ async fn send_request(
 
             req = req
                 .header("host", uri.authority())
-                .header("content-length", content.len())
+                .header("content-length", content.content_len())
                 .header("content-type", content.content_type_header);
 
             if let Some(content_encoding) = content.content_encoding_header {
@@ -455,7 +455,7 @@ impl HttpContent {
         self
     }
 
-    pub fn len(&self) -> usize {
+    pub fn content_len(&self) -> usize {
         self.content_frame_len() + self.content_payload_len()
     }
 
@@ -504,7 +504,7 @@ impl Body for HttpContent {
     }
 
     fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.len() as u64)
+        SizeHint::with_exact(self.content_len() as u64)
     }
 }
 

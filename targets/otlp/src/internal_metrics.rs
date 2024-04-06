@@ -1,16 +1,56 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Default)]
-pub(crate) struct InternalMetrics {
-    pub(crate) otlp_event_discarded: Counter,
-    pub(crate) otlp_http_conn_established: Counter,
-    pub(crate) otlp_http_conn_failed: Counter,
-    pub(crate) otlp_http_conn_tls_handshake: Counter,
-    pub(crate) otlp_http_conn_tls_failed: Counter,
-    pub(crate) otlp_http_request_sent: Counter,
-    pub(crate) otlp_http_request_failed: Counter,
-    pub(crate) otlp_http_compress_gzip: Counter,
+macro_rules! metrics {
+    ($container:ident {
+        $(
+            $name:ident: $ty:ty,
+        )*
+    }) => {
+        #[derive(Default)]
+        pub(crate) struct $container {
+            $(
+                pub(crate) $name: $ty
+            ),*
+        }
+
+        impl $container {
+            pub fn sample(
+                &self,
+            ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
+                let $container {
+                    $(
+                        $name
+                    ),*
+                } = self;
+
+                [
+                    $(
+                        emit::metric::Metric::new(
+                            env!("CARGO_PKG_NAME"),
+                            emit::empty::Empty,
+                            stringify!($name),
+                            emit::well_known::METRIC_AGG_COUNT,
+                            $name.sample(),
+                            emit::empty::Empty,
+                        )
+                    ),*
+                ]
+                .into_iter()
+            }
+        }
+    };
 }
+
+metrics!(InternalMetrics {
+    otlp_event_discarded: Counter,
+    otlp_http_conn_established: Counter,
+    otlp_http_conn_failed: Counter,
+    otlp_http_conn_tls_handshake: Counter,
+    otlp_http_conn_tls_failed: Counter,
+    otlp_http_request_sent: Counter,
+    otlp_http_request_failed: Counter,
+    otlp_http_compress_gzip: Counter,
+});
 
 #[derive(Default)]
 pub(crate) struct Counter(AtomicUsize);
@@ -26,90 +66,5 @@ impl Counter {
 
     pub fn sample(&self) -> usize {
         self.0.load(Ordering::Relaxed)
-    }
-}
-
-impl InternalMetrics {
-    pub fn sample(
-        &self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-        let InternalMetrics {
-            otlp_event_discarded,
-            otlp_http_conn_established,
-            otlp_http_conn_failed,
-            otlp_http_conn_tls_handshake,
-            otlp_http_conn_tls_failed,
-            otlp_http_request_sent,
-            otlp_http_request_failed,
-            otlp_http_compress_gzip,
-        } = self;
-
-        [
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_event_discarded),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_event_discarded.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_conn_established),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_conn_established.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_conn_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_conn_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_conn_tls_handshake),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_conn_tls_handshake.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_conn_tls_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_conn_tls_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_request_sent),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_request_sent.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_request_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_request_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_otlp",
-                emit::empty::Empty,
-                stringify!(otlp_http_compress_gzip),
-                emit::well_known::METRIC_AGG_COUNT,
-                otlp_http_compress_gzip.sample(),
-                emit::empty::Empty,
-            ),
-        ]
-        .into_iter()
     }
 }

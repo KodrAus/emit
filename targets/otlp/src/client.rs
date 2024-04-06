@@ -25,7 +25,7 @@ impl Otlp {
     ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'a {
         self.sender
             .sample_metrics()
-            .map(|metric| metric.with_module("emit_otlp"))
+            .map(|metric| metric.with_module(env!("CARGO_PKG_NAME")))
             .chain(self.metrics.sample())
     }
 }
@@ -61,15 +61,7 @@ impl emit::emitter::Emitter for Otlp {
             let rt = rt.get();
 
             for metric in self.sample_metrics() {
-                emit::emit!(
-                    rt,
-                    extent: metric.extent(),
-                    props: metric.props(),
-                    "{metric_agg} of {metric_name} is {metric_value}",
-                    metric_name: metric.name(),
-                    metric_agg: metric.agg(),
-                    metric_value: metric.value(),
-                );
+                rt.emit(&metric.to_event());
             }
         }
     }

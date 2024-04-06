@@ -1,15 +1,55 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Default)]
-pub(crate) struct InternalMetrics {
-    pub(crate) file_set_read_failed: Counter,
-    pub(crate) file_open_failed: Counter,
-    pub(crate) file_create: Counter,
-    pub(crate) file_create_failed: Counter,
-    pub(crate) file_write_failed: Counter,
-    pub(crate) file_delete: Counter,
-    pub(crate) file_delete_failed: Counter,
+macro_rules! metrics {
+    ($container:ident {
+        $(
+            $name:ident: $ty:ty,
+        )*
+    }) => {
+        #[derive(Default)]
+        pub(crate) struct $container {
+            $(
+                pub(crate) $name: $ty
+            ),*
+        }
+
+        impl $container {
+            pub fn sample(
+                &self,
+            ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
+                let $container {
+                    $(
+                        $name
+                    ),*
+                } = self;
+
+                [
+                    $(
+                        emit::metric::Metric::new(
+                            env!("CARGO_PKG_NAME"),
+                            emit::empty::Empty,
+                            stringify!($name),
+                            emit::well_known::METRIC_AGG_COUNT,
+                            $name.sample(),
+                            emit::empty::Empty,
+                        )
+                    ),*
+                ]
+                .into_iter()
+            }
+        }
+    };
 }
+
+metrics!(InternalMetrics {
+    file_set_read_failed: Counter,
+    file_open_failed: Counter,
+    file_create: Counter,
+    file_create_failed: Counter,
+    file_write_failed: Counter,
+    file_delete: Counter,
+    file_delete_failed: Counter,
+});
 
 #[derive(Default)]
 pub(crate) struct Counter(AtomicUsize);
@@ -25,81 +65,5 @@ impl Counter {
 
     pub fn sample(&self) -> usize {
         self.0.load(Ordering::Relaxed)
-    }
-}
-
-impl InternalMetrics {
-    pub fn sample(
-        &self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-        let InternalMetrics {
-            file_set_read_failed,
-            file_open_failed,
-            file_create,
-            file_create_failed,
-            file_write_failed,
-            file_delete,
-            file_delete_failed,
-        } = self;
-
-        [
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_set_read_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_set_read_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_open_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_open_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_create),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_create.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_create_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_create_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_write_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_write_failed.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_delete),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_delete.sample(),
-                emit::empty::Empty,
-            ),
-            emit::metric::Metric::new(
-                "emit_file",
-                emit::empty::Empty,
-                stringify!(file_delete_failed),
-                emit::well_known::METRIC_AGG_COUNT,
-                file_delete_failed.sample(),
-                emit::empty::Empty,
-            ),
-        ]
-        .into_iter()
     }
 }

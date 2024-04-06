@@ -1,10 +1,12 @@
 use core::ops::ControlFlow;
 
 use emit_core::{
+    event::Event,
     extent::{Extent, ToExtent},
     path::Path,
     props::{ByRef, ErasedProps, Props},
     str::{Str, ToStr},
+    template::{self, Template},
     value::{ToValue, Value},
     well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE},
 };
@@ -95,6 +97,24 @@ impl<'a, P> Metric<'a, P> {
             value: self.value,
             props,
         }
+    }
+
+    pub fn to_event(&self) -> Event<&Self> {
+        // "{metric_agg} of {metric_name} is {metric_value}"
+        const TEMPLATE: &'static [template::Part<'static>] = &[
+            template::Part::hole("metric_agg"),
+            template::Part::text(" of "),
+            template::Part::hole("metric_name"),
+            template::Part::text(" is "),
+            template::Part::hole("metric_value"),
+        ];
+
+        Event::new(
+            self.module.by_ref(),
+            self.extent.clone(),
+            Template::new(TEMPLATE),
+            self,
+        )
     }
 }
 
