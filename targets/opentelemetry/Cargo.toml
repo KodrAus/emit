@@ -1,0 +1,16 @@
+[package]
+name = "emit_opentelemetry"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies.emit]
+path = "../../"
+features = ["std"]
+
+[dependencies.opentelemetry_sdk]
+version = "0.22"
+features = ["logs", "trace", "metrics"]
+
+[dependencies.opentelemetry]
+version = "0.22"
+features = ["logs", "trace", "metrics"]

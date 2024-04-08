@@ -4,7 +4,7 @@ use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write, iter};
 
 use emit::well_known::{
-    KEY_ERR, KEY_LVL, KEY_METRIC_NAME, KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_TRACE_ID,
+    KEY_ERR, KEY_EVENT_KIND, KEY_LVL, KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_TRACE_ID,
 };
 use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
@@ -230,8 +230,8 @@ fn print_event(
         write_plain(buf, " ");
     }
 
-    if evt.props().get(KEY_METRIC_NAME).is_some() {
-        write_fg(buf, "metric", METRIC);
+    if let Some(kind) = evt.props().get(KEY_EVENT_KIND) {
+        write_fg(buf, kind, KIND);
         write_plain(buf, " ");
     }
 
@@ -362,7 +362,7 @@ impl<'a> emit::template::Write for Writer<'a> {
 }
 
 const MODULE: Color = Color::Ansi256(244);
-const METRIC: Color = Color::Ansi256(174);
+const KIND: Color = Color::Ansi256(174);
 
 const TEXT: Color = Color::Ansi256(69);
 const NUMBER: Color = Color::Ansi256(135);

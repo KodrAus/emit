@@ -19,7 +19,7 @@ use emit_core::{
 use emit_core::{
     empty::Empty,
     event::Event,
-    well_known::{KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID},
+    well_known::{KEY_SPAN_ID, KEY_TRACE_ID},
 };
 
 #[cfg(feature = "alloc")]
@@ -30,8 +30,7 @@ use std::error::Error;
 
 use crate::{
     base_emit,
-    timer::TimerGuard,
-    trace::{SpanId, TraceId},
+    trace::{Span, SpanId, SpanProps, TraceId},
     Level, Timer,
 };
 
@@ -528,39 +527,16 @@ pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 #[cfg(feature = "alloc")]
 pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
-    source: impl Into<Path<'b>>,
+    module: impl Into<Path<'b>>,
     when: Option<impl Filter>,
     tpl: Template<'b>,
     ctxt_props: impl Props,
     evt_props: impl Props,
-) -> (Frame<Option<&'a C>>, Option<Timer<&'a T>>) {
-    struct TraceContext {
-        trace_id: Option<TraceId>,
-        span_parent: Option<SpanId>,
-        span_id: Option<SpanId>,
-    }
-
-    impl Props for TraceContext {
-        fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-            &'kv self,
-            mut for_each: F,
-        ) -> ControlFlow<()> {
-            if let Some(ref trace_id) = self.trace_id {
-                for_each(KEY_TRACE_ID.to_str(), trace_id.to_value())?;
-            }
-
-            if let Some(ref span_parent) = self.span_parent {
-                for_each(KEY_SPAN_PARENT.to_str(), span_parent.to_value())?;
-            }
-
-            if let Some(ref span_id) = self.span_id {
-                for_each(KEY_SPAN_ID.to_str(), span_id.to_value())?;
-            }
-
-            ControlFlow::Continue(())
-        }
-    }
-
+) -> (
+    Frame<Option<&'a C>>,
+    Option<Timer<&'a T>>,
+    Option<SpanProps<Empty>>,
+) {
     let (mut trace_id, span_parent) = rt.ctxt().with_current(|current| {
         (
             current.pull::<TraceId, _>(KEY_TRACE_ID),
@@ -571,38 +547,38 @@ pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock
     trace_id = trace_id.or_else(|| TraceId::random(rt.rng()));
     let span_id = SpanId::random(rt.rng());
 
-    let trace_ctxt = TraceContext {
-        trace_id,
-        span_parent,
-        span_id,
-    };
+    if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
+        let timer = Timer::start(rt.clock());
 
-    let timer = Timer::start(rt.clock());
+        let span_props = SpanProps::new(trace_id, span_parent, span_id, Empty);
 
-    if FirstDefined(when, rt.filter()).matches(&Event::new(
-        source,
-        timer.extent().map(|extent| *extent.as_point()),
-        tpl,
-        ctxt_props.by_ref().chain(&trace_ctxt).chain(&evt_props),
-    )) {
-        (
-            Frame::push(Some(rt.ctxt()), trace_ctxt.chain(ctxt_props)),
-            Some(timer),
-        )
-    } else {
-        (Frame::push(None, Empty), None)
+        if FirstDefined(when, rt.filter()).matches(&Event::new(
+            module,
+            timer.extent().map(|extent| *extent.as_point()),
+            tpl,
+            ctxt_props.by_ref().chain(&span_props).chain(&evt_props),
+        )) {
+            return (
+                Frame::push(Some(rt.ctxt()), span_props.ctxt().chain(ctxt_props)),
+                Some(timer),
+                Some(span_props),
+            );
+        }
     }
+
+    (Frame::push(None, Empty), None, None)
 }
 
 #[track_caller]
-pub fn __private_begin_span<C: Clock, F: FnOnce(Option<Extent>)>(
+pub fn __private_begin_span<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)>(
     timer: Option<Timer<C>>,
+    props: Option<SpanProps<P>>,
     default_complete: F,
-) -> TimerGuard<C, F> {
-    if let Some(timer) = timer {
-        TimerGuard::new(timer, default_complete)
+) -> Span<C, P, F> {
+    if let (Some(timer), Some(props)) = (timer, props) {
+        Span::new(timer, props, default_complete)
     } else {
-        TimerGuard::disabled()
+        Span::disabled()
     }
 }
 

@@ -8,7 +8,9 @@ use emit_core::{
     str::{Str, ToStr},
     template::{self, Template},
     value::{ToValue, Value},
-    well_known::{KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE},
+    well_known::{
+        EVENT_KIND_METRIC, KEY_EVENT_KIND, KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_VALUE,
+    },
 };
 
 pub struct Metric<'a, P> {
@@ -153,6 +155,7 @@ impl<'a, P: Props> Props for Metric<'a, P> {
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
+        for_each(KEY_EVENT_KIND.to_str(), EVENT_KIND_METRIC.to_value())?;
         for_each(KEY_METRIC_NAME.to_str(), self.name.to_value())?;
         for_each(KEY_METRIC_AGG.to_str(), self.agg.to_value())?;
         for_each(KEY_METRIC_VALUE.to_str(), self.value.by_ref())?;

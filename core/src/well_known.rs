@@ -4,6 +4,10 @@ pub const KEY_TS: &'static str = "ts";
 pub const KEY_TS_START: &'static str = "ts_start";
 pub const KEY_TPL: &'static str = "tpl";
 pub const KEY_MSG: &'static str = "msg";
+pub const KEY_EVENT_KIND: &'static str = "event_kind";
+
+pub const EVENT_KIND_SPAN: &'static str = "span";
+pub const EVENT_KIND_METRIC: &'static str = "metric";
 
 // Log
 pub const KEY_LVL: &'static str = "lvl";

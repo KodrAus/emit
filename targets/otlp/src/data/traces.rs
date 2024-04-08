@@ -1,6 +1,7 @@
 mod export_trace_service;
 mod span;
 
+use emit::well_known::{EVENT_KIND_SPAN, KEY_EVENT_KIND};
 use emit_batcher::BatchError;
 
 pub use self::{export_trace_service::*, span::*};
@@ -27,6 +28,15 @@ impl EventEncoder for TracesEventEncoder {
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
+        if !evt
+            .props()
+            .pull::<emit::Str, _>(KEY_EVENT_KIND)
+            .map(|kind| kind == EVENT_KIND_SPAN)
+            .unwrap_or(false)
+        {
+            return None;
+        }
+
         let (start_time_unix_nano, end_time_unix_nano) = evt
             .extent()
             .filter(|extent| extent.is_span())

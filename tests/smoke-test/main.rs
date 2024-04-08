@@ -136,9 +136,7 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     .await;
 
     if let Err(ref err) = r {
-        span.complete(
-            |extent| emit::warn!(when: emit::filter::always(), extent, "in_ctxt failed with {err}"),
-        );
+        span.complete(|extent, props| emit::warn!(extent, props, "in_ctxt failed with {err}"));
     }
 
     r
@@ -172,6 +170,7 @@ fn sample_metrics() {
         emit::emit!(
             extent: now,
             "{metric_agg} of {metric_name} is {metric_value}",
+            event_kind: "metric",
             metric_agg,
             metric_name,
             metric_value: metric_value.load(Ordering::Relaxed),

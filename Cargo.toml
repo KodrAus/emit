@@ -6,6 +6,7 @@ members = [
     "targets/file",
     "targets/otlp",
     "targets/otlp/gen",
+    "targets/opentelemetry",
     "macros",
     "benchmark",
     "tests/smoke-test",
