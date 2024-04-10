@@ -847,7 +847,7 @@ enum OtlpTransport<R> {
 }
 
 impl<R: data::RequestEncoder> OtlpTransport<R> {
-    #[emit::span(rt: emit::runtime::internal(), arg: span, "send")]
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.len())]
     pub(crate) async fn send(
         &self,
         batch: Vec<PreEncoded>,

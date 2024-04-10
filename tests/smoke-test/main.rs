@@ -69,6 +69,7 @@ async fn main() {
     emit::emit!(
         extent: timer,
         "{metric_agg} of {metric_name} is {metric_value}",
+        event_kind: "metric",
         metric_agg: "count",
         metric_name: "smoke_test::sum",
         #[emit::as_value]

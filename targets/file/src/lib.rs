@@ -384,7 +384,7 @@ impl Worker {
         }
     }
 
-    #[emit::span(rt: emit::runtime::internal(), arg: span, "on_batch")]
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "write file batch")]
     fn on_batch(&mut self, mut batch: EventBatch) -> Result<(), BatchError<EventBatch>> {
         let now = std::time::UNIX_EPOCH.elapsed().unwrap();
         let ts = emit::Timestamp::new(now).unwrap();
