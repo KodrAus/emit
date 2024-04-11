@@ -7,11 +7,10 @@ pub use self::{export_metrics_service::*, metric::*};
 
 use emit::{
     well_known::{
-        EVENT_KIND_METRIC, KEY_EVENT_KIND, KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_UNIT,
-        KEY_METRIC_VALUE, KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID, METRIC_AGG_COUNT,
-        METRIC_AGG_SUM,
+        KEY_METRIC_AGG, KEY_METRIC_NAME, KEY_METRIC_UNIT, KEY_METRIC_VALUE, KEY_SPAN_ID,
+        KEY_SPAN_PARENT, KEY_TRACE_ID, METRIC_AGG_COUNT, METRIC_AGG_SUM,
     },
-    Props,
+    Filter, Props,
 };
 use emit_batcher::BatchError;
 use sval::Value;
@@ -48,12 +47,7 @@ impl EventEncoder for MetricsEventEncoder {
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
     ) -> Option<PreEncoded> {
-        if !evt
-            .props()
-            .pull::<emit::Str, _>(KEY_EVENT_KIND)
-            .map(|kind| kind == EVENT_KIND_METRIC)
-            .unwrap_or(false)
-        {
+        if !emit::kind::is_metric_filter().matches(evt) {
             return None;
         }
 
