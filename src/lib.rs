@@ -354,9 +354,10 @@ pub mod span;
 pub mod timer;
 
 pub use self::{
-    clock::Clock, ctxt::Ctxt, emitter::Emitter, event::Event, extent::Extent, filter::Filter,
-    frame::Frame, level::Level, metric::Metric, path::Path, props::Props, rng::Rng, span::Span,
-    str::Str, template::Template, timer::Timer, timestamp::Timestamp, value::Value,
+    clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::Event, extent::Extent,
+    filter::Filter, frame::Frame, kind::Kind, level::Level, metric::Metric, path::Path,
+    props::Props, rng::Rng, span::Span, str::Str, template::Template, timer::Timer,
+    timestamp::Timestamp, value::Value,
 };
 
 mod macro_hooks;
