@@ -21,6 +21,7 @@ pub const LVL_ERROR: &'static str = "error";
 pub const KEY_ERR: &'static str = "err";
 
 // Trace
+pub const KEY_SPAN_NAME: &'static str = "span_name";
 pub const KEY_TRACE_ID: &'static str = "trace_id";
 pub const KEY_SPAN_ID: &'static str = "span_id";
 pub const KEY_SPAN_PARENT: &'static str = "span_parent";

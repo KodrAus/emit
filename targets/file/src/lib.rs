@@ -397,7 +397,7 @@ impl Worker {
 
         if file.is_none() {
             if let Err(err) = fs::create_dir_all(&self.dir) {
-                span.complete(|extent, props| {
+                span.complete_with(|extent, props| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
                         extent,
@@ -509,7 +509,7 @@ impl Worker {
             if let Err(err) = file.write_event(buf) {
                 self.metrics.file_write_failed.increment();
 
-                span.complete(|extent, props| {
+                span.complete_with(|extent, props| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
                         extent,
@@ -534,7 +534,7 @@ impl Worker {
             .sync_all()
             .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
-        span.complete(|extent, props| {
+        span.complete_with(|extent, props| {
             emit::debug!(
                 rt: emit::runtime::internal(),
                 extent,

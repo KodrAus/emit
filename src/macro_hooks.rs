@@ -15,22 +15,15 @@ use emit_core::{
     value::{ToValue, Value},
 };
 
-#[cfg(feature = "alloc")]
-use emit_core::{
-    empty::Empty,
-    event::Event,
-    well_known::{KEY_SPAN_ID, KEY_TRACE_ID},
-};
+use emit_core::{empty::Empty, event::Event};
 
-#[cfg(feature = "alloc")]
 use crate::frame::Frame;
 
 #[cfg(feature = "std")]
 use std::error::Error;
 
 use crate::{
-    base_emit,
-    trace::{Span, SpanId, SpanProps, TraceId},
+    span::{Span, SpanCtxtProps, SpanEventProps, SpanId, TraceId},
     Level, Timer,
 };
 
@@ -504,85 +497,72 @@ pub fn __private_filter_span_complete() -> Option<impl Filter + Send + Sync + 's
 }
 
 #[track_caller]
-pub fn __private_emit<'a, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+pub fn __private_emit<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
-    source: impl Into<Path<'a>>,
+    module: impl Into<Path<'b>>,
     when: Option<impl Filter>,
     extent: impl ToExtent,
-    tpl: Template,
+    tpl: Template<'b>,
     props: impl Props,
 ) {
-    base_emit(
-        rt.emitter(),
-        source.into(),
-        FirstDefined(when, rt.filter()),
-        rt.ctxt(),
-        extent.to_extent().or_else(|| rt.clock().now().to_extent()),
-        tpl,
-        props,
-    );
+    rt.ctxt().with_current(|ctxt| {
+        let evt = Event::new(
+            module,
+            extent.to_extent().or_else(|| rt.clock().now().to_extent()),
+            tpl,
+            props.chain(ctxt),
+        );
+
+        if FirstDefined(when, rt.filter()).matches(&evt) {
+            rt.emitter().emit(&evt);
+        }
+    });
 }
 
 #[track_caller]
-#[cfg(feature = "alloc")]
-pub fn __private_push_span_ctxt<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+pub fn __private_begin_span<
+    'a,
+    'b,
+    E: Emitter,
+    F: Filter,
+    C: Ctxt,
+    T: Clock,
+    R: Rng,
+    S: FnOnce(Option<Extent>, SpanEventProps<Empty>),
+>(
     rt: &'a Runtime<E, F, C, T, R>,
     module: impl Into<Path<'b>>,
     when: Option<impl Filter>,
     tpl: Template<'b>,
     ctxt_props: impl Props,
     evt_props: impl Props,
-) -> (
-    Frame<Option<&'a C>>,
-    Option<Timer<&'a T>>,
-    Option<SpanProps<Empty>>,
-) {
-    let (mut trace_id, span_parent) = rt.ctxt().with_current(|current| {
-        (
-            current.pull::<TraceId, _>(KEY_TRACE_ID),
-            current.pull::<SpanId, _>(KEY_SPAN_ID),
-        )
-    });
+    name: impl Into<Str<'static>>,
+    default_complete: S,
+) -> (Frame<Option<&'a C>>, Span<'static, &'a T, Empty, S>) {
+    let span = Span::filtered_new(
+        Timer::start(rt.clock()),
+        name,
+        SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
+        Empty,
+        |extent, props| {
+            FirstDefined(when, rt.filter()).matches(&Event::new(
+                module,
+                extent,
+                tpl,
+                ctxt_props.by_ref().chain(props).chain(&evt_props),
+            ))
+        },
+        default_complete,
+    );
 
-    trace_id = trace_id.or_else(|| TraceId::random(rt.rng()));
-    let span_id = SpanId::random(rt.rng());
-
-    if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
-        let timer = Timer::start(rt.clock());
-
-        let span_props = SpanProps::new(trace_id, span_parent, span_id, Empty);
-
-        if FirstDefined(when, rt.filter()).matches(&Event::new(
-            module,
-            timer.extent().map(|extent| *extent.as_point()),
-            tpl,
-            ctxt_props.by_ref().chain(&span_props).chain(&evt_props),
-        )) {
-            return (
-                Frame::push(Some(rt.ctxt()), span_props.ctxt().chain(ctxt_props)),
-                Some(timer),
-                Some(span_props),
-            );
-        }
-    }
-
-    (Frame::push(None, Empty), None, None)
-}
-
-#[track_caller]
-pub fn __private_begin_span<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)>(
-    timer: Option<Timer<C>>,
-    props: Option<SpanProps<P>>,
-    default_complete: F,
-) -> Span<C, P, F> {
-    if let (Some(timer), Some(props)) = (timer, props) {
-        Span::new(timer, props, default_complete)
+    let frame = if span.is_enabled() {
+        Frame::push(Some(rt.ctxt()), span.ctxt().chain(ctxt_props))
     } else {
-        Span::disabled()
-    }
-}
+        Frame::push(None, Empty)
+    };
 
-pub use core::module_path as __private_module;
+    (frame, span)
+}
 
 #[repr(transparent)]
 pub struct __PrivateMacroProps<'a>([(Str<'a>, Option<Value<'a>>)]);

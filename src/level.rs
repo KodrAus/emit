@@ -107,7 +107,7 @@ impl<'v> FromValue<'v> for Level {
     }
 }
 
-pub fn min_level(min: Level) -> MinLevel {
+pub fn min_level_filter(min: Level) -> MinLevel {
     MinLevel::new(min)
 }
 

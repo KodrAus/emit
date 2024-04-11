@@ -16,6 +16,10 @@ impl<C: Clock> Timer<C> {
         }
     }
 
+    pub fn start_timestamp(&self) -> Option<Timestamp> {
+        self.start
+    }
+
     pub fn extent(&self) -> Option<Extent> {
         let end = self.clock.now();
 

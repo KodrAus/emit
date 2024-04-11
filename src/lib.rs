@@ -335,6 +335,8 @@ extern crate alloc;
 
 use emit_core::extent::ToExtent;
 
+pub use std::module_path as module;
+
 #[doc(inline)]
 pub use emit_macros::*;
 
@@ -345,15 +347,16 @@ pub use emit_core::{
 };
 
 pub mod frame;
+pub mod kind;
 pub mod level;
 pub mod metric;
+pub mod span;
 pub mod timer;
-pub mod trace;
 
 pub use self::{
     clock::Clock, ctxt::Ctxt, emitter::Emitter, event::Event, extent::Extent, filter::Filter,
-    frame::Frame, level::Level, path::Path, props::Props, rng::Rng, str::Str, template::Template,
-    timer::Timer, timestamp::Timestamp, value::Value,
+    frame::Frame, level::Level, metric::Metric, path::Path, props::Props, rng::Rng, span::Span,
+    str::Str, template::Template, timer::Timer, timestamp::Timestamp, value::Value,
 };
 
 mod macro_hooks;
@@ -363,25 +366,6 @@ mod platform;
 pub mod setup;
 #[cfg(feature = "std")]
 pub use setup::{setup, Setup};
-
-#[track_caller]
-fn base_emit(
-    to: impl Emitter,
-    source: Path,
-    when: impl Filter,
-    ctxt: impl Ctxt,
-    ts: impl ToExtent,
-    tpl: Template,
-    props: impl Props,
-) {
-    ctxt.with_current(|ctxt| {
-        let evt = Event::new(source, ts, tpl, props.chain(ctxt));
-
-        if when.matches(&evt) {
-            to.emit(&evt);
-        }
-    });
-}
 
 #[doc(hidden)]
 pub mod __private {

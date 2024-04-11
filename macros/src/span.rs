@@ -155,21 +155,31 @@ fn inject_sync(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
+    let template_literal_tokens = template.template_literal_tokens();
 
     quote!({
-        let (mut __ctxt, __timer, __span_props) = emit::__private::__private_push_span_ctxt(#rt_tokens, #module_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
+        let (mut __ctxt, __span_arg) = emit::__private::__private_begin_span(
+            #rt_tokens,
+            #module_tokens,
+            #when_tokens,
+            #template_tokens,
+            #ctxt_props_tokens,
+            #evt_props_tokens,
+            #template_literal_tokens,
+            |extent, props| {
+                emit::__private::__private_emit(
+                    #rt_tokens,
+                    #module_tokens,
+                    emit::__private::__private_filter_span_complete(),
+                    extent,
+                    #template_tokens,
+                    emit::Props::chain(props, #evt_props_tokens),
+                )
+            }
+        );
         let __ctxt_guard = __ctxt.enter();
 
-        let #span_arg = emit::__private::__private_begin_span(__timer, __span_props, |extent, props| {
-            emit::__private::__private_emit(
-                #rt_tokens,
-                #module_tokens,
-                emit::__private::__private_filter_span_complete(),
-                extent,
-                #template_tokens,
-                emit::Props::chain(props, #evt_props_tokens),
-            )
-        });
+        let #span_arg = __span_arg;
 
         #body
     })
@@ -188,12 +198,18 @@ fn inject_async(
     let ctxt_props_tokens = ctxt_props.props_tokens();
     let evt_props_tokens = evt_props.props_tokens();
     let template_tokens = template.template_tokens();
+    let template_literal_tokens = template.template_literal_tokens();
 
     quote!({
-        let (__ctxt, __timer, __span_props) = emit::__private::__private_push_span_ctxt(#rt_tokens, #module_tokens, #when_tokens, #template_tokens, #ctxt_props_tokens, #evt_props_tokens);
-
-        __ctxt.in_future(async {
-            let #span_arg = emit::__private::__private_begin_span(__timer, __span_props, |extent, props| {
+        let (__ctxt, __span_arg) = emit::__private::__private_begin_span(
+            #rt_tokens,
+            #module_tokens,
+            #when_tokens,
+            #template_tokens,
+            #ctxt_props_tokens,
+            #evt_props_tokens,
+            #template_literal_tokens,
+            |extent, props| {
                 emit::__private::__private_emit(
                     #rt_tokens,
                     #module_tokens,
@@ -202,7 +218,11 @@ fn inject_async(
                     #template_tokens,
                     emit::Props::chain(props, #evt_props_tokens),
                 )
-            });
+            }
+        );
+
+        __ctxt.in_future(async {
+            let #span_arg = __span_arg;
 
             async #body.await
         }).await

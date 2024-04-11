@@ -86,8 +86,8 @@ impl<T, S, P> PropsLogRecordAttributes<T, S, P> {
 }
 
 impl<
-        TR: From<emit::trace::TraceId> + sval::Value,
-        SP: From<emit::trace::SpanId> + sval::Value,
+        TR: From<emit::span::TraceId> + sval::Value,
+        SP: From<emit::span::SpanId> + sval::Value,
         P: emit::props::Props,
     > sval::Value for PropsLogRecordAttributes<TR, SP, P>
 {
@@ -111,14 +111,14 @@ impl<
                     emit::well_known::KEY_SPAN_ID => {
                         span_id = v
                             .by_ref()
-                            .cast::<emit::trace::SpanId>()
+                            .cast::<emit::span::SpanId>()
                             .map(|span_id| SP::from(span_id));
                         true
                     }
                     emit::well_known::KEY_TRACE_ID => {
                         trace_id = v
                             .by_ref()
-                            .cast::<emit::trace::TraceId>()
+                            .cast::<emit::span::TraceId>()
                             .map(|trace_id| TR::from(trace_id));
                         true
                     }

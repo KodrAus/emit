@@ -62,7 +62,7 @@ impl emit::emitter::Emitter for Stdout {
 
 impl emit::runtime::InternalEmitter for Stdout {}
 
-fn trace_id_color(trace_id: &emit::trace::TraceId) -> u8 {
+fn trace_id_color(trace_id: &emit::span::TraceId) -> u8 {
     let mut hash = 0;
 
     for b in trace_id.to_u128().to_le_bytes() {
@@ -72,7 +72,7 @@ fn trace_id_color(trace_id: &emit::trace::TraceId) -> u8 {
     hash
 }
 
-fn span_id_color(span_id: &emit::trace::SpanId) -> u8 {
+fn span_id_color(span_id: &emit::span::SpanId) -> u8 {
     let mut hash = 0;
 
     for b in span_id.to_u64().to_le_bytes() {
@@ -192,8 +192,8 @@ fn print_event(
     buf: &mut Buffer,
     evt: &emit::event::Event<impl emit::props::Props>,
 ) {
-    if let Some(span_id) = evt.props().pull::<emit::trace::SpanId, _>(KEY_SPAN_ID) {
-        if let Some(trace_id) = evt.props().pull::<emit::trace::TraceId, _>(KEY_TRACE_ID) {
+    if let Some(span_id) = evt.props().pull::<emit::span::SpanId, _>(KEY_SPAN_ID) {
+        if let Some(trace_id) = evt.props().pull::<emit::span::TraceId, _>(KEY_TRACE_ID) {
             let trace_id_color = trace_id_color(&trace_id);
 
             write_fg(buf, "▓", Color::Ansi256(trace_id_color));

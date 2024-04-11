@@ -49,7 +49,7 @@ async fn main() {
         )
         .and_emit_to(emit_term::stdout())
         .and_emit_to(
-            emit::level::min_level(emit::Level::Warn).wrap_emitter(
+            emit::level::min_level_filter(emit::Level::Warn).wrap_emitter(
                 emit_file::set("./target/logs/log.txt")
                     .reuse_files(true)
                     .roll_by_minute()
@@ -137,21 +137,50 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     .await;
 
     if let Err(ref err) = r {
-        span.complete(|extent, props| emit::warn!(extent, props, "in_ctxt failed with {err}"));
+        span.complete_with(|extent, props| emit::warn!(extent, props, "in_ctxt failed with {err}"));
     }
 
     r
 }
 
-#[emit::span("in_ctxt2", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
-    emit::warn!(
-        "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
-        #[emit::fmt(">08")]
-        x: 15,
-        #[emit::optional]
-        z: None::<i32>,
+    let rt = emit::runtime::shared();
+
+    let span = emit::Span::filtered_new(
+        emit::Timer::start(rt.clock()),
+        "in_ctxt2",
+        emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
+        emit::empty::Empty,
+        |extent, props| {
+            rt.filter()
+                .matches(&emit::event!(extent, props, "in_ctxt2", b))
+        },
+        |extent, props| {
+            emit::emit!(
+                rt,
+                extent,
+                props,
+                "in_ctxt2",
+                b,
+                bx: 90,
+            )
+        },
     );
+
+    emit::Frame::push(rt.ctxt(), span.ctxt())
+        .in_future(async {
+            tokio::time::sleep(Duration::from_millis(17)).await;
+
+            emit::warn!(
+                rt,
+                "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
+                #[emit::fmt(">08")]
+                x: 15,
+                #[emit::optional]
+                z: None::<i32>,
+            );
+        })
+        .await
 }
 
 static COUNT: AtomicUsize = AtomicUsize::new(0);

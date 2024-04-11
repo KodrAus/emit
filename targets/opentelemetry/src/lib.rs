@@ -28,8 +28,8 @@ pub struct OpenTelemetryContextFrame {
 }
 
 pub struct OpenTelemetryContextProps {
-    trace_id: Option<emit::trace::TraceId>,
-    span_id: Option<emit::trace::SpanId>,
+    trace_id: Option<emit::span::TraceId>,
+    span_id: Option<emit::span::SpanId>,
 }
 
 impl emit::Props for OpenTelemetryContextProps {
@@ -61,8 +61,8 @@ impl emit::Ctxt for OpenTelemetryContext {
     type Frame = OpenTelemetryContextFrame;
 
     fn open_root<P: emit::Props>(&self, props: P) -> Self::Frame {
-        let trace_id = props.pull::<emit::trace::TraceId, _>(emit::well_known::KEY_TRACE_ID);
-        let span_id = props.pull::<emit::trace::SpanId, _>(emit::well_known::KEY_SPAN_ID);
+        let trace_id = props.pull::<emit::span::TraceId, _>(emit::well_known::KEY_TRACE_ID);
+        let span_id = props.pull::<emit::span::SpanId, _>(emit::well_known::KEY_SPAN_ID);
 
         if let Some(span_id) = span_id {
             let mut span = self
@@ -104,8 +104,8 @@ impl emit::Ctxt for OpenTelemetryContext {
         let span_id = span.span_context().span_id().to_bytes();
 
         let props = OpenTelemetryContextProps {
-            trace_id: emit::trace::TraceId::from_bytes(trace_id),
-            span_id: emit::trace::SpanId::from_bytes(span_id),
+            trace_id: emit::span::TraceId::from_bytes(trace_id),
+            span_id: emit::span::SpanId::from_bytes(span_id),
         };
 
         with(&props)

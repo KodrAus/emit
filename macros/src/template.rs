@@ -73,13 +73,15 @@ pub fn parse2<A: Parse>(
     }
 
     // A runtime representation of the template
-    let template_tokens = {
+    let (template_parts_tokens, template_literal_tokens) = {
         let mut template_visitor = TemplateVisitor {
             props: &props,
             parts: Ok(Vec::new()),
+            literal: String::new(),
         };
         template.visit_literal(&mut template_visitor);
         let template_parts = template_visitor.parts?;
+        let literal = template_visitor.literal;
 
         /*
         Ideally this would be:
@@ -98,15 +100,19 @@ pub fn parse2<A: Parse>(
         Once that is stable then we'll be able to use it here and avoid
         "value doesn't live long enough" errors in `let x = tpl!(..);`.
         */
-        quote!([
-            #(#template_parts),*
-        ])
+        (
+            quote!([
+                #(#template_parts),*
+            ]),
+            quote!(#literal),
+        )
     };
 
     Ok((
         args,
         Template {
-            template_parts_tokens: template_tokens,
+            template_parts_tokens,
+            template_literal_tokens,
         },
         props,
     ))
@@ -114,11 +120,16 @@ pub fn parse2<A: Parse>(
 
 pub struct Template {
     template_parts_tokens: TokenStream,
+    template_literal_tokens: TokenStream,
 }
 
 impl Template {
     pub fn template_parts_tokens(&self) -> TokenStream {
         self.template_parts_tokens.clone()
+    }
+
+    pub fn template_literal_tokens(&self) -> TokenStream {
+        self.template_literal_tokens.clone()
     }
 
     pub fn template_tokens(&self) -> TokenStream {
@@ -131,6 +142,7 @@ impl Template {
 struct TemplateVisitor<'a> {
     props: &'a Props,
     parts: syn::Result<Vec<TokenStream>>,
+    literal: String,
 }
 
 impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
@@ -145,6 +157,10 @@ impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
         let field = self.props.get(&label).expect("missing prop");
 
         debug_assert!(field.interpolated);
+
+        self.literal.push_str("{");
+        self.literal.push_str(&label);
+        self.literal.push_str("}");
 
         match fmt::template_hole_with_hook(&field.attrs, &hole, true, field.captured) {
             Ok(hole_tokens) => match field.cfg_attr {
@@ -161,6 +177,8 @@ impl<'a> fv_template::LiteralVisitor for TemplateVisitor<'a> {
         let Ok(ref mut parts) = self.parts else {
             return;
         };
+
+        self.literal.push_str(text);
 
         parts.push(quote!(emit::template::Part::text(#text)));
     }

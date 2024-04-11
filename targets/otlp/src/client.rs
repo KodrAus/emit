@@ -871,7 +871,7 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                     .await
                 {
                     Ok(res) => {
-                        span.complete(|extent, props| {
+                        span.complete_with(|extent, props| {
                             emit::debug!(
                                 rt: emit::runtime::internal(),
                                 props,
@@ -884,7 +884,7 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                         res
                     }
                     Err(err) => {
-                        span.complete(|extent, props| {
+                        span.complete_with(|extent, props| {
                             emit::warn!(
                                 rt: emit::runtime::internal(),
                                 props,

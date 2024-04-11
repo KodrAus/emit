@@ -35,7 +35,6 @@ pub struct KeyValue {
     span: Span,
     pub interpolated: bool,
     pub captured: bool,
-    pub label: String,
     pub cfg_attr: Option<Attribute>,
     pub attrs: Vec<Attribute>,
 }
@@ -166,7 +165,6 @@ impl Props {
                 match_bound_tokens: quote_spanned!(fv.span()=> #cfg_attr (#match_bound_ident.0, #match_bound_ident.1)),
                 direct_bound_tokens: quote_spanned!(fv.span()=> #key_value_tokens),
                 span: fv.span(),
-                label,
                 cfg_attr,
                 attrs,
                 captured,

@@ -36,18 +36,18 @@ pub(crate) trait RequestEncoder {
 }
 
 pub(crate) trait RawEncoder {
-    type TraceId: From<emit::trace::TraceId> + sval::Value;
-    type SpanId: From<emit::trace::SpanId> + sval::Value;
+    type TraceId: From<emit::span::TraceId> + sval::Value;
+    type SpanId: From<emit::span::SpanId> + sval::Value;
 
     fn encode<V: sval::Value>(value: V) -> PreEncoded;
 }
 
 pub(crate) struct Proto;
 
-pub(crate) struct BinaryTraceId(emit::trace::TraceId);
+pub(crate) struct BinaryTraceId(emit::span::TraceId);
 
-impl From<emit::trace::TraceId> for BinaryTraceId {
-    fn from(id: emit::trace::TraceId) -> BinaryTraceId {
+impl From<emit::span::TraceId> for BinaryTraceId {
+    fn from(id: emit::span::TraceId) -> BinaryTraceId {
         BinaryTraceId(id)
     }
 }
@@ -58,10 +58,10 @@ impl sval::Value for BinaryTraceId {
     }
 }
 
-pub(crate) struct BinarySpanId(emit::trace::SpanId);
+pub(crate) struct BinarySpanId(emit::span::SpanId);
 
-impl From<emit::trace::SpanId> for BinarySpanId {
-    fn from(id: emit::trace::SpanId) -> BinarySpanId {
+impl From<emit::span::SpanId> for BinarySpanId {
+    fn from(id: emit::span::SpanId) -> BinarySpanId {
         BinarySpanId(id)
     }
 }
@@ -83,10 +83,10 @@ impl RawEncoder for Proto {
 
 pub(crate) struct Json;
 
-pub(crate) struct TextTraceId(emit::trace::TraceId);
+pub(crate) struct TextTraceId(emit::span::TraceId);
 
-impl From<emit::trace::TraceId> for TextTraceId {
-    fn from(id: emit::trace::TraceId) -> TextTraceId {
+impl From<emit::span::TraceId> for TextTraceId {
+    fn from(id: emit::span::TraceId) -> TextTraceId {
         TextTraceId(id)
     }
 }
@@ -97,10 +97,10 @@ impl sval::Value for TextTraceId {
     }
 }
 
-pub(crate) struct TextSpanId(emit::trace::SpanId);
+pub(crate) struct TextSpanId(emit::span::SpanId);
 
-impl From<emit::trace::SpanId> for TextSpanId {
-    fn from(id: emit::trace::SpanId) -> TextSpanId {
+impl From<emit::span::SpanId> for TextSpanId {
+    fn from(id: emit::span::SpanId) -> TextSpanId {
         TextSpanId(id)
     }
 }

@@ -1,14 +1,16 @@
 use emit_core::{
     clock::Clock,
-    extent::Extent,
+    ctxt::Ctxt,
+    extent::{Extent, ToExtent},
     props::Props,
     rng::Rng,
     str::{Str, ToStr},
     value::FromValue,
-    well_known::{EVENT_KIND_SPAN, KEY_EVENT_KIND, KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID},
+    well_known::{KEY_EVENT_KIND, KEY_SPAN_ID, KEY_SPAN_NAME, KEY_SPAN_PARENT, KEY_TRACE_ID},
 };
 
 use crate::{
+    kind::Kind,
     value::{ToValue, Value},
     Timer,
 };
@@ -338,45 +340,84 @@ impl<const N: usize> fmt::Write for Buffer<N> {
     }
 }
 
-pub struct Span<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)> {
-    value: Option<(Timer<C>, SpanProps<P>)>,
+pub struct Span<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> {
+    value: Option<(Timer<C>, SpanEventProps<'a, P>)>,
     on_drop: Option<F>,
 }
 
-pub struct SpanProps<P> {
-    ctxt: SpanCtxt,
+#[derive(Debug, Clone)]
+pub struct SpanEventProps<'a, P> {
+    ctxt: SpanCtxtProps,
+    name: Str<'a>,
     props: P,
 }
 
-pub struct SpanCtxt {
-    trace_id: TraceId,
-    span_parent: Option<SpanId>,
-    span_id: SpanId,
+impl<'a, P> SpanEventProps<'a, P> {
+    pub fn ctxt(&self) -> &SpanCtxtProps {
+        &self.ctxt
+    }
+
+    pub fn name(&self) -> &Str<'a> {
+        &self.name
+    }
+
+    pub fn props(&self) -> &P {
+        &self.props
+    }
 }
 
-impl SpanCtxt {
-    pub fn new(trace_id: TraceId, span_parent: Option<SpanId>, span_id: SpanId) -> Self {
-        SpanCtxt {
+#[derive(Debug, Clone, Copy)]
+pub struct SpanCtxtProps {
+    trace_id: Option<TraceId>,
+    span_parent: Option<SpanId>,
+    span_id: Option<SpanId>,
+}
+
+impl SpanCtxtProps {
+    pub const fn new(
+        trace_id: Option<TraceId>,
+        span_parent: Option<SpanId>,
+        span_id: Option<SpanId>,
+    ) -> Self {
+        SpanCtxtProps {
             trace_id,
             span_parent,
             span_id,
         }
     }
 
-    pub fn trace_id(&self) -> &TraceId {
-        &self.trace_id
+    pub fn current(ctxt: impl Ctxt) -> Self {
+        ctxt.with_current(|current| {
+            SpanCtxtProps::new(
+                current.pull::<TraceId, _>(KEY_TRACE_ID),
+                current.pull::<SpanId, _>(KEY_SPAN_PARENT),
+                current.pull::<SpanId, _>(KEY_SPAN_ID),
+            )
+        })
+    }
+
+    pub fn new_child(&self, rng: impl Rng) -> Self {
+        let trace_id = self.trace_id.or_else(|| TraceId::random(&rng));
+        let span_parent = self.span_id;
+        let span_id = SpanId::random(&rng);
+
+        SpanCtxtProps::new(trace_id, span_parent, span_id)
+    }
+
+    pub fn trace_id(&self) -> Option<&TraceId> {
+        self.trace_id.as_ref()
     }
 
     pub fn span_parent(&self) -> Option<&SpanId> {
         self.span_parent.as_ref()
     }
 
-    pub fn span_id(&self) -> &SpanId {
-        &self.span_id
+    pub fn span_id(&self) -> Option<&SpanId> {
+        self.span_id.as_ref()
     }
 }
 
-impl Props for SpanCtxt {
+impl Props for SpanCtxtProps {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
@@ -392,48 +433,21 @@ impl Props for SpanCtxt {
     }
 }
 
-impl<P> SpanProps<P> {
-    pub fn new(trace_id: TraceId, span_parent: Option<SpanId>, span_id: SpanId, props: P) -> Self {
-        SpanProps {
-            ctxt: SpanCtxt::new(trace_id, span_parent, span_id),
-            props,
-        }
-    }
-
-    pub fn trace_id(&self) -> &TraceId {
-        &self.ctxt.trace_id
-    }
-
-    pub fn span_parent(&self) -> Option<&SpanId> {
-        self.ctxt.span_parent.as_ref()
-    }
-
-    pub fn span_id(&self) -> &SpanId {
-        &self.ctxt.span_id
-    }
-
-    pub fn props(&self) -> &P {
-        &self.props
-    }
-
-    pub fn ctxt(&self) -> &SpanCtxt {
-        &self.ctxt
-    }
-}
-
-impl<P: Props> Props for SpanProps<P> {
+impl<'a, P: Props> Props for SpanEventProps<'a, P> {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for_each(KEY_EVENT_KIND.to_str(), EVENT_KIND_SPAN.to_value())?;
-
-        self.ctxt().for_each(&mut for_each)?;
-        self.props.for_each(for_each)
+        for_each(KEY_EVENT_KIND.to_str(), Kind::Span.to_value())?;
+        for_each(KEY_SPAN_NAME.to_str(), self.name.to_value())?;
+        self.ctxt.for_each(&mut for_each)?;
+        self.props.for_each(&mut for_each)
     }
 }
 
-impl<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)> Drop for Span<C, P, F> {
+impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> Drop
+    for Span<'a, C, P, F>
+{
     fn drop(&mut self) {
         if let Some((timer, props)) = self.value.take() {
             if let Some(on_drop) = self.on_drop.take() {
@@ -443,12 +457,39 @@ impl<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)> Drop for Span<
     }
 }
 
-impl<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)> Span<C, P, F> {
-    pub fn new(timer: Timer<C>, props: SpanProps<P>, default_complete: F) -> Self {
-        Span {
-            value: Some((timer, props)),
-            on_drop: Some(default_complete),
+impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> Span<'a, C, P, F> {
+    pub fn filtered_new(
+        timer: Timer<C>,
+        name: impl Into<Str<'a>>,
+        ctxt: SpanCtxtProps,
+        props: P,
+        filter: impl FnOnce(Option<Extent>, &SpanEventProps<'a, P>) -> bool,
+        default_complete: F,
+    ) -> Self {
+        let props = SpanEventProps {
+            name: name.into(),
+            ctxt,
+            props,
+        };
+
+        if filter(timer.start_timestamp().map(Extent::point), &props) {
+            Span {
+                value: Some((timer, props)),
+                on_drop: Some(default_complete),
+            }
+        } else {
+            Self::disabled()
         }
+    }
+
+    pub fn new(
+        timer: Timer<C>,
+        name: impl Into<Str<'a>>,
+        ctxt: SpanCtxtProps,
+        props: P,
+        default_complete: F,
+    ) -> Self {
+        Self::filtered_new(timer, name, ctxt, props, |_, _| true, default_complete)
     }
 
     pub fn disabled() -> Self {
@@ -466,33 +507,40 @@ impl<C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanProps<P>)> Span<C, P, F> 
         self.value.as_ref().map(|(timer, _)| timer)
     }
 
-    pub fn span_props(&self) -> Option<&SpanProps<P>> {
-        self.value.as_ref().map(|(_, props)| props)
+    pub fn ctxt(&self) -> Option<&SpanCtxtProps> {
+        self.value.as_ref().map(|(_, props)| props.ctxt())
+    }
+
+    pub fn name(&self) -> Option<&Str<'a>> {
+        self.value.as_ref().map(|(_, props)| props.name())
     }
 
     pub fn props(&self) -> Option<&P> {
-        self.span_props().map(|props| props.props())
+        self.value.as_ref().map(|(_, props)| props.props())
     }
 
-    pub fn trace_id(&self) -> Option<&TraceId> {
-        self.span_props().map(|props| props.trace_id())
+    pub fn complete(self) {
+        drop(self);
     }
 
-    pub fn span_parent(&self) -> Option<&SpanId> {
-        self.span_props().and_then(|props| props.span_parent())
-    }
-
-    pub fn span_id(&self) -> Option<&SpanId> {
-        self.span_props().map(|props| props.span_id())
-    }
-
-    pub fn complete(mut self, complete: impl FnOnce(Option<Extent>, SpanProps<P>)) -> bool {
+    pub fn complete_with(
+        mut self,
+        complete: impl FnOnce(Option<Extent>, SpanEventProps<'a, P>),
+    ) -> bool {
         if let Some((timer, props)) = self.value.take() {
             complete(timer.extent(), props);
             true
         } else {
             false
         }
+    }
+}
+
+impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> ToExtent
+    for Span<'a, C, P, F>
+{
+    fn to_extent(&self) -> Option<Extent> {
+        self.timer().to_extent()
     }
 }
 
