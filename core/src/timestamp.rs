@@ -1,3 +1,9 @@
+/*
+Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
+
+Licensed under Apache 2.0
+*/
+
 use core::{
     cmp, fmt,
     ops::{Add, AddAssign},
@@ -52,12 +58,6 @@ impl Timestamp {
     }
 
     pub fn from_parts(parts: Parts) -> Option<Self> {
-        /*
-        Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
-
-        Licensed under Apache 2.0
-        */
-
         let is_leap;
         let start_of_year;
         let year = (parts.years as i64) - 1900;
@@ -152,12 +152,6 @@ impl Timestamp {
     }
 
     pub fn to_parts(&self) -> Parts {
-        /*
-        Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
-
-        Licensed under Apache 2.0
-        */
-
         let dur = self.0;
         let secs = dur.as_secs();
         let nanos = dur.subsec_nanos();
