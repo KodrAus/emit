@@ -39,9 +39,9 @@ async fn main() {
                     #[emit::key("telemetry.sdk.language")]
                     language: "rust",
                     #[emit::key("telemetry.sdk.name")]
-                    sdk: "emit",
+                    sdk: emit_otlp::telemetry_sdk_name(),
                     #[emit::key("telemetry.sdk.version")]
-                    version: "0.1",
+                    version: emit_otlp::telemetry_sdk_version(),
                 })
                 .scope("some-scope", "0.1", emit::props! {})
                 .spawn()

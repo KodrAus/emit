@@ -8,6 +8,14 @@ mod error;
 
 pub use self::{client::*, error::*};
 
+pub const fn telemetry_sdk_name() -> &'static str {
+    "emit"
+}
+
+pub const fn telemetry_sdk_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 pub fn new() -> OtlpBuilder {
     OtlpBuilder::new()
 }
