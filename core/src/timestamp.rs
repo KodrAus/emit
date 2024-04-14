@@ -1,7 +1,13 @@
 /*
-Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
+Parts of this file are adapted from other libraries:
 
+Post:
+https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
 Licensed under Apache 2.0
+
+humantime:
+https://github.com/tailhook/humantime/blob/master/src/date.rs
+Licensed under MIT
 */
 
 use core::{
@@ -280,12 +286,6 @@ impl<'v> FromValue<'v> for Timestamp {
 pub struct ParseTimestampError {}
 
 fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
-    /*
-    Original implementation: https://github.com/tokio-rs/prost/blob/master/prost-types/src/datetime.rs
-
-    Licensed under Apache 2.0
-    */
-
     if fmt.len() > 30 || fmt.len() < 19 {
         unimplemented!("invalid len {}", fmt.len());
     }

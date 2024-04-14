@@ -1,7 +1,9 @@
 /*!
 Structured diagnostics for Rust applications.
 
-`emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org). All diagnostics in `emit` are represented as [`Event`]s. An event is a notable change in the state of a system that is broadcast to outside observers. Events carry both a human-readable description of what triggered them in the form of a [`Template`]. They also have a structured payload of [`Props`] that can be used to process them. Events have a temporal [`Extent`]; they may be anchored to a point in time at which they occurred, or may cover a span of time for which they are active. Together, this information provides a solid foundation for building tailored diagnostics into your applications.
+`emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org).
+
+All diagnostics in `emit` are represented as [`Event`]s. An event is a notable change in the state of a system that is broadcast to outside observers. Events carry both a human-readable description of what triggered them in the form of a [`Template`] and a structured payload of [`Props`] that can be used to process them. Events have a temporal [`Extent`]; they may be anchored to a point in time at which they occurred, or may cover a span of time for which they are active. Together, this information provides a solid foundation for building tailored diagnostics into your applications.
 
 # Getting started
 
@@ -15,9 +17,9 @@ version = "*"
 version = "*"
 ```
 
-`emit` needs to be configured with at least an [`Emitter`] that sends events somewhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
+`emit` needs to be configured with at least an [`Emitter`] that receives events, otherwise your diagnostics will go nowhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
 
-At the start of your `main` function, use [`setup()`] to initialize `emit`. At the end of your `main` function, use [`setup::Init::blocking_flush`] to ensure all emitted events are fully flushed to the outside target.
+At the start of your `main` function, use [`setup()`] to initialize `emit`. At the end of your `main` function, use [`setup::Init::blocking_flush`] to ensure all emitted events are fully flushed before returning.
 
 ```
 fn main() {
@@ -30,6 +32,8 @@ fn main() {
     rt.blocking_flush(std::time::Duration::from_secs(5));
 }
 ```
+
+For more advanced setup options, see the [`setup`] module.
 
 # Logging events
 
@@ -44,7 +48,7 @@ emit::info!("Hello, {user}", id);
 
 In this example, the template is `"Hello, {user}"`, and the properties are `{"user": "Rust", "id": 42}`.
 
-Properties are field values, so identifiers may be given values inline either in the template itself or after it:
+Properties are Rust field values, so identifiers may be given values inline either in the template itself or after it:
 
 ```
 emit::info!("Hello, {user: \"Rust\"}", id: 42);
@@ -56,9 +60,20 @@ Properties can also be mentioned by name in the template, but initialized outsid
 emit::info!("Hello, {user}", user: "Rust", id: 42);
 ```
 
+## Well-known log properties
+
+Events can carry any number and combination of properties. `emit` defines a set of well-known properties with expected types and values to improve interoperability with emitters. Well-known properties for log events include:
+
+- `lvl`: A [`Level`] representing the severity of the event.
+- `err`: A [`std::error::Error`] associated with the event.
+- `trace_id`: A [`span::TraceId`] for the distributed trace this event belongs to.
+- `span_id`: A [`span::SpanId`] for the operation this event was produced by.
+
+See the [`well_known`] module for more details.
+
 # Tracing functions
 
-When significant operations are invoked in your application you can use _span events_ to time them, also linking any other events they emit into a correlated hierarchy. This can be done using the [`span`], [`debug_span`], [`info_span`], [`warn_span`], and [`error_span`] macros. The macros use the same syntax as those for regular events:
+When operations are executed in your application you can use _span events_ to time them while also linking any other events they emit into a correlated hierarchy. This can be done using the [`span`], [`debug_span`], [`info_span`], [`warn_span`], and [`error_span`] macros. The span macros use the same syntax as the emit macros:
 
 ```
 #[emit::info_span!("Invoke with {user}")]
@@ -67,7 +82,17 @@ fn my_function(user: &str) {
 }
 ```
 
-When `my_function` completes, an event will be emitted with the time it took to execute.
+When `my_function` completes, an event will be emitted with the time it took to execute. That event will also carry a trace id, span id, and link to any parent span that it executed under.
+
+## Well-known span properties
+
+Span events carry the following well-known properties:
+
+- `event_kind`: The value `"span"` identifies the event as being a span in a trace hierarchy.
+- `span_name`: A descriptive name for the operation. This may be the event template, or other low-cardinality value.
+- `trace_id`: A [`span::TraceId`], with an identifier for the distributed trace the span belongs to.
+- `span_id`: A [`span::SpanId`], with an identifier for this particular operation. Other events emitted while the operation is executing can carry the same `span_id` property.
+- `span_parent`: A [`span::SpanId`], with an identifier for the operation that started this one.
 
 ## Completion
 
@@ -78,9 +103,13 @@ The span macros accept an argument called `arg` _before_ the template for an ide
 #[emit::info_span!(arg: span, "Parse {id}")]
 fn my_function(id: &str) -> Result<i32, Error> {
     match id.parse() {
-        Ok(id) => Ok(id),
+        Ok(id) => {
+            // The span completes normally in this branch
+            Ok(id)
+        },
         Err(err) => {
-            span.complete(|extent| emit::error!(extent, "Parse {id} failed", err));
+            // The span completes differently in this branch
+            span.complete_with(|extent, props| emit::error!(extent, props, "Parse {id} failed", err));
 
             Err(err.into())
         }
@@ -88,17 +117,11 @@ fn my_function(id: &str) -> Result<i32, Error> {
 }
 ```
 
-In this example, we use the `arg` field value before the template to assign a local variable `span` that represents the span for our function. The type of `span` is a [`timer::TimerGuard`]. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
+In this example, we use the `arg` field value before the template to assign a local variable `span` that represents our operation. The type of `span` is a [`Span`]. In the `Ok` branch, we let the span complete normally. In the `Err` branch, we complete the span manually with the error produced.
 
 # Aggregating metrics
 
-You can periodically aggregate and emit events for metrics tracked by your applications. This can be done using the [`emit`] macro along with some well-known properties. An event is considered a metric if it carries:
-
-- `metric_name`: The source of the metric.
-- `metric_agg`: The aggregation applied to the source to produce its value.
-- `metric_value`: The value of the metric.
-
-In SQL terms, you can think of a metric as:
+You can periodically aggregate and emit events for metrics tracked by your applications. This can be done using the [`Metric`] type. Metrics in `emit` are represented as the result of applying an _aggregation_, like count, over a data stream to produce a value. In SQL terms, you can think of a metric as:
 
 ```sql
 select metric_agg(x) as metric_value from metric_name
@@ -106,17 +129,41 @@ select metric_agg(x) as metric_value from metric_name
 
 `emit` doesn't have any infrastructure for collecting and storing metrics themselves; this is left up to the application.
 
+## Well-known metric properties
+
+Metric events carry the following well-known properties:
+
+- `event_kind`: The value `"metric"` identifies the event as being a metric sample.
+- `metric_name`: The name of the underlying data stream the metric was sampled from.
+- `metric_agg`: The aggregation applied to the data stream. Aggregations include:
+    - `"count"`: A non-negative sum of defined values.
+    - `"sum"`: A sum of defined values.
+    - `"max"`: The maximum defined value.
+    - `"min"`: The minimum defined value.
+    - `"mean"`: The average defined value calculated as its mean.
+- `metric_value`: The value produced by applying the aggregated to the data stream.
+- `metric_unit`: The unit of the value.
+
+The `metric_value` is interpreted differently depending on the extent of the event.
+
+For more details on metrics, see the [`metric`] module.
+
 ## Cumulative metrics
 
 Events with a point extent are considered cumulative metrics. The value is the result of applying the aggregation over the entire lifetime of the metric up to that timestamp.
 
 ```
-emit::emit!(
-    "{metric_agg} of {metric_name} is {metric_value}",
-    metric_agg: "count",
-    metric_name: "requests_received",
-    metric_value: 17,
+let rt = emit::runtime::shared();
+
+let metric = Metric::new(
+    emit::module!(),
+    rt.clock().now(),
+    "requests_received",
+    "count",
+    17,
 );
+
+rt.emit(&metric.to_event());
 ```
 
 In this example, the total number of requests received over the lifetime of the application is `17`.
@@ -126,15 +173,20 @@ In this example, the total number of requests received over the lifetime of the 
 Events with a span extent are considered delta metrics. The value is the result of applying the aggregation over that time range.
 
 ```
-let now = emit::runtime::shared().now();
+let rt = emit::runtime::shared();
 
-emit::emit!(
-    extent: now..now + Duration::from_secs(60),
-    "{metric_agg} of {metric_name} is {metric_value}",
-    metric_agg: "count",
-    metric_name: "requests_received",
-    metric_value: 3,
+let now = rt.clock().now();
+let later = now + Duration::from_secs(60);
+
+let metric = Metric::new(
+    emit::module!(),
+    now..later,
+    "requests_received",
+    "count",
+    3,
 );
+
+rt.emit(&metric.to_event());
 ```
 
 In this example, there have been `3` new requests received over the last minute.
@@ -144,21 +196,25 @@ In this example, there have been `3` new requests received over the last minute.
 Events with a span extent where the metric value is also a sequence are considered histograms. Each element in the sequence is a bucket. The width of each bucket is implied as `extent.len() / metric_value.len()`.
 
 ```
-let now = emit::runtime::shared().now();
+let rt = emit::runtime::shared();
 
-emit::emit!(
-    extent: now..now + Duration::from_secs(60),
-    "{metric_agg} of {metric_name} is {metric_value}",
-    metric_agg: "count",
-    metric_name: "requests_received",
-    #[emit::as_value]
-    metric_value: &[
+let now = rt.clock().now();
+let later = now + Duration::from_secs(60);
+
+let metric = Metric::new(
+    emit::module!(),
+    now..later,
+    "requests_received",
+    "count",
+    &[
         3,
         6,
         0,
         8,
     ],
 );
+
+rt.emit(&metric.to_event());
 ```
 
 In this example, the requests received are collected into 15 second buckets (`60s / 4`).
@@ -206,8 +262,6 @@ let user = "Rust";
 emit::info!(to: emit::emitter::from_fn(|evt| println!("{}", evt)), "Hello", user);
 ```
 
-Think of field values before the template like optional function arguments.
-
 # Extents and timestamps
 
 The extent of an event is the time for which it is relevant. This may be a single point in time if the event was triggered by something happening, or a span of time if the event was started at one point and completed at a later one. Extents are represented by the [`Extent`] type, and timestamps by the [`Timestamp`] type.
@@ -234,14 +288,27 @@ let later = now + Duration::from_secs(1000);
 emit::info!(extent: now..later, "A span event");
 ```
 
-The [`Timer`] type provides a convenient way to produce an extent that covers a time range.
+The [`Timer`] type provides a convenient way to produce an extent that covers a time range:
+
+```
+# fn do_some_work() {}
+let timer = emit::Timer::start(emit::Timestamp::new(Duration::from_secs(1711317957)));
+
+do_some_work();
+
+// Get the time elapsed since the timer was started
+let elapsed = timer.elapsed();
+
+// Get the time elapsed as an extent
+let extent = timer.extent();
+```
 
 ## Getting the current timestamp
 
 You can read the current timestamp from a clock using [`Clock::now`]:
 
 ```
-let now = emit::runtime::shared().now();
+let now = emit::runtime::shared().clock().now();
 ```
 
 # Ambient context
@@ -254,7 +321,7 @@ Any properties captured by the span macros will be pushed onto the current conte
 
 ## Setting ambient context
 
-The most straightfoward way to push ambient context is using the span macros:
+Use the span macros to push properties onto the context:
 
 ```
 #[emit::span("Greeting", span_id: "86d871f54f5b4e23")]
@@ -266,7 +333,9 @@ The most straightfoward way to push ambient context is using the span macros:
 You can also push properties onto the ambient context directly with [`Frame::push`]:
 
 ```
-let frame = emit::Frame::push(emit::runtime::shared(), emit::props! {
+let rt = emit::runtime::shared();
+
+let frame = emit::Frame::push(rt.ctxt(), emit::props! {
     span_id: "86d871f54f5b4e23"
 });
 
@@ -280,7 +349,9 @@ emit::info!("Hello, {user}", user: "Rust", id: 42);
 You can read the current properties in the ambient context with [`Frame::with`]:
 
 ```
-emit::Frame::current().with(|props| {
+let rt = emit::runtime::shared();
+
+emit::Frame::current(rt.ctxt()).with(|props| {
     let span_id = props.get("span_id");
 
     // ..
@@ -294,8 +365,10 @@ This example also uses [`Frame::current`] instead of [`Frame::push`] to get a fr
 Ambient context is not guaranteed to propagate across threads, so when spawning background work that should retain the context of its creator, you'll need to grab the current context to send with the work:
 
 ```
+let rt = emit::runtime::shared();
+
 thread::spawn({
-    let frame = emit::Frame::current(emit::runtime::shared());
+    let frame = emit::Frame::current(rt.ctxt());
 
     move || frame.call(move || {
         // ..
@@ -306,8 +379,10 @@ thread::spawn({
 In async code, you can typically wrap the future representing the background work in the current context:
 
 ```
+let rt = emit::runtime::shared();
+
 tokio::spawn(
-    emit::Frame::current(emit::runtime::shared()).in_future(async {
+    emit::Frame::current(rt.ctxt()).in_future(async {
         // ..
     })
 );
