@@ -18,6 +18,8 @@ async fn main() {
 
     let internal = emit::setup().emit_to(emit_term::stdout()).init_internal();
 
+    // Setup via emit_otlp
+    /*
     let emitter = emit::setup()
         .emit_to(
             emit_otlp::new()
@@ -47,6 +49,49 @@ async fn main() {
                 .spawn()
                 .unwrap(),
         )
+        .and_emit_to(emit_term::stdout())
+        .and_emit_to(
+            emit::level::min_level_filter(emit::Level::Warn).wrap_emitter(
+                emit_file::set("./target/logs/log.txt")
+                    .reuse_files(true)
+                    .roll_by_minute()
+                    .max_files(6)
+                    .spawn()
+                    .unwrap(),
+            ),
+        )
+        .init();
+    */
+
+    // Setup via opentelemetry
+    let channel = tonic::transport::Channel::from_static("http://localhost:4319")
+        .connect()
+        .await
+        .unwrap();
+
+    opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_channel(channel.clone()),
+        )
+        .install_batch(opentelemetry_sdk::runtime::Tokio)
+        .unwrap();
+
+    opentelemetry_otlp::new_pipeline()
+        .logging()
+        .with_exporter(
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_channel(channel.clone()),
+        )
+        .install_batch(opentelemetry_sdk::runtime::Tokio)
+        .unwrap();
+
+    let emitter = emit::setup()
+        .emit_to(emit_opentelemetry::emitter("emit"))
+        .map_ctxt(|ctxt| emit_opentelemetry::ctxt("emit", ctxt))
         .and_emit_to(emit_term::stdout())
         .and_emit_to(
             emit::level::min_level_filter(emit::Level::Warn).wrap_emitter(
@@ -91,6 +136,8 @@ async fn main() {
 
     emitter.blocking_flush(Duration::from_secs(60));
     internal.blocking_flush(Duration::from_secs(5));
+
+    emit_opentelemetry::shutdown();
 }
 
 #[emit::span("in_trace")]

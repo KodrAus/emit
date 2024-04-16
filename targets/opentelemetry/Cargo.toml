@@ -9,8 +9,8 @@ features = ["std"]
 
 [dependencies.opentelemetry_sdk]
 version = "0.22"
-features = ["logs", "trace", "metrics"]
+features = ["logs", "trace"]
 
 [dependencies.opentelemetry]
 version = "0.22"
-features = ["logs", "trace", "metrics"]
+features = ["logs", "trace"]
