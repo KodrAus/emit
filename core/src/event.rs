@@ -117,10 +117,11 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
 
         impl<T: Props> fmt::Debug for AsDebug<T> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let mut f = f.debug_struct("");
+                let mut f = f.debug_map();
 
                 self.0.for_each(|k, v| {
-                    f.field(k.get(), &v);
+                    f.key(&k.get());
+                    f.value(&v);
 
                     ControlFlow::Continue(())
                 });

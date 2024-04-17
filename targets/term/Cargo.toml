@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies.emit]
 path = "../../"
 default-features = false
-features = ["std"]
+features = ["std", "sval"]
 
 [dependencies.sval]
 version = "2"

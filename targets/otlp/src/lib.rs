@@ -9,7 +9,7 @@ mod error;
 pub use self::{client::*, error::*};
 
 pub const fn telemetry_sdk_name() -> &'static str {
-    "emit"
+    env!("CARGO_PKG_NAME")
 }
 
 pub const fn telemetry_sdk_version() -> &'static str {

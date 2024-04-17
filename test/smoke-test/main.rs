@@ -23,6 +23,17 @@ async fn main() {
     let emitter = emit::setup()
         .emit_to(
             emit_otlp::new()
+                .resource(emit::props! {
+                    #[emit::key("service.name")]
+                    service_name: env!("CARGO_PKG_NAME"),
+                    #[emit::key("telemetry.sdk.language")]
+                    language: "rust",
+                    #[emit::key("telemetry.sdk.name")]
+                    sdk: emit_otlp::telemetry_sdk_name(),
+                    #[emit::key("telemetry.sdk.version")]
+                    version: emit_otlp::telemetry_sdk_version(),
+                })
+                .scope("some-scope", "0.1", emit::props! {})
                 .logs(
                     emit_otlp::logs_proto(
                         emit_otlp::grpc("http://localhost:4319").headers([("X-ApiKey", "1234")]),
@@ -35,17 +46,6 @@ async fn main() {
                     }),
                 )
                 .metrics(emit_otlp::metrics_grpc_proto("http://localhost:4319"))
-                .resource(emit::props! {
-                    #[emit::key("service.name")]
-                    service_name: "smoke-test-rs",
-                    #[emit::key("telemetry.sdk.language")]
-                    language: "rust",
-                    #[emit::key("telemetry.sdk.name")]
-                    sdk: emit_otlp::telemetry_sdk_name(),
-                    #[emit::key("telemetry.sdk.version")]
-                    version: emit_otlp::telemetry_sdk_version(),
-                })
-                .scope("some-scope", "0.1", emit::props! {})
                 .spawn()
                 .unwrap(),
         )
@@ -144,7 +144,7 @@ async fn main() {
 async fn in_trace() -> Result<(), io::Error> {
     let mut futures = Vec::new();
 
-    for i in 0..100 {
+    for i in 0..2 {
         futures.push(tokio::spawn(
             emit::frame::Frame::current(emit::runtime::shared().ctxt()).in_future(in_ctxt(i)),
         ));
@@ -214,6 +214,7 @@ async fn in_ctxt2(b: i32) {
         },
     );
 
+    // TODO: This is a bit of a nasty pattern; should add `span::push`
     emit::Frame::push(rt.ctxt(), span.ctxt())
         .in_future(async {
             tokio::time::sleep(Duration::from_millis(17)).await;
@@ -226,6 +227,8 @@ async fn in_ctxt2(b: i32) {
                 #[emit::optional]
                 z: None::<i32>,
             );
+
+            drop(span);
         })
         .await
 }

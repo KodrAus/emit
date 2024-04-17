@@ -9,7 +9,7 @@ members = [
     "targets/opentelemetry",
     "macros",
     "benchmark",
-    "tests/smoke-test",
+    "test/smoke-test",
 ]
 
 [package]
