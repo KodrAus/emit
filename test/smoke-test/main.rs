@@ -33,7 +33,7 @@ async fn main() {
                     #[emit::key("telemetry.sdk.version")]
                     version: emit_otlp::telemetry_sdk_version(),
                 })
-                .scope("some-scope", "0.1", emit::props! {})
+                .scope(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), emit::props! {})
                 .logs(
                     emit_otlp::logs_proto(
                         emit_otlp::grpc("http://localhost:4319").headers([("X-ApiKey", "1234")]),
