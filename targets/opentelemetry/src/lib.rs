@@ -4,8 +4,8 @@ use emit::{
     str::ToStr,
     value::ToValue,
     well_known::{
-        KEY_ERR, KEY_LVL, KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID, LVL_DEBUG, LVL_ERROR,
-        LVL_INFO, LVL_WARN,
+        KEY_ERR, KEY_EVENT_KIND, KEY_LVL, KEY_SPAN_ID, KEY_SPAN_NAME, KEY_SPAN_PARENT,
+        KEY_TRACE_ID, LVL_DEBUG, LVL_ERROR, LVL_INFO, LVL_WARN,
     },
     Filter,
 };
@@ -261,7 +261,12 @@ impl emit::Emitter for OpenTelemetryEmitter {
                                 return ControlFlow::Continue(());
                             }
 
-                            if k == KEY_TRACE_ID || k == KEY_SPAN_ID || k == KEY_SPAN_PARENT {
+                            if k == KEY_TRACE_ID
+                                || k == KEY_SPAN_ID
+                                || k == KEY_SPAN_PARENT
+                                || k == KEY_SPAN_NAME
+                                || k == KEY_EVENT_KIND
+                            {
                                 return ControlFlow::Continue(());
                             }
 
