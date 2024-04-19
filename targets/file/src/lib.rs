@@ -1,5 +1,3 @@
-#![feature(stmt_expr_attributes, proc_macro_hygiene)]
-
 mod internal_metrics;
 
 use std::{

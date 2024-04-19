@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene, stmt_expr_attributes)]
-
 use std::thread;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};

@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene, stmt_expr_attributes)]
-
 use core::{fmt, str, time::Duration};
 use std::{cell::RefCell, cmp, io::Write, iter};
 

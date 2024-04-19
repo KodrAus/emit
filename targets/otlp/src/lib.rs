@@ -1,5 +1,3 @@
-#![feature(stmt_expr_attributes, proc_macro_hygiene)]
-
 #[macro_use]
 mod internal_metrics;
 mod client;

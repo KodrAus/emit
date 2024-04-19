@@ -1,10 +1,18 @@
-use std::{borrow::Cow, cell::RefCell, ops::ControlFlow};
+use std::{cell::RefCell, ops::ControlFlow};
 
-use emit::{str::ToStr, value::ToValue, well_known::KEY_SPAN_ID, Filter};
+use emit::{
+    str::ToStr,
+    value::ToValue,
+    well_known::{
+        KEY_ERR, KEY_LVL, KEY_SPAN_ID, KEY_SPAN_PARENT, KEY_TRACE_ID, LVL_DEBUG, LVL_ERROR,
+        LVL_INFO, LVL_WARN,
+    },
+    Filter,
+};
 use opentelemetry::{
     global::{self, BoxedTracer, GlobalLoggerProvider},
-    logs::{AnyValue, LogRecord, Logger, LoggerProvider},
-    trace::{FutureExt, Span, SpanId, TraceContextExt, TraceId, Tracer},
+    logs::{AnyValue, LogRecord, Logger, LoggerProvider, Severity},
+    trace::{SpanContext, SpanId, Status, TraceContextExt, TraceId, Tracer},
     Context, ContextGuard, Key, KeyValue, Value,
 };
 
@@ -26,7 +34,7 @@ thread_local! {
 }
 
 struct CtxtFrame {
-    guard: ContextGuard,
+    _guard: ContextGuard,
     open: bool,
 }
 
@@ -147,7 +155,7 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
             let guard = ctxt.attach();
 
             push(CtxtFrame {
-                guard,
+                _guard: guard,
                 open: local.open,
             });
             local.attached = true;
@@ -186,6 +194,7 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
     }
 
     fn close(&self, mut local: Self::Frame) {
+        // If the span hasn't been closed through an event, then close it now
         if local.open {
             if let Some(ctxt) = local.ctxt.take() {
                 let span = ctxt.span();
@@ -225,11 +234,37 @@ impl emit::Emitter for OpenTelemetryEmitter {
 
                     // If the event is for the current span then complete it
                     if Some(span_id) == evt_span_id {
-                        if let Some(name) = evt.props().get(emit::well_known::KEY_SPAN_NAME) {
-                            span.update_name(name.to_string());
+                        if let Some(name) = evt
+                            .props()
+                            .pull::<emit::Str, _>(emit::well_known::KEY_SPAN_NAME)
+                        {
+                            span.update_name(name.to_cow());
+                        } else {
+                            span.update_name(evt.tpl().to_string())
                         }
 
                         evt.props().for_each(|k, v| {
+                            if k == KEY_LVL {
+                                if let Some(emit::Level::Error) = v.by_ref().cast::<emit::Level>() {
+                                    span.set_status(Status::error("error"));
+
+                                    return ControlFlow::Continue(());
+                                }
+                            }
+
+                            if k == KEY_ERR {
+                                span.add_event(
+                                    "exception",
+                                    vec![KeyValue::new("exception.message", v.to_string())],
+                                );
+
+                                return ControlFlow::Continue(());
+                            }
+
+                            if k == KEY_TRACE_ID || k == KEY_SPAN_ID || k == KEY_SPAN_PARENT {
+                                return ControlFlow::Continue(());
+                            }
+
                             if let Some(v) = otel_span_value(v) {
                                 span.set_attribute(KeyValue::new(k.to_cow(), v));
                             }
@@ -254,21 +289,110 @@ impl emit::Emitter for OpenTelemetryEmitter {
             }
         }
 
+        let mut record = LogRecord::builder().with_body(evt.msg().to_string());
+
+        let mut trace_id = None;
+        let mut span_id = None;
         let mut attributes = Vec::new();
-        evt.props().for_each(|k, v| {
-            if let Some(v) = otel_log_value(v) {
-                attributes.push((Key::new(k.to_cow()), v));
-            }
+        {
+            let mut slot = Some(record);
+            evt.props().for_each(|k, v| {
+                if k == KEY_LVL {
+                    match v.by_ref().cast::<emit::Level>() {
+                        Some(emit::Level::Debug) => {
+                            slot = Some(
+                                slot.take()
+                                    .unwrap()
+                                    .with_severity_number(Severity::Debug)
+                                    .with_severity_text(LVL_DEBUG),
+                            );
+                        }
+                        Some(emit::Level::Info) => {
+                            slot = Some(
+                                slot.take()
+                                    .unwrap()
+                                    .with_severity_number(Severity::Info)
+                                    .with_severity_text(LVL_INFO),
+                            );
+                        }
+                        Some(emit::Level::Warn) => {
+                            slot = Some(
+                                slot.take()
+                                    .unwrap()
+                                    .with_severity_number(Severity::Warn)
+                                    .with_severity_text(LVL_WARN),
+                            );
+                        }
+                        Some(emit::Level::Error) => {
+                            slot = Some(
+                                slot.take()
+                                    .unwrap()
+                                    .with_severity_number(Severity::Error)
+                                    .with_severity_text(LVL_ERROR),
+                            );
+                        }
+                        None => {
+                            slot = Some(slot.take().unwrap().with_severity_text(v.to_string()));
+                        }
+                    }
 
-            ControlFlow::Continue(())
-        });
+                    return ControlFlow::Continue(());
+                }
 
-        let record = LogRecord::builder()
-            .with_body(evt.msg().to_string())
-            .with_attributes(attributes)
-            .build();
+                if k == KEY_TRACE_ID {
+                    if let Some(id) = v.by_ref().cast::<emit::span::TraceId>() {
+                        trace_id = Some(otel_trace_id(id));
 
-        self.logger.emit(record);
+                        return ControlFlow::Continue(());
+                    }
+                }
+
+                if k == KEY_SPAN_ID {
+                    if let Some(id) = v.by_ref().cast::<emit::span::SpanId>() {
+                        span_id = Some(otel_span_id(id));
+
+                        return ControlFlow::Continue(());
+                    }
+                }
+
+                if k == KEY_SPAN_PARENT {
+                    if v.by_ref().cast::<emit::span::SpanId>().is_some() {
+                        return ControlFlow::Continue(());
+                    }
+                }
+
+                if let Some(v) = otel_log_value(v) {
+                    attributes.push((Key::new(k.to_cow()), v));
+                }
+
+                ControlFlow::Continue(())
+            });
+
+            record = slot.unwrap();
+        }
+
+        record = record.with_attributes(attributes);
+
+        if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
+            let ctxt = Context::current();
+            let span = ctxt.span();
+
+            let ctxt = span.span_context();
+
+            record = record.with_span_context(&SpanContext::new(
+                trace_id,
+                span_id,
+                ctxt.trace_flags(),
+                ctxt.is_remote(),
+                ctxt.trace_state().clone(),
+            ))
+        }
+
+        if let Some(extent) = evt.extent() {
+            record = record.with_timestamp(extent.as_point().to_system_time());
+        }
+
+        self.logger.emit(record.build());
     }
 
     fn blocking_flush(&self, _: std::time::Duration) {}
