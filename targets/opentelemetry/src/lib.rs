@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ops::ControlFlow};
+use std::{cell::RefCell, fmt, ops::ControlFlow};
 
 use emit::{
     str::ToStr,
@@ -7,7 +7,7 @@ use emit::{
         KEY_ERR, KEY_EVENT_KIND, KEY_LVL, KEY_SPAN_ID, KEY_SPAN_NAME, KEY_SPAN_PARENT,
         KEY_TRACE_ID, LVL_DEBUG, LVL_ERROR, LVL_INFO, LVL_WARN,
     },
-    Filter,
+    Filter, Props,
 };
 use opentelemetry::{
     global::{self, BoxedTracer, GlobalLoggerProvider},
@@ -206,13 +206,74 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
 
 pub struct OpenTelemetryEmitter {
     logger: <GlobalLoggerProvider as LoggerProvider>::Logger,
+    span_name: Box<MessageFormatter>,
+    log_body: Box<MessageFormatter>,
+}
+
+type MessageFormatter = dyn Fn(&emit::event::Event<&dyn emit::props::ErasedProps>, &mut fmt::Formatter) -> fmt::Result
+    + Send
+    + Sync;
+
+fn default_span_name() -> Box<MessageFormatter> {
+    Box::new(|evt, f| {
+        if let Some(name) = evt.props().get(KEY_SPAN_NAME) {
+            write!(f, "{}", name)
+        } else {
+            write!(f, "{}", evt.msg())
+        }
+    })
+}
+
+fn default_log_body() -> Box<MessageFormatter> {
+    Box::new(|evt, f| write!(f, "{}", evt.msg()))
+}
+
+struct MessageRenderer<'a, P> {
+    pub fmt: &'a MessageFormatter,
+    pub evt: &'a emit::event::Event<'a, P>,
+}
+
+impl<'a, P: emit::props::Props> fmt::Display for MessageRenderer<'a, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.fmt)(&self.evt.erase(), f)
+    }
 }
 
 impl OpenTelemetryEmitter {
     pub fn new(name: &'static str) -> Self {
         OpenTelemetryEmitter {
             logger: global::logger_provider().logger(name),
+            span_name: default_span_name(),
+            log_body: default_log_body(),
         }
+    }
+
+    pub fn with_span_name(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.span_name = Box::new(writer);
+        self
+    }
+
+    pub fn with_log_body(
+        mut self,
+        writer: impl Fn(
+                &emit::event::Event<&dyn emit::props::ErasedProps>,
+                &mut fmt::Formatter,
+            ) -> fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        self.log_body = Box::new(writer);
+        self
     }
 }
 
@@ -234,14 +295,15 @@ impl emit::Emitter for OpenTelemetryEmitter {
 
                     // If the event is for the current span then complete it
                     if Some(span_id) == evt_span_id {
-                        if let Some(name) = evt
-                            .props()
-                            .pull::<emit::Str, _>(emit::well_known::KEY_SPAN_NAME)
-                        {
-                            span.update_name(name.to_cow());
-                        } else {
-                            span.update_name(evt.tpl().to_string())
-                        }
+                        let name = format!(
+                            "{}",
+                            MessageRenderer {
+                                fmt: &self.span_name,
+                                evt
+                            }
+                        );
+
+                        span.update_name(name);
 
                         evt.props().for_each(|k, v| {
                             if k == KEY_LVL {
@@ -294,7 +356,16 @@ impl emit::Emitter for OpenTelemetryEmitter {
             }
         }
 
-        let mut record = LogRecord::builder().with_body(evt.msg().to_string());
+        let mut record = LogRecord::builder();
+
+        let body = format!(
+            "{}",
+            MessageRenderer {
+                fmt: &self.log_body,
+                evt
+            }
+        );
+        record = record.with_body(body);
 
         let mut trace_id = None;
         let mut span_id = None;

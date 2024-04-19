@@ -6,8 +6,8 @@ use emit_batcher::BatchError;
 pub use self::{export_logs_service::*, log_record::*};
 
 use super::{
-    default_message_formatter, AnyValue, EventEncoder, MessageFormatter, MessageRenderer,
-    PreEncoded, RawEncoder, RequestEncoder,
+    AnyValue, EventEncoder, MessageFormatter, MessageRenderer, PreEncoded, RawEncoder,
+    RequestEncoder,
 };
 
 pub(crate) struct LogsEventEncoder {
@@ -20,6 +20,10 @@ impl Default for LogsEventEncoder {
             body: default_message_formatter(),
         }
     }
+}
+
+fn default_message_formatter() -> Box<MessageFormatter> {
+    Box::new(|evt, f| write!(f, "{}", evt.msg()))
 }
 
 impl EventEncoder for LogsEventEncoder {

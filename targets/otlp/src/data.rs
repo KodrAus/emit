@@ -238,10 +238,6 @@ pub(crate) type MessageFormatter = dyn Fn(&emit::event::Event<&dyn emit::props::
     + Send
     + Sync;
 
-pub(crate) fn default_message_formatter() -> Box<MessageFormatter> {
-    Box::new(|evt, f| write!(f, "{}", evt.msg()))
-}
-
 pub(crate) struct MessageRenderer<'a, P> {
     pub fmt: &'a MessageFormatter,
     pub evt: &'a emit::event::Event<'a, P>,

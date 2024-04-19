@@ -1,14 +1,13 @@
 mod export_trace_service;
 mod span;
 
-use emit::Filter;
+use emit::{well_known::KEY_SPAN_NAME, Filter, Props};
 use emit_batcher::BatchError;
 
 pub use self::{export_trace_service::*, span::*};
 
 use super::{
-    default_message_formatter, EventEncoder, MessageFormatter, MessageRenderer, PreEncoded,
-    RawEncoder, RequestEncoder,
+    EventEncoder, MessageFormatter, MessageRenderer, PreEncoded, RawEncoder, RequestEncoder,
 };
 
 pub(crate) struct TracesEventEncoder {
@@ -18,9 +17,19 @@ pub(crate) struct TracesEventEncoder {
 impl Default for TracesEventEncoder {
     fn default() -> Self {
         TracesEventEncoder {
-            name: default_message_formatter(),
+            name: default_name_formatter(),
         }
     }
+}
+
+fn default_name_formatter() -> Box<MessageFormatter> {
+    Box::new(|evt, f| {
+        if let Some(name) = evt.props().get(KEY_SPAN_NAME) {
+            write!(f, "{}", name)
+        } else {
+            write!(f, "{}", evt.msg())
+        }
+    })
 }
 
 impl EventEncoder for TracesEventEncoder {
