@@ -133,9 +133,8 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
         let mut f = f.debug_struct("Event");
 
         f.field("module", &self.module);
-        f.field("extent", &self.extent);
-        f.field("msg", &self.msg());
         f.field("tpl", &self.tpl);
+        f.field("extent", &self.extent);
         f.field("props", &AsDebug(&self.props));
 
         f.finish()

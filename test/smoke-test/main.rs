@@ -137,7 +137,8 @@ async fn main() {
     emitter.blocking_flush(Duration::from_secs(60));
     internal.blocking_flush(Duration::from_secs(5));
 
-    emit_opentelemetry::shutdown();
+    opentelemetry::global::shutdown_logger_provider();
+    opentelemetry::global::shutdown_tracer_provider();
 }
 
 #[emit::span("in_trace")]

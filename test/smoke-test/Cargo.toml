@@ -22,6 +22,10 @@ path = "../../targets/opentelemetry"
 version = "0.22"
 features = ["rt-tokio", "trace", "logs"]
 
+[dependencies.opentelemetry]
+version = "0.22"
+features = ["trace", "logs"]
+
 [dependencies.opentelemetry-otlp]
 version = "0.15"
 features = ["trace", "logs", "grpc-tonic", "gzip-tonic"]

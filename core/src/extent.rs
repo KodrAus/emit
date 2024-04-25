@@ -1,7 +1,7 @@
 use crate::{empty::Empty, timestamp::Timestamp};
 use core::{fmt, ops::Range, time::Duration};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Extent {
     range: Range<Timestamp>,
     is_span: bool,
@@ -52,6 +52,18 @@ impl Extent {
 
     pub fn is_span(&self) -> bool {
         self.is_span
+    }
+}
+
+impl fmt::Debug for Extent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_span() {
+            fmt::Debug::fmt(&self.range.start, f)?;
+            f.write_str("..")?;
+            fmt::Debug::fmt(&self.range.end, f)
+        } else {
+            fmt::Debug::fmt(&self.range.end, f)
+        }
     }
 }
 

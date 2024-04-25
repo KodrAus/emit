@@ -3,29 +3,25 @@ Structured diagnostics for Rust applications.
 
 `emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org).
 
-All diagnostics in `emit` are represented as [`Event`]s. An event is a notable change in the state of a system that is broadcast to outside observers. Events carry both a human-readable description of what triggered them in the form of a [`Template`] and a structured payload of [`Props`] that can be used to process them. Events have a temporal [`Extent`]; they may be anchored to a point in time at which they occurred, or may cover a span of time for which they are active. Together, this information provides a solid foundation for building tailored diagnostics into your applications.
+# A guided tour of `emit`
 
-# Getting started
-
-Add `emit` to your `Cargo.toml`:
+To get started, add `emit` to your `Cargo.toml`:
 
 ```toml
 [dependencies.emit]
 version = "*"
-
-[dependencies.emit_term]
-version = "*"
 ```
 
-`emit` needs to be configured with at least an [`Emitter`] that receives events, otherwise your diagnostics will go nowhere. In this example we're using `emit_term` to write events to the console. Other emitters exist for rolling files and OpenTelemetry's wire format.
+## Configuring an emitter
 
-At the start of your `main` function, use [`setup()`] to initialize `emit`. At the end of your `main` function, use [`setup::Init::blocking_flush`] to ensure all emitted events are fully flushed before returning.
+`emit` needs to be configured with at least an [`Emitter`] that receives events, otherwise your diagnostics will go nowhere. At the start of your `main` function, use [`setup()`] to initialize `emit`. At the end of your `main` function, use [`setup::Init::blocking_flush`] to ensure all emitted events are fully flushed before returning.
+
+Here's an example of a simple configuration with an emitter that prints events using [`std::fmt`]:
 
 ```
-# mod emit_term { pub fn stdout() -> impl emit::Emitter + Send + Sync + 'static { emit::emitter::from_fn(|_| {}) } }
 fn main() {
     let rt = emit::setup()
-        .emit_to(emit_term::stdout())
+        .emit_to(emit::emitter::from_fn(|evt| println!("{evt:#?}")))
         .init();
 
     // Your app code goes here
@@ -34,32 +30,123 @@ fn main() {
 }
 ```
 
+In real applications, you'll want to use a more sophisticated emitter, such as:
+
+- `emit_term`: Emit diagnostics to the console.
+- `emit_file`: Emit diagnostics to a set of rolling files.
+- `emit_otlp`: Emit diagnostics to a remote collector via OpenTelemetry Protocol.
+
 For more advanced setup options, see the [`setup`] module.
 
-# Logging events
+## Emitting events
 
-`emit` uses macros with a special syntax to log events. Here's an example of an event:
+`emit` uses macros with a special syntax to log events.
+
+Here's an example of an event:
 
 ```
 emit::emit!("Hello, World");
 ```
 
+Using the `std::fmt` emitter from before, it will output:
+
 ```text
 Event {
-    module: "emit_test",
-    extent: Some(
-        Extent {
-            range: 2024-04-15T20:58:29.222187000Z..2024-04-15T20:58:29.222187000Z,
-            is_span: false,
-        },
-    ),
-    msg: "Hello, world!",
+    module: "my_app",
     tpl: "Hello, world!",
+    extent: Some(
+        "2024-04-23T10:04:37.632304000Z",
+    ),
     props: {},
 }
 ```
 
-In simple cases, `emit` looks a lot like the built-in `println!`.
+This example is a perfect opportunity to introduce `emit`'s model of diagnostics: events. An event is a notable change in the state of a system that is broadcast to outside observers. Events are the combination of:
+
+- `module`: The component that raised the event.
+- `tpl`: A text template that can be rendered to describe the event.
+- `extent`: The point in time when the event occurred, or the span of time for which it was active.
+- `props`: A set of key-value pairs that define the event and capture the context surrounding it.
+
+`emit`'s events are general enough to represent many observability paradigms including logs, distributed traces, metric samples, and more.
+
+## Properties in templates
+
+The string literal argument to the [`emit!`] macro is its template. Properties can be attached to events by interpolating them into the template between braces:
+
+```
+let user = "World";
+
+emit::emit!("Hello, {user}!");
+```
+
+```text
+Event {
+    module: "emit_test",
+    tpl: "Hello, `user`!",
+    extent: Some(
+        "2024-04-25T00:53:36.364794000Z",
+    ),
+    props: {
+        "user": "World",
+    },
+}
+```
+
+`emit` uses the same syntax between braces in its templates as Rust uses for struct field initialization where the identifier becomes the key of the property. The above example uses the field-init shorthand, but could also be written equivalently in other ways:
+
+```
+let greet = "World";
+
+emit::emit!("Hello, {user: greet}!");
+```
+
+```
+emit::emit!("Hello, {user: \"World\"}!");
+```
+
+In these examples we've been using the string `"World"` as the property value. Other primitive types such as booleans, integers, floats, and most library-defined datastructures like UUIDs and URIs can be captured by default in templates, retaining their structure:
+
+```
+emit::emit!("Hello, user {id: 908}!");
+```
+
+```text
+Event {
+    module: "emit_test",
+    tpl: "Hello, user `id`!",
+    extent: Some(
+        "2024-04-25T21:38:42.029412000Z",
+    ),
+    props: {
+        "id": 908,
+    },
+}
+```
+
+## Rendering templates
+
+Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:
+
+```
+let user = "World";
+
+emit::emit!("Hello, {user}!");
+```
+
+If we change our emitter to:
+
+```
+# let e =
+emit::emitter::from_fn(|evt| println!("{}", evt.msg()))
+# ;
+```
+
+then it will produce the output:
+
+```text
+"Hello, World!"
+```
 */
 
 #![cfg_attr(not(feature = "std"), no_std)]

@@ -24,11 +24,6 @@ pub fn ctxt<C: emit::Ctxt>(name: &'static str, ctxt: C) -> OpenTelemetryContext<
     OpenTelemetryContext::new(name, ctxt)
 }
 
-pub fn shutdown() {
-    global::shutdown_logger_provider();
-    global::shutdown_tracer_provider();
-}
-
 thread_local! {
     static CTXT_STACK: RefCell<Vec<CtxtFrame>> = RefCell::new(Vec::new());
 }

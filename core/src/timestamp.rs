@@ -249,7 +249,11 @@ impl AddAssign<Duration> for Timestamp {
 
 impl fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt_rfc3339(*self, f)
+        use fmt::Write as _;
+
+        f.write_char('"')?;
+        fmt_rfc3339(*self, f)?;
+        f.write_char('"')
     }
 }
 
