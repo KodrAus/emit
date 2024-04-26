@@ -49,3 +49,7 @@ default-features = false
 [dependencies.rand]
 version = "0.8"
 optional = true
+
+[dev-dependencies.serde]
+version = "1"
+features = ["derive"]

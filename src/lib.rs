@@ -229,6 +229,114 @@ emit::emit!(
 
 ```
 
+## Controlling property capturing
+
+Property capturing is controlled by regular Rust attributes. For example, the [`key`] attribute can be used to set the key of a property to an arbitrary string:
+
+```
+emit::emit!(
+    "Hello, {user}!",
+    #[emit::key("user.name")]
+    user: "World",
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, `user.name`!",
+    extent: Some(
+        "2024-04-26T06:33:59.159727258Z",
+    ),
+    props: {
+        "user.name": "World",
+    },
+}
+```
+
+By default, properties are captured based on their [`std::fmt::Display`] implementation. This can be changed by applying one of the `as` attributes to the property. For example, applying the [`as_debug`] attribute will capture the property using uts [`std::fmt::Debug`] implementation instead:
+
+```
+#[derive(Debug)]
+struct User {
+    name: &'static str,
+}
+
+emit::emit!(
+    "Hello, {user}!",
+    #[emit::as_debug]
+    user: User {
+        name: "World",
+    },
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, `user`!",
+    extent: Some(
+        "2024-04-26T06:29:55.778795150Z",
+    ),
+    props: {
+        "user": User {
+            name: "World",
+        },
+    },
+}
+```
+
+In the above example, the structure of the `user` property is lost. It can be formatted using the `std::fmt` machinery, but if serialized to JSON it would produce a string:
+
+```json
+{
+    "module": "my_app",
+    "tpl": "Hello, `user`!",
+    "extent": "2024-04-26T06:29:55.778795150Z",
+    "props": {
+        "user": "User { name: \"World\" }"
+    }
+}
+```
+
+To retain the structure of complex values, you can use the [`as_serde`] or [`as_sval`] attributes:
+
+```
+# #[cfg(not(feature = "serde"))] fn main() {}
+# #[cfg(feature = "serde")]
+# fn main() {
+#[derive(serde::Serialize)]
+struct User {
+    name: &'static str,
+}
+
+emit::emit!(
+    "Hello, {user}!",
+    #[emit::as_serde]
+    user: User {
+        name: "World",
+    },
+);
+# }
+```
+
+Represented as JSON, this event will instead produce:
+
+```json
+{
+    "module": "my_app",
+    "tpl": "Hello, `user`!",
+    "extent": "2024-04-26T06:29:55.778795150Z",
+    "props": {
+        "user": {
+            "name": "World"
+        }
+    }
+}
+```
+
+Primitive types like booleans and numbers are always structure-preserving, so `as` attributes don't need to be applied to them.
+
 ## Rendering templates
 
 Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:
