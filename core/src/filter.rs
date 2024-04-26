@@ -87,7 +87,7 @@ impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
     }
 }
 
-pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
+pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>) -> bool>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 

@@ -95,6 +95,36 @@ impl<'a, 'b> PartialEq<Path<'b>> for Path<'a> {
     }
 }
 
+impl<'a, 'b> PartialEq<Str<'b>> for Path<'a> {
+    fn eq(&self, other: &Str<'b>) -> bool {
+        self.0 == *other
+    }
+}
+
+impl<'a, 'b> PartialEq<Path<'b>> for Str<'a> {
+    fn eq(&self, other: &Path<'b>) -> bool {
+        *self == other.0
+    }
+}
+
+impl<'a> PartialEq<str> for Path<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl<'a> PartialEq<Path<'a>> for str {
+    fn eq(&self, other: &Path<'a>) -> bool {
+        self == other.0
+    }
+}
+
+impl<'a, 'b> PartialEq<&'b str> for Path<'a> {
+    fn eq(&self, other: &&'b str) -> bool {
+        self.0 == *other
+    }
+}
+
 impl<'a> fmt::Debug for Path<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)

@@ -36,7 +36,7 @@ In real applications, you'll want to use a more sophisticated emitter, such as:
 - `emit_file`: Emit diagnostics to a set of rolling files.
 - `emit_otlp`: Emit diagnostics to a remote collector via OpenTelemetry Protocol.
 
-For more advanced setup options, see the [`setup`] module.
+For more advanced setup options, see the [`mod@setup`] module.
 
 ## Emitting events
 
@@ -48,7 +48,7 @@ Here's an example of an event:
 emit::emit!("Hello, World");
 ```
 
-Using the `std::fmt` emitter from before, it will output:
+Using the `std::fmt` emitter from earlier, it will output:
 
 ```text
 Event {
@@ -82,7 +82,7 @@ emit::emit!("Hello, {user}!");
 
 ```text
 Event {
-    module: "emit_test",
+    module: "my_app",
     tpl: "Hello, `user`!",
     extent: Some(
         "2024-04-25T00:53:36.364794000Z",
@@ -93,7 +93,7 @@ Event {
 }
 ```
 
-`emit` uses the same syntax between braces in its templates as Rust uses for struct field initialization where the identifier becomes the key of the property. The above example uses the field-init shorthand, but could also be written equivalently in other ways:
+`emit` uses Rust's field value syntax between braces in its templates, where the identifier becomes the key of the property. This is the same syntax used for struct field initialization. The above example could be written equivalently in other ways:
 
 ```
 let greet = "World";
@@ -105,23 +105,128 @@ emit::emit!("Hello, {user: greet}!");
 emit::emit!("Hello, {user: \"World\"}!");
 ```
 
-In these examples we've been using the string `"World"` as the property value. Other primitive types such as booleans, integers, floats, and most library-defined datastructures like UUIDs and URIs can be captured by default in templates, retaining their structure:
+In these examples we've been using the string `"World"` as the property value. Other primitive types such as booleans, integers, floats, and most library-defined datastructures like UUIDs and URIs can be captured by default in templates.
+
+## Properties outside templates
+
+Additional properties can be added to an event by listing them as field values after the template:
 
 ```
-emit::emit!("Hello, user {id: 908}!");
+let user = "World";
+let greeter = "emit";
+let lang = "en";
+
+emit::emit!("Hello, {user}!", lang, greeter);
 ```
 
 ```text
 Event {
-    module: "emit_test",
-    tpl: "Hello, user `id`!",
+    module: "my_app",
+    tpl: "Hello, `user`!",
     extent: Some(
-        "2024-04-25T21:38:42.029412000Z",
+        "2024-04-25T22:32:23.013651640Z",
     ),
     props: {
-        "id": 908,
+        "greeter": "emit",
+        "lang": "en",
+        "user": "World",
     },
 }
+```
+
+Properties inside templates may be initialized outside of them:
+
+```
+emit::emit!("Hello, {user}", user: "World");
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, `user`",
+    extent: Some(
+        "2024-04-25T22:34:25.536438193Z",
+    ),
+    props: {
+        "user": "World",
+    },
+}
+```
+
+## Controlling event construction and emission
+
+Control parameters appear before the template. They use the same field value syntax as properties, but aren't captured as properties on the event. They instead customize other aspects of the event.
+
+The `module` control parameter sets the module:
+
+```
+emit::emit!(module: "my_module", "Hello, World!");
+```
+
+```text
+Event {
+    module: "my_module",
+    tpl: "Hello, World!",
+    extent: Some(
+        "2024-04-25T22:42:52.180968127Z",
+    ),
+    props: {},
+}
+```
+
+The `extent` control parameter sets the extent:
+
+```
+# use std::time::Duration;
+emit::emit!(
+    extent: emit::Timestamp::new(Duration::from_secs(1000000000)),
+    "Hello, World!",
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, World!",
+    extent: Some(
+        "2001-09-09T01:46:40.000000000Z",
+    ),
+    props: {},
+}
+```
+
+The `when` control parameter only emits the event if it matches the given filter:
+
+```
+// This event matches the filter
+emit::emit!(
+    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
+    "Hello, World!",
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, World!",
+    extent: Some(
+        "2024-04-25T22:54:50.055493407Z",
+    ),
+    props: {},
+}
+```
+
+```
+// This event does not match the filter
+emit::emit!(
+    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
+    module: "not_my_app",
+    "Hello, World!",
+);
+```
+
+```text
+
 ```
 
 ## Rendering templates
@@ -145,7 +250,7 @@ emit::emitter::from_fn(|evt| println!("{}", evt.msg()))
 then it will produce the output:
 
 ```text
-"Hello, World!"
+Hello, World!
 ```
 */
 
