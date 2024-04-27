@@ -337,6 +337,173 @@ Represented as JSON, this event will instead produce:
 
 Primitive types like booleans and numbers are always structure-preserving, so `as` attributes don't need to be applied to them.
 
+## Tracing operations
+
+Traces are a collection of events that span the execution of key operations in your application. Span events carry a start and end timestamp for the time the operation was active. They also carry well-known identifiers that correlate span events into a single distributed unit of execution, and organize them into a call tree.
+
+`emit` supports tracing functions through attribute macros with the same syntax as emitting regular events:
+
+```
+#[emit::span("wait a bit", sleep_ms)]
+fn wait_a_bit(sleep_ms: u64) {
+    thread::sleep(Duration::from_millis(sleep_ms))
+}
+
+wait_a_bit(1200);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "wait a bit",
+    extent: Some(
+        "2024-04-27T22:40:24.112859000Z".."2024-04-27T22:40:25.318273000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "wait a bit",
+        "span_id": 71ea734fcbb4dc41,
+        "trace_id": 6d6bb9c23a5f76e7185fb3957c2f5527,
+        "sleep_ms": 1200,
+    },
+}
+```
+
+On nightly compilers, the same attributes can also be applied to blocks instead of functions:
+
+```
+#![feature(proc_macro_hygiene, stmt_expr_attributes)]
+
+# fn main() {
+let sleep_ms = 1200;
+
+#[emit::span("wait a bit", sleep_ms)]
+{
+    thread::sleep(Duration::from_millis(sleep_ms))
+}
+# }
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "wait a bit",
+    extent: Some(
+        "2024-04-27T22:40:24.112859000Z".."2024-04-27T22:40:25.318273000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "wait a bit",
+        "span_id": 71ea734fcbb4dc41,
+        "trace_id": 6d6bb9c23a5f76e7185fb3957c2f5527,
+        "sleep_ms": 1200,
+    },
+}
+```
+
+Asynchronous functions are also supported:
+
+```
+#[emit::span("wait a bit", sleep_ms)]
+async fn wait_a_bit(sleep_ms: u64) {
+    sleep(Duration::from_millis(sleep_ms)).await
+}
+
+wait_a_bit(1200).await;
+```
+
+Properties added to the span macros are automatically included on any events emitted within that operation:
+
+```
+#[emit::span("wait a bit", sleep_ms)]
+fn wait_a_bit(sleep_ms: u64) {
+    thread::sleep(Duration::from_millis(sleep_ms));
+
+    emit::emit!("waiting a bit longer");
+
+    thread::sleep(Duration::from_millis(sleep_ms));
+}
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "waiting a bit longer",
+    extent: Some(
+        "2024-04-27T22:47:34.780288000Z",
+    ),
+    props: {
+        "trace_id": d2a5e592546010570472ac6e6457c086,
+        "sleep_ms": 1200,
+        "span_id": ee9fde093b6efd78,
+    },
+}
+Event {
+    module: "my_app",
+    tpl: "wait a bit",
+    extent: Some(
+        "2024-04-27T22:47:33.574839000Z".."2024-04-27T22:47:35.985844000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "wait a bit",
+        "trace_id": d2a5e592546010570472ac6e6457c086,
+        "sleep_ms": 1200,
+        "span_id": ee9fde093b6efd78,
+    },
+}
+```
+
+Any operations started within a span will inherit its identifiers, forming a tree of causal relationships between them:
+
+```
+#[emit::span("outer span", sleep_ms)]
+fn outer_span(sleep_ms: u64) {
+    thread::sleep(Duration::from_millis(sleep_ms));
+
+    inner_span(sleep_ms / 2);
+}
+
+#[emit::span("inner span", sleep_ms)]
+fn inner_span(sleep_ms: u64) {
+    thread::sleep(Duration::from_millis(sleep_ms));
+}
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "inner span",
+    extent: Some(
+        "2024-04-27T22:50:50.385706000Z".."2024-04-27T22:50:50.994509000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "inner span",
+        "trace_id": 12b2fde225aebfa6758ede9cac81bf4d,
+        "span_parent": 23995f85b4610391,
+        "sleep_ms": 600,
+        "span_id": fc8ed8f3a980609c,
+    },
+}
+Event {
+    module: "my_app",
+    tpl: "outer span",
+    extent: Some(
+        "2024-04-27T22:50:49.180025000Z".."2024-04-27T22:50:50.994797000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "outer span",
+        "sleep_ms": 1200,
+        "span_id": 23995f85b4610391,
+        "trace_id": 12b2fde225aebfa6758ede9cac81bf4d,
+    },
+}
+```
+
+Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_span`. That's because `inner_span` was called within the execution og `outer_span`.
+
 ## Rendering templates
 
 Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:

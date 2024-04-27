@@ -539,7 +539,7 @@ pub fn __private_begin_span<
     name: impl Into<Str<'static>>,
     default_complete: S,
 ) -> (Frame<Option<&'a C>>, Span<'static, &'a T, Empty, S>) {
-    let span = Span::filtered_new(
+    let mut span = Span::filtered_new(
         Timer::start(rt.clock()),
         name,
         SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
@@ -554,6 +554,8 @@ pub fn __private_begin_span<
         },
         default_complete,
     );
+
+    span.include_ctxt_in_complete(false);
 
     let frame = if span.is_enabled() {
         Frame::push(Some(rt.ctxt()), span.ctxt().chain(ctxt_props))

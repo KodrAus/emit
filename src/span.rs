@@ -26,7 +26,7 @@ pub struct TraceId(NonZeroU128);
 
 impl fmt::Debug for TraceId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
+        fmt::Debug::fmt(str::from_utf8(&self.to_hex()).unwrap(), f)
     }
 }
 
@@ -142,7 +142,7 @@ pub struct SpanId(NonZeroU64);
 
 impl fmt::Debug for SpanId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(str::from_utf8(&self.to_hex()).unwrap())
+        fmt::Debug::fmt(str::from_utf8(&self.to_hex()).unwrap(), f)
     }
 }
 
@@ -341,8 +341,40 @@ impl<const N: usize> fmt::Write for Buffer<N> {
 }
 
 pub struct Span<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> {
-    value: Option<(Timer<C>, SpanEventProps<'a, P>)>,
+    value: Option<SpanValue<'a, C, P>>,
     on_drop: Option<F>,
+}
+
+struct SpanValue<'a, C: Clock, P: Props> {
+    timer: Timer<C>,
+    ctxt: SpanCtxtProps,
+    name: Str<'a>,
+    props: P,
+    include_ctxt: bool,
+}
+
+impl<'a, C: Clock, P: Props> SpanValue<'a, C, P> {
+    fn split(self) -> (Timer<C>, SpanEventProps<'a, P>) {
+        if self.include_ctxt {
+            (
+                self.timer,
+                SpanEventProps {
+                    ctxt: self.ctxt,
+                    name: self.name,
+                    props: self.props,
+                },
+            )
+        } else {
+            (
+                self.timer,
+                SpanEventProps {
+                    ctxt: SpanCtxtProps::empty(),
+                    name: self.name,
+                    props: self.props,
+                },
+            )
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -350,20 +382,6 @@ pub struct SpanEventProps<'a, P> {
     ctxt: SpanCtxtProps,
     name: Str<'a>,
     props: P,
-}
-
-impl<'a, P> SpanEventProps<'a, P> {
-    pub fn ctxt(&self) -> &SpanCtxtProps {
-        &self.ctxt
-    }
-
-    pub fn name(&self) -> &Str<'a> {
-        &self.name
-    }
-
-    pub fn props(&self) -> &P {
-        &self.props
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -383,6 +401,14 @@ impl SpanCtxtProps {
             trace_id,
             span_parent,
             span_id,
+        }
+    }
+
+    pub const fn empty() -> Self {
+        Self {
+            trace_id: None,
+            span_parent: None,
+            span_id: None,
         }
     }
 
@@ -422,8 +448,13 @@ impl Props for SpanCtxtProps {
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for_each(KEY_TRACE_ID.to_str(), self.trace_id.to_value())?;
-        for_each(KEY_SPAN_ID.to_str(), self.span_id.to_value())?;
+        if let Some(ref trace_id) = self.trace_id {
+            for_each(KEY_TRACE_ID.to_str(), trace_id.to_value())?;
+        }
+
+        if let Some(ref span_id) = self.span_id {
+            for_each(KEY_SPAN_ID.to_str(), span_id.to_value())?;
+        }
 
         if let Some(ref span_parent) = self.span_parent {
             for_each(KEY_SPAN_PARENT.to_str(), span_parent.to_value())?;
@@ -449,10 +480,10 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> D
     for Span<'a, C, P, F>
 {
     fn drop(&mut self) {
-        if let Some((timer, props)) = self.value.take() {
-            if let Some(on_drop) = self.on_drop.take() {
-                on_drop(timer.extent(), props)
-            }
+        if let (Some(value), Some(on_drop)) = (self.value.take(), self.on_drop.take()) {
+            let (timer, props) = value.split();
+
+            on_drop(timer.extent(), props)
         }
     }
 }
@@ -467,14 +498,20 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> S
         default_complete: F,
     ) -> Self {
         let props = SpanEventProps {
-            name: name.into(),
             ctxt,
+            name: name.into(),
             props,
         };
 
         if filter(timer.start_timestamp().map(Extent::point), &props) {
             Span {
-                value: Some((timer, props)),
+                value: Some(SpanValue {
+                    timer,
+                    ctxt: props.ctxt,
+                    name: props.name,
+                    props: props.props,
+                    include_ctxt: true,
+                }),
                 on_drop: Some(default_complete),
             }
         } else {
@@ -504,19 +541,25 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> S
     }
 
     pub fn timer(&self) -> Option<&Timer<C>> {
-        self.value.as_ref().map(|(timer, _)| timer)
+        self.value.as_ref().map(|value| &value.timer)
     }
 
     pub fn ctxt(&self) -> Option<&SpanCtxtProps> {
-        self.value.as_ref().map(|(_, props)| props.ctxt())
+        self.value.as_ref().map(|value| &value.ctxt)
     }
 
     pub fn name(&self) -> Option<&Str<'a>> {
-        self.value.as_ref().map(|(_, props)| props.name())
+        self.value.as_ref().map(|value| &value.name)
     }
 
     pub fn props(&self) -> Option<&P> {
-        self.value.as_ref().map(|(_, props)| props.props())
+        self.value.as_ref().map(|value| &value.props)
+    }
+
+    pub fn include_ctxt_in_complete(&mut self, include: bool) {
+        if let Some(ref mut value) = self.value {
+            value.include_ctxt = include;
+        }
     }
 
     pub fn complete(self) {
@@ -527,7 +570,9 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> S
         mut self,
         complete: impl FnOnce(Option<Extent>, SpanEventProps<'a, P>),
     ) -> bool {
-        if let Some((timer, props)) = self.value.take() {
+        if let Some(value) = self.value.take() {
+            let (timer, props) = value.split();
+
             complete(timer.extent(), props);
             true
         } else {
