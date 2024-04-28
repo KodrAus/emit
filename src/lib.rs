@@ -525,7 +525,7 @@ Event {
 
 Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_span`. That's because `inner_span` was called within the execution of `outer_span`.
 
-### Sharing span context across threads
+### Propagating span context across threads
 
 Ambient span properties are not shared across threads by default. This context needs to be fetched and sent across threads manually:
 
@@ -553,6 +553,10 @@ tokio::spawn(
 ```
 
 Async functions that simply migrate across threads in work-stealing runtimes don't need any manual work to keep their context across those threads.
+
+### Propagating span context across services
+
+`emit` doesn't implement any distributed trace propagation itself. This is the responsibility of end-users through their web framework and clients to manage.
 
 ### Completing spans manually
 
