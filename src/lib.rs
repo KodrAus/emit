@@ -70,7 +70,7 @@ This example is a perfect opportunity to introduce `emit`'s model of diagnostics
 
 `emit`'s events are general enough to represent many observability paradigms including logs, distributed traces, metric samples, and more.
 
-## Properties in templates
+### Properties in templates
 
 The string literal argument to the [`emit!`] macro is its template. Properties can be attached to events by interpolating them into the template between braces:
 
@@ -107,7 +107,7 @@ emit::emit!("Hello, {user: \"World\"}!");
 
 In these examples we've been using the string `"World"` as the property value. Other primitive types such as booleans, integers, floats, and most library-defined datastructures like UUIDs and URIs can be captured by default in templates.
 
-## Properties outside templates
+### Properties outside templates
 
 Additional properties can be added to an event by listing them as field values after the template:
 
@@ -153,7 +153,7 @@ Event {
 }
 ```
 
-## Controlling event construction and emission
+### Controlling event construction and emission
 
 Control parameters appear before the template. They use the same field value syntax as properties, but aren't captured as properties on the event. They instead customize other aspects of the event.
 
@@ -229,7 +229,7 @@ emit::emit!(
 
 ```
 
-## Controlling property capturing
+### Controlling property capturing
 
 Property capturing is controlled by regular Rust attributes. For example, the [`key`] attribute can be used to set the key of a property to an arbitrary string:
 
@@ -339,11 +339,12 @@ Primitive types like booleans and numbers are always structure-preserving, so `a
 
 ## Tracing operations
 
-Traces are a collection of events that span the execution of key operations in your application. Span events carry a start and end timestamp for the time the operation was active. They also carry well-known identifiers that correlate span events into a single distributed unit of execution, and organize them into a call tree.
+When your application executes key operations, you can emit span events that dover the time they were active. Any other operations involved in that execution, or any other events emitted during it, will be correlated through identifiers to form a hierarchical call tree. Together, these events form a trace, which in distributed systems can involve operations executed by other services.
 
 `emit` supports tracing functions through attribute macros with the same syntax as emitting regular events:
 
 ```
+# use std::{thread, time::Duration};
 #[emit::span("wait a bit", sleep_ms)]
 fn wait_a_bit(sleep_ms: u64) {
     thread::sleep(Duration::from_millis(sleep_ms))
@@ -369,11 +370,22 @@ Event {
 }
 ```
 
+When the annotated function returns, a span event for its execution is emitted. The extent of a span event is a range, where the start is the time the function began executing, and the end is the time the function returned.
+
+The data model of traces is an extension of `emit`'s events, including:
+
+- `event_kind`: with a value of `"span"` to indicate that the event is a span.
+- `span_name`: a name for the operation the span represents. This defaults to the template.
+- `span_id`: an identifier for this specific invocation of the operation.
+- `parent_id`: the `span_id` of the operation that invoked this one.
+- `trace_id`: an identifier shared by all events in a distributed trace. A `trace_id` is assigned by the first operation.
+
 On nightly compilers, the same attributes can also be applied to blocks instead of functions:
 
 ```
 #![feature(proc_macro_hygiene, stmt_expr_attributes)]
 
+# use std::{thread, time::Duration};
 # fn main() {
 let sleep_ms = 1200;
 
@@ -404,17 +416,25 @@ Event {
 Asynchronous functions are also supported:
 
 ```
+# use std::{thread, time::Duration};
+# fn main() {}
+# async fn sleep(_: Duration) {}
+# async fn main_async() {
 #[emit::span("wait a bit", sleep_ms)]
 async fn wait_a_bit(sleep_ms: u64) {
     sleep(Duration::from_millis(sleep_ms)).await
 }
 
 wait_a_bit(1200).await;
+# }
 ```
 
-Properties added to the span macros are automatically included on any events emitted within that operation:
+### Contextual properties
+
+Properties added to the span macros are added to an ambient context and automatically included on any events emitted within that operation:
 
 ```
+# use std::{thread, time::Duration};
 #[emit::span("wait a bit", sleep_ms)]
 fn wait_a_bit(sleep_ms: u64) {
     thread::sleep(Duration::from_millis(sleep_ms));
@@ -454,9 +474,10 @@ Event {
 }
 ```
 
-Any operations started within a span will inherit its identifiers, forming a tree of causal relationships between them:
+Any operations started within a span will inherit its identifiers:
 
 ```
+# use std::{thread, time::Duration};
 #[emit::span("outer span", sleep_ms)]
 fn outer_span(sleep_ms: u64) {
     thread::sleep(Duration::from_millis(sleep_ms));
@@ -502,7 +523,89 @@ Event {
 }
 ```
 
-Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_span`. That's because `inner_span` was called within the execution og `outer_span`.
+Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_span`. That's because `inner_span` was called within the execution of `outer_span`.
+
+### Sharing span context across threads
+
+Ambient span properties are not shared across threads by default. This context needs to be fetched and sent across threads manually:
+
+```
+# use std::thread;
+# fn my_operation() {}
+thread::spawn({
+    let ctxt = emit::Frame::current(emit::runtime::shared().ctxt());
+
+    move || ctxt.call(|| {
+        // Your code goes here
+    })
+});
+```
+
+This same process is also needed for async code that involves thread spawning:
+
+```
+# mod tokio { pub fn spawn(_: impl std::future::Future) {} }
+tokio::spawn(
+    emit::Frame::current(emit::runtime::shared().ctxt()).in_future(async {
+        // Your code goes here
+    }),
+);
+```
+
+Async functions that simply migrate across threads in work-stealing runtimes don't need any manual work to keep their context across those threads.
+
+### Completing spans manually
+
+The `arg` control parameter can be applied to span macros to bind an identifier in the body of the annotated function for the [`Span`] that's created for it. This span can be completed manually, changing properties of the span along the way:
+
+```
+# use std::{thread, time::Duration};
+#[emit::span(arg: span, "wait a bit", sleep_ms)]
+fn wait_a_bit(sleep_ms: u64) {
+    thread::sleep(Duration::from_millis(sleep_ms));
+
+    if sleep_ms > 500 {
+        span.complete_with(|extent, props| {
+            emit::warn!(extent, props, "wait a bit took too long");
+        });
+    }
+}
+
+wait_a_bit(100);
+wait_a_bit(1200);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "wait a bit",
+    extent: Some(
+        "2024-04-28T21:12:20.497595000Z".."2024-04-28T21:12:20.603108000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "wait a bit",
+        "trace_id": 5b9ab977a530dfa782eedd6db08fdb66,
+        "sleep_ms": 100,
+        "span_id": 6f21f5ddc707f730,
+    },
+}
+Event {
+    module: "my_app",
+    tpl: "wait a bit took too long",
+    extent: Some(
+        "2024-04-28T21:12:20.603916000Z".."2024-04-28T21:12:21.808502000Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "wait a bit",
+        "lvl": warn,
+        "trace_id": 9abad69ac8bf6d6ef6ccde8453226aa3,
+        "sleep_ms": 1200,
+        "span_id": c63632332de89ac3,
+    },
+}
+```
 
 ## Rendering templates
 
