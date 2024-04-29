@@ -40,9 +40,9 @@ For more advanced setup options, see the [`mod@setup`] module.
 
 ## Emitting events
 
-`emit` uses macros with a special syntax to log events.
+Producing useful diagnostics in your applications is a critical aspect of building robust and maintainable software. If you don't find your diagnostics useful in development, then you won't find them useful in production either when you really need them. `emit` is a tool for application developers, designed to be straightforward to configure and integrate into your projects with low conceptual overhead.
 
-Here's an example of an event:
+`emit` uses macros with a special syntax to log events. Here's an example of an event:
 
 ```
 emit::emit!("Hello, World");
