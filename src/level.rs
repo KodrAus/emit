@@ -9,6 +9,7 @@ use emit_core::{
 
 use crate::value::{ToValue, Value};
 use core::{fmt, str::FromStr};
+use emit_core::path::Path;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {
@@ -107,7 +108,7 @@ impl<'v> FromValue<'v> for Level {
     }
 }
 
-pub fn min_level_filter(min: Level) -> MinLevel {
+pub fn min_filter(min: Level) -> MinLevel {
     MinLevel::new(min)
 }
 
@@ -116,8 +117,14 @@ pub struct MinLevel {
     default: Level,
 }
 
+impl From<Level> for MinLevel {
+    fn from(min: Level) -> Self {
+        MinLevel::new(min)
+    }
+}
+
 impl MinLevel {
-    pub fn new(min: Level) -> MinLevel {
+    pub const fn new(min: Level) -> MinLevel {
         MinLevel {
             min,
             default: Level::Debug,
@@ -140,6 +147,67 @@ impl Filter for MinLevel {
 }
 
 impl InternalFilter for MinLevel {}
+
+pub fn min_by_path_filter<P: Into<Path<'static>>, L: Into<MinLevel>>(
+    levels: impl IntoIterator<Item = (P, L)>,
+) -> MinLevelPathMap {
+    MinLevelPathMap::from_iter(levels)
+}
+
+pub struct MinLevelPathMap {
+    paths: Vec<(Path<'static>, MinLevel)>,
+}
+
+impl MinLevelPathMap {
+    pub const fn new() -> Self {
+        MinLevelPathMap { paths: Vec::new() }
+    }
+
+    pub fn min_level(&mut self, path: impl Into<Path<'static>>, min_level: impl Into<MinLevel>) {
+        let path = path.into();
+
+        match self.paths.binary_search_by_key(&&path, |(path, _)| path) {
+            Ok(index) => {
+                self.paths[index] = (path, min_level.into());
+            }
+            Err(index) => {
+                self.paths.insert(index, (path, min_level.into()));
+            }
+        }
+    }
+}
+
+impl Filter for MinLevelPathMap {
+    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+        let evt_path = evt.module();
+
+        if let Ok(index) = self.paths.binary_search_by_key(&evt_path, |(path, _)| path) {
+            self.paths[index].1.matches(evt)
+        } else {
+            for (path, min_level) in &self.paths {
+                if evt_path.is_child_of(path) {
+                    return min_level.matches(evt);
+                }
+            }
+
+            true
+        }
+    }
+}
+
+impl InternalFilter for MinLevelPathMap {}
+
+impl<P: Into<Path<'static>>, L: Into<MinLevel>> FromIterator<(P, L)> for MinLevelPathMap {
+    fn from_iter<T: IntoIterator<Item = (P, L)>>(iter: T) -> Self {
+        let mut map = MinLevelPathMap::new();
+
+        for (path, min_level) in iter {
+            map.min_level(path, min_level);
+        }
+
+        map
+    }
+}
 
 #[cfg(test)]
 mod tests {

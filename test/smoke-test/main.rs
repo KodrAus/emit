@@ -94,7 +94,7 @@ async fn main() {
         .map_ctxt(|ctxt| emit_opentelemetry::ctxt("emit", ctxt))
         .and_emit_to(emit_term::stdout())
         .and_emit_to(
-            emit::level::min_level_filter(emit::Level::Warn).wrap_emitter(
+            emit::level::min_filter(emit::Level::Warn).wrap_emitter(
                 emit_file::set("./target/logs/log.txt")
                     .reuse_files(true)
                     .roll_by_minute()

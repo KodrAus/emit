@@ -195,38 +195,30 @@ Event {
 }
 ```
 
-The `when` control parameter only emits the event if it matches the given filter:
+The `props` control parameter adds a base set of [`Props`] to an event in addition to any added through the template:
 
 ```
-// This event matches the filter
 emit::emit!(
-    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
-    "Hello, World!",
+    props: emit::props! {
+        lang: "en",
+    },
+    "Hello, {user}!",
+    user: "World",
 );
 ```
 
 ```text
 Event {
     module: "my_app",
-    tpl: "Hello, World!",
+    tpl: "Hello, `user`!",
     extent: Some(
-        "2024-04-25T22:54:50.055493407Z",
+        "2024-04-29T03:36:07.751177000Z",
     ),
-    props: {},
+    props: {
+        "lang": "en",
+        "user": "World",
+    },
 }
-```
-
-```
-// This event does not match the filter
-emit::emit!(
-    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
-    module: "not_my_app",
-    "Hello, World!",
-);
-```
-
-```text
-
 ```
 
 ### Controlling property capturing
@@ -337,11 +329,119 @@ Represented as JSON, this event will instead produce:
 
 Primitive types like booleans and numbers are always structure-preserving, so `as` attributes don't need to be applied to them.
 
+## Filtering events
+
+Managing the volume of diagnostic data is an important activity in application development to keep costs down and make debugging more efficient. Ideally, applications would only produce useful diagnostics, but reality demands tooling to limit volume at a high-level. `emit` lets you configure a [`Filter`] during [`setup()`] to reduce the volume of diagnostic data. A useful filter is [`level::min_by_path_filter`], which only emits events when they are produced for at least a given [`Level`] within a given module:
+
+```
+fn main() {
+    let rt = emit::setup()
+        .emit_to(emit::emitter::from_fn(|evt| println!("{evt:#?}")))
+        .emit_when(emit::level::min_by_path_filter([
+            ("my_app::submodule", emit::Level::Info)
+        ]))
+        .init();
+
+    emit::debug!("Up and running");
+
+    submodule::greet("World");
+
+    rt.blocking_flush(std::time::Duration::from_secs(5));
+}
+
+mod submodule {
+    pub fn greet(user: &str) {
+        emit::debug!("Preparing to greet {user}");
+        emit::info!("Hello, {user}!");
+    }
+}
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Up and running",
+    extent: Some(
+        "2024-04-29T04:31:24.085826100Z",
+    ),
+    props: {
+        "lvl": debug,
+    },
+}
+Event {
+    module: "my_app::submodule",
+    tpl: "Hello, `user`!",
+    extent: Some(
+        "2024-04-29T04:31:24.086327500Z",
+    ),
+    props: {
+        "lvl": info,
+        "user": "World",
+    },
+}
+```
+
+Filters can apply to any feature of a candidate event. For example, this filter only matches events with a property `lang` that matches `"en"`:
+
+```
+# let e =
+emit::filter::from_fn(|evt| {
+    use emit::Props as _;
+
+    evt.props().pull::<emit::Str, _>("lang") == Some(emit::Str::new("en"))
+});
+# ;
+```
+
+The `when` control parameter of the emit macros can be used to override the globally configured filter for a specific event:
+
+```
+// This event matches the filter
+emit::emit!(
+    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
+    "Hello, World!",
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "Hello, World!",
+    extent: Some(
+        "2024-04-25T22:54:50.055493407Z",
+    ),
+    props: {},
+}
+```
+
+```
+// This event does not match the filter
+emit::emit!(
+    when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
+    module: "not_my_app",
+    "Hello, World!",
+);
+```
+
+```text
+
+```
+
+This can be useful to guarantee an event will always be emitted, regardless of any filter configuration:
+
+```
+// This event is never filtered out
+emit::emit!(
+    when: emit::filter::always(),
+    "Hello, World!",
+);
+```
+
 ## Tracing operations
 
-When your application executes key operations, you can emit span events that dover the time they were active. Any other operations involved in that execution, or any other events emitted during it, will be correlated through identifiers to form a hierarchical call tree. Together, these events form a trace, which in distributed systems can involve operations executed by other services.
+When your application executes key operations, you can emit span events that dover the time they were active. Any other operations involved in that execution, or any other events emitted during it, will be correlated through identifiers to form a hierarchical call tree. Together, these events form a trace, which in distributed systems can involve operations executed by other services. Traces are a useful way to build a picture of service dependencies in distributed applications, and to identify performance problems across them.
 
-`emit` supports tracing functions through attribute macros with the same syntax as emitting regular events:
+`emit` supports tracing operations through attribute macros on functions. These macros use the same syntax as those for emitting regular events:
 
 ```
 # use std::{thread, time::Duration};
@@ -394,23 +494,6 @@ let sleep_ms = 1200;
     thread::sleep(Duration::from_millis(sleep_ms))
 }
 # }
-```
-
-```text
-Event {
-    module: "my_app",
-    tpl: "wait a bit",
-    extent: Some(
-        "2024-04-27T22:40:24.112859000Z".."2024-04-27T22:40:25.318273000Z",
-    ),
-    props: {
-        "event_kind": span,
-        "span_name": "wait a bit",
-        "span_id": 71ea734fcbb4dc41,
-        "trace_id": 6d6bb9c23a5f76e7185fb3957c2f5527,
-        "sleep_ms": 1200,
-    },
-}
 ```
 
 Asynchronous functions are also supported:
@@ -558,6 +641,64 @@ Async functions that simply migrate across threads in work-stealing runtimes don
 
 `emit` doesn't implement any distributed trace propagation itself. This is the responsibility of end-users through their web framework and clients to manage.
 
+When an incoming request arrives, you can parse the trace and span ids from its traceparent header and push them onto the current context:
+
+```
+// Parsed from a traceparent header
+let trace_id = "12b2fde225aebfa6758ede9cac81bf4d";
+let span_id = "23995f85b4610391";
+
+let frame = emit::Frame::push(emit::runtime::shared().ctxt(), emit::props! {
+    trace_id,
+    span_id,
+});
+
+frame.call(handle_request);
+
+#[emit::span("incoming request")]
+fn handle_request() {
+    // Your code goes here
+}
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "incoming request",
+    extent: Some(
+        "2024-04-29T05:37:05.278488400Z".."2024-04-29T05:37:05.278636100Z",
+    ),
+    props: {
+        "event_kind": span,
+        "span_name": "incoming request",
+        "span_parent": 23995f85b4610391,
+        "trace_id": 12b2fde225aebfa6758ede9cac81bf4d,
+        "span_id": 641a578cc05c9db2,
+    },
+}
+```
+
+This pattern of pushing the incoming traceparent onto the context and then immediately calling a span annotated function ensures the `span_id` parsed from the traceparent becomes the `span_parent` in the events emitted by your application, without emitting a span event for the calling service itself.
+
+When making outbound requests, you can pull the current trace and span ids from the current context and format them into a traceparent header:
+
+```
+use emit::{well_known::{KEY_SPAN_ID, KEY_TRACE_ID}, Ctxt, Props};
+
+let (trace_id, span_id) = emit::runtime::shared().ctxt().with_current(|props| {
+    (
+        props.pull::<emit::span::TraceId, _>(KEY_TRACE_ID),
+        props.pull::<emit::span::SpanId, _>(KEY_SPAN_ID),
+    )
+});
+
+if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
+    let traceparent = format!("00-{trace_id}-{span_id}-00");
+
+    // Push the traceparent header onto the request
+}
+```
+
 ### Completing spans manually
 
 The `arg` control parameter can be applied to span macros to bind an identifier in the body of the annotated function for the [`Span`] that's created for it. This span can be completed manually, changing properties of the span along the way:
@@ -570,7 +711,7 @@ fn wait_a_bit(sleep_ms: u64) {
 
     if sleep_ms > 500 {
         span.complete_with(|extent, props| {
-            emit::warn!(extent, props, "wait a bit took too long");
+            emit::warn!(extent, props, when: emit::filter::always(), "wait a bit took too long");
         });
     }
 }
@@ -611,6 +752,8 @@ Event {
 }
 ```
 
+Take care when completing spans manually that they always match the configured filter. This can be done using the `when` control parameter like in the above example. If a span is created it _must_ be emitted, otherwise the resulting trace will be incomplete.
+
 ## Rendering templates
 
 Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:
@@ -640,6 +783,7 @@ Hello, World!
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+extern crate core;
 
 use emit_core::extent::ToExtent;
 
@@ -678,6 +822,6 @@ pub use setup::{setup, Setup};
 
 #[doc(hidden)]
 pub mod __private {
+    pub extern crate core;
     pub use crate::macro_hooks::*;
-    pub use core;
 }

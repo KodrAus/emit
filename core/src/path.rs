@@ -1,4 +1,9 @@
-use core::{fmt, str};
+use core::{
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+    str,
+};
 
 use crate::{
     str::Str,
@@ -95,6 +100,12 @@ impl<'a, 'b> PartialEq<Path<'b>> for Path<'a> {
     }
 }
 
+impl<'a> Hash for Path<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
+
 impl<'a, 'b> PartialEq<Str<'b>> for Path<'a> {
     fn eq(&self, other: &Str<'b>) -> bool {
         self.0 == *other
@@ -122,6 +133,18 @@ impl<'a> PartialEq<Path<'a>> for str {
 impl<'a, 'b> PartialEq<&'b str> for Path<'a> {
     fn eq(&self, other: &&'b str) -> bool {
         self.0 == *other
+    }
+}
+
+impl<'a> PartialOrd for Path<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<'a> Ord for Path<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
     }
 }
 
