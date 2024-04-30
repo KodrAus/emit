@@ -472,6 +472,38 @@ Event {
 
 When the annotated function returns, a span event for its execution is emitted. The extent of a span event is a range, where the start is the time the function began executing, and the end is the time the function returned.
 
+On nightly compilers, the same attributes can also be applied to blocks instead of functions:
+
+```
+#![feature(proc_macro_hygiene, stmt_expr_attributes)]
+
+# use std::{thread, time::Duration};
+# fn main() {
+let sleep_ms = 1200;
+
+#[emit::span("wait a bit", sleep_ms)]
+{
+    thread::sleep(Duration::from_millis(sleep_ms))
+}
+# }
+```
+
+Asynchronous functions are also supported:
+
+```
+# use std::{thread, time::Duration};
+# fn main() {}
+# async fn sleep(_: Duration) {}
+# async fn main_async() {
+#[emit::span("wait a bit", sleep_ms)]
+async fn wait_a_bit(sleep_ms: u64) {
+    sleep(Duration::from_millis(sleep_ms)).await
+}
+
+wait_a_bit(1200).await;
+# }
+```
+
 Span events may also be created manually:
 
 ```
@@ -557,38 +589,6 @@ The data model of spans is an extension of `emit`'s events. Span events include 
 - `span_id`: an identifier for this specific invocation of the operation.
 - `parent_id`: the `span_id` of the operation that invoked this one.
 - `trace_id`: an identifier shared by all events in a distributed trace. A `trace_id` is assigned by the first operation.
-
-On nightly compilers, the same attributes can also be applied to blocks instead of functions:
-
-```
-#![feature(proc_macro_hygiene, stmt_expr_attributes)]
-
-# use std::{thread, time::Duration};
-# fn main() {
-let sleep_ms = 1200;
-
-#[emit::span("wait a bit", sleep_ms)]
-{
-    thread::sleep(Duration::from_millis(sleep_ms))
-}
-# }
-```
-
-Asynchronous functions are also supported:
-
-```
-# use std::{thread, time::Duration};
-# fn main() {}
-# async fn sleep(_: Duration) {}
-# async fn main_async() {
-#[emit::span("wait a bit", sleep_ms)]
-async fn wait_a_bit(sleep_ms: u64) {
-    sleep(Duration::from_millis(sleep_ms)).await
-}
-
-wait_a_bit(1200).await;
-# }
-```
 
 ### Contextual properties
 
@@ -1091,11 +1091,23 @@ Emitters write their own diagnostics to an alternative `emit` runtime, which you
 
 ```
 # mod emit_term { pub fn stdout() -> impl emit::runtime::InternalEmitter { emit::runtime::AssertInternal(emit::emitter::from_fn(|_| {})) } }
-let internal_rt = emit::setup()
-    .emit_to(emit_term::stdout())
-    .init_internal();
+fn main() {
+    // Configure the internal runtime before your regular setup
+    let internal_rt = emit::setup()
+        .emit_to(emit_term::stdout())
+        .init_internal();
 
-internal_rt.blocking_flush(std::time::Duration::from_secs(5));
+    let rt = emit::setup()
+        .emit_to(emit::emitter::from_fn(|evt| println!("{evt:#?}")))
+        .init();
+
+    // Your app code goes here
+
+    rt.blocking_flush(std::time::Duration::from_secs(5));
+
+    // Flush the internal runtime after your regular setup
+    internal_rt.blocking_flush(std::time::Duration::from_secs(5));
+}
 ```
 */
 
