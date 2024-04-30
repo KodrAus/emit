@@ -514,18 +514,18 @@ let sleep_ms = 1200;
 
 let rt = emit::runtime::shared();
 
+// Create a span
 let mut span = emit::Span::filtered_new(
     emit::Timer::start(rt.clock()),
     "wait a bit",
     emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
     emit::Empty,
     |extent, props| {
-        rt.filter().matches(&emit::Event::new(
-            emit::module!(),
+        rt.filter().matches(&emit::event! {
             extent,
-            emit::tpl!("wait a bit"),
             props,
-        ))
+            "wait a bit",
+        })
     },
     |extent, props| {
         emit::emit!(
@@ -537,6 +537,7 @@ let mut span = emit::Span::filtered_new(
     },
 );
 
+// Push the span onto the current context
 let frame = span.push_ctxt(
     rt.ctxt(),
     emit::props! {
@@ -544,7 +545,8 @@ let frame = span.push_ctxt(
     },
 );
 
-frame.call(|| {
+// Execute some operation within the frame
+frame.call(move || {
     // Your code goes here
     thread::sleep(Duration::from_millis(sleep_ms));
 
@@ -558,27 +560,48 @@ frame.call(|| {
 Spans can also be emitted directly as regular events:
 
 ```
-# use std::{thread, time::Duration};
-use emit::well_known::EVENT_KIND_SPAN;
+# use std::{thread, time::Duration, panic};
+use emit::{well_known::EVENT_KIND_SPAN, Filter};
 
 let sleep_ms = 1200;
 
 let rt = emit::runtime::shared();
 
+let timer = emit::Timer::start(rt.clock());
 let props = emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng());
 
-emit::Frame::push(rt.ctxt(), props).call(|| {
-    let timer = emit::Timer::start(rt.clock());
+// Check whether the span should be created or not
+let frame = if rt.filter().matches(&emit::event! {
+    extent: timer.start_timestamp(),
+    props,
+    "wait a bit",
+    event_kind: EVENT_KIND_SPAN,
+}) {
+    emit::Frame::push(Some(rt.ctxt()), props)
+} else {
+    emit::Frame::current(None)
+};
 
-    // Your code goes here
-    thread::sleep(Duration::from_millis(sleep_ms));
+// Execute some operation within the frame
+frame.call(|| {
+    let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        // Your code goes here
+        thread::sleep(Duration::from_millis(sleep_ms));
+    }));
 
+    // Emit the span event at the end of the scope
+    // We do this regardless of panics
     emit::emit!(
         extent: timer,
         "wait a bit",
         event_kind: EVENT_KIND_SPAN,
         sleep_ms,
     );
+
+    match r {
+        Ok(r) => r,
+        Err(r) => panic::resume_unwind(r),
+    }
 });
 ```
 

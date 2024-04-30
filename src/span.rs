@@ -1,7 +1,6 @@
 use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
-    empty::Empty,
     extent::{Extent, ToExtent},
     props::Props,
     rng::Rng,
@@ -565,7 +564,7 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> S
         if self.is_enabled() {
             Frame::push(Some(ctxt), self.ctxt().chain(ctxt_props))
         } else {
-            Frame::push(None, Empty)
+            Frame::current(None)
         }
     }
 
