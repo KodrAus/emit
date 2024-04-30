@@ -12,9 +12,8 @@ Licensed under MIT
 
 use core::{
     cmp, fmt,
-    ops::{Add, AddAssign},
-    str,
-    str::FromStr,
+    ops::{Add, AddAssign, Sub, SubAssign},
+    str::{self, FromStr},
     time::Duration,
 };
 
@@ -244,6 +243,23 @@ impl Add<Duration> for Timestamp {
 impl AddAssign<Duration> for Timestamp {
     fn add_assign(&mut self, rhs: Duration) {
         *self = *self + rhs;
+    }
+}
+
+impl Sub<Duration> for Timestamp {
+    type Output = Timestamp;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        match Timestamp::new(self.to_unix_time() - rhs) {
+            Some(ts) => ts,
+            None => panic!("overflow subtracting from timestamp"),
+        }
+    }
+}
+
+impl SubAssign<Duration> for Timestamp {
+    fn sub_assign(&mut self, rhs: Duration) {
+        *self = *self - rhs;
     }
 }
 

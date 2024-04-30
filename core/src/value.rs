@@ -223,6 +223,12 @@ macro_rules! impl_primitive {
                     Value(value_bag::ValueBag::from_option(value))
                 }
             }
+
+            impl<'v, const N: usize> From<&'v [$t; N]> for Value<'v> {
+                fn from(value: &'v [$t; N]) -> Self {
+                    Value(value_bag::ValueBag::from(value))
+                }
+            }
         )*
     };
 }
@@ -257,6 +263,12 @@ macro_rules! impl_ref {
             impl<$l> From<Option<&$l $t>> for Value<$l> {
                 fn from(value: Option<&$l $t>) -> Self {
                     Value(value_bag::ValueBag::from_option(value))
+                }
+            }
+
+            impl<$l, 'a, const N: usize> From<&'v [&'a $t; N]> for Value<'v> {
+                fn from(value: &$l [&'a $t; N]) -> Self {
+                    Value(value_bag::ValueBag::from(value))
                 }
             }
         )*

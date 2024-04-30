@@ -1,6 +1,7 @@
 use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
+    empty::Empty,
     extent::{Extent, ToExtent},
     props::Props,
     rng::Rng,
@@ -12,7 +13,7 @@ use emit_core::{
 use crate::{
     kind::Kind,
     value::{ToValue, Value},
-    Timer,
+    Frame, Timer,
 };
 use core::{
     fmt,
@@ -556,9 +557,15 @@ impl<'a, C: Clock, P: Props, F: FnOnce(Option<Extent>, SpanEventProps<'a, P>)> S
         self.value.as_ref().map(|value| &value.props)
     }
 
-    pub fn include_ctxt_in_complete(&mut self, include: bool) {
+    pub fn push_ctxt<T: Ctxt>(&mut self, ctxt: T, ctxt_props: impl Props) -> Frame<Option<T>> {
         if let Some(ref mut value) = self.value {
-            value.include_ctxt = include;
+            value.include_ctxt = false;
+        }
+
+        if self.is_enabled() {
+            Frame::push(Some(ctxt), self.ctxt().chain(ctxt_props))
+        } else {
+            Frame::push(None, Empty)
         }
     }
 

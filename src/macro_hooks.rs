@@ -555,13 +555,7 @@ pub fn __private_begin_span<
         default_complete,
     );
 
-    span.include_ctxt_in_complete(false);
-
-    let frame = if span.is_enabled() {
-        Frame::push(Some(rt.ctxt()), span.ctxt().chain(ctxt_props))
-    } else {
-        Frame::push(None, Empty)
-    };
+    let frame = span.push_ctxt(rt.ctxt(), ctxt_props);
 
     (frame, span)
 }

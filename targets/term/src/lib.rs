@@ -264,14 +264,14 @@ fn print_event(
         let buckets = value.as_f64_sequence();
 
         if !buckets.is_empty() {
-            write_histogram(buf, &buckets);
+            write_timeseries(buf, &buckets);
         }
     }
 
     let _ = out.print(&buf);
 }
 
-fn write_histogram(buf: &mut Buffer, buckets: &[f64]) {
+fn write_timeseries(buf: &mut Buffer, buckets: &[f64]) {
     const BLOCKS: [&'static str; 7] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇"];
 
     let mut bucket_min = f64::NAN;

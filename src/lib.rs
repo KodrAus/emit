@@ -472,7 +472,85 @@ Event {
 
 When the annotated function returns, a span event for its execution is emitted. The extent of a span event is a range, where the start is the time the function began executing, and the end is the time the function returned.
 
-The data model of traces is an extension of `emit`'s events, including:
+Span events may also be created manually:
+
+```
+# use std::{time::Duration, thread};
+use emit::Filter;
+
+let sleep_ms = 1200;
+
+let rt = emit::runtime::shared();
+
+let mut span = emit::Span::filtered_new(
+    emit::Timer::start(rt.clock()),
+    "wait a bit",
+    emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
+    emit::Empty,
+    |extent, props| {
+        rt.filter().matches(&emit::Event::new(
+            emit::module!(),
+            extent,
+            emit::tpl!("wait a bit"),
+            props,
+        ))
+    },
+    |extent, props| {
+        emit::emit!(
+            extent,
+            props,
+            when: emit::filter::always(),
+            "wait a bit",
+        );
+    },
+);
+
+let frame = span.push_ctxt(
+    rt.ctxt(),
+    emit::props! {
+        sleep_ms,
+    },
+);
+
+frame.call(|| {
+    // Your code goes here
+    thread::sleep(Duration::from_millis(sleep_ms));
+
+    // Make sure you complete the span in the frame.
+    // This is especially important for futures, otherwise the span may
+    // complete before the future does
+    span.complete();
+});
+```
+
+Spans can also be emitted directly as regular events:
+
+```
+# use std::{thread, time::Duration};
+use emit::well_known::EVENT_KIND_SPAN;
+
+let sleep_ms = 1200;
+
+let rt = emit::runtime::shared();
+
+let props = emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng());
+
+emit::Frame::push(rt.ctxt(), props).call(|| {
+    let timer = emit::Timer::start(rt.clock());
+
+    // Your code goes here
+    thread::sleep(Duration::from_millis(sleep_ms));
+
+    emit::emit!(
+        extent: timer,
+        "wait a bit",
+        event_kind: EVENT_KIND_SPAN,
+        sleep_ms,
+    );
+});
+```
+
+The data model of spans is an extension of `emit`'s events. Span events include the following well-known properties:
 
 - `event_kind`: with a value of `"span"` to indicate that the event is a span.
 - `span_name`: a name for the operation the span represents. This defaults to the template.
@@ -754,6 +832,235 @@ Event {
 
 Take care when completing spans manually that they always match the configured filter. This can be done using the `when` control parameter like in the above example. If a span is created it _must_ be emitted, otherwise the resulting trace will be incomplete.
 
+## Sampling metrics
+
+Metrics are an effective approach to monitoring applications at scale. They can be cheap to collect, making them suitable for performance sensitive operations. They can also be compact to report, making them suitable for high-volume scenarios. `emit` doesn't provide any infrastructure for collecting or sampling metrics. What it does provide is a standard way to report metric samples as events.
+
+A standard kind of metric is a monotonic counter, which can be represented as an atomic integer. In this example, our counter is for the number of bytes written to a file, which we'll call `bytes_written`. We can report a sample of this counter as an event by wrapping it in a [`Metric`]:
+
+```
+# fn sample_bytes_written() -> usize { 4643 }
+use emit::{well_known::METRIC_AGG_COUNT, Clock};
+
+let rt = emit::runtime::shared();
+
+let now = rt.clock().now();
+let sample = sample_bytes_written();
+
+rt.emit(
+    &emit::Metric::new(
+        emit::module!(),
+        now,
+        "bytes_written",
+        METRIC_AGG_COUNT,
+        sample,
+        emit::Empty,
+    ).to_event()
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "`metric_agg` of `metric_name` is `metric_value`",
+    extent: Some(
+        "2024-04-29T10:08:24.780230000Z",
+    ),
+    props: {
+        "event_kind": metric,
+        "metric_name": "bytes_written",
+        "metric_agg": "count",
+        "metric_value": 4643,
+    },
+}
+```
+
+Metrics may also be emitted manually:
+
+```
+# fn sample_bytes_written() -> usize { 4643 }
+use emit::well_known::{EVENT_KIND_METRIC, METRIC_AGG_COUNT};
+
+let sample = sample_bytes_written();
+
+emit::emit!(
+    "{metric_agg} of {metric_name} is {metric_value}",
+    event_kind: EVENT_KIND_METRIC,
+    metric_agg: METRIC_AGG_COUNT,
+    metric_name: "bytes_written",
+    metric_value: sample,
+);
+```
+
+The data model of metrics is an extension of `emit`'s events. Metric events are points or buckets in a timeseries. They don't model the underlying instruments collecting metrics like counters or gauges. They instead model the aggregation of readings from those instruments over their lifetime. Metric events include the following well-known properties:
+
+- `event_kind`: with a value of `"metric"` to indicate that the event is a metric sample.
+- `metric_agg`: the aggregation over the underlying data stream that produced the sample.
+    - `"count"`: A monotonic sum of `1`'s for defined values, and `0`'s for undefined values.
+    - `"sum"`: A potentially non-monotonic sum of defined values.
+    - `"min"`: The lowest ordered value.
+    - `"max"`: The largest ordered value.
+    - `"last"`: The most recent value.
+- `metric_name`: the name of the underlying data stream.
+- `metric_value`: the sample itself. These values are expected to be numeric.
+
+### Cumulative metrics
+
+Metric events with a point extent are cumulative. Their `metric_value` is the result of applying their `metric_agg` over the entire underlying stream up to that point.
+
+The following metric reports the current number of bytes written as 591:
+
+```
+use emit::{Clock, well_known::METRIC_AGG_COUNT};
+
+let rt = emit::runtime::shared();
+
+let now = rt.clock().now();
+
+rt.emit(
+    &emit::Metric::new(
+        emit::module!(),
+        now,
+        "bytes_written",
+        METRIC_AGG_COUNT,
+        591,
+        emit::Empty,
+    ).to_event()
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "`metric_agg` of `metric_name` is `metric_value`",
+    extent: Some(
+        "2024-04-30T06:53:41.069203000Z",
+    ),
+    props: {
+        "event_kind": metric,
+        "metric_name": "bytes_written",
+        "metric_agg": "count",
+        "metric_value": 591,
+    },
+}
+```
+
+### Delta metrics
+
+Metric events with a span extent are deltas. Their `metric_value` is the result of applying their `metric_agg` over the underlying stream within the extent.
+
+The following metric reports that the number of bytes written changed by 17 over the last 30 seconds:
+
+```
+use emit::{Clock, well_known::METRIC_AGG_COUNT};
+
+let rt = emit::runtime::shared();
+
+let now = rt.clock().now();
+let last_sample = now.map(|now| now - std::time::Duration::from_secs(30));
+
+rt.emit(
+    &emit::Metric::new(
+        emit::module!(),
+        last_sample..now,
+        "bytes_written",
+        METRIC_AGG_COUNT,
+        17,
+        emit::Empty,
+    ).to_event()
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "`metric_agg` of `metric_name` is `metric_value`",
+    extent: Some(
+        "2024-04-30T06:55:59.839770000Z".."2024-04-30T06:56:29.839770000Z",
+    ),
+    props: {
+        "event_kind": metric,
+        "metric_name": "bytes_written",
+        "metric_agg": "count",
+        "metric_value": 17,
+    },
+}
+```
+
+### Timeseries metrics
+
+Metric events with a span extent, where the `metric_value` is an array are a complete timeseries. Each element in the array is a bucket in the timeseries. The width of each bucket is the length of the extent divided by the number of buckets.
+
+The following metric is for a timeseries with 15 buckets, where each bucket covers 1 second:
+
+```
+use emit::{Clock, well_known::METRIC_AGG_COUNT};
+
+let rt = emit::runtime::shared();
+
+let now = rt.clock().now();
+let last_sample = now.map(|now| now - std::time::Duration::from_secs(15));
+
+rt.emit(
+    &emit::Metric::new(
+        emit::module!(),
+        last_sample..now,
+        "bytes_written",
+        METRIC_AGG_COUNT,
+        &[
+            0,
+            5,
+            56,
+            0,
+            0,
+            221,
+            7,
+            0,
+            0,
+            5,
+            876,
+            0,
+            194,
+            0,
+            18,
+        ],
+        emit::Empty,
+    ).to_event()
+);
+```
+
+```text
+Event {
+    module: "my_app",
+    tpl: "`metric_agg` of `metric_name` is `metric_value`",
+    extent: Some(
+        "2024-04-30T07:03:07.828185000Z".."2024-04-30T07:03:22.828185000Z",
+    ),
+    props: {
+        "event_kind": metric,
+        "metric_name": "bytes_written",
+        "metric_agg": "count",
+        "metric_value": [
+            0,
+            5,
+            56,
+            0,
+            0,
+            221,
+            7,
+            0,
+            0,
+            5,
+            876,
+            0,
+            194,
+            0,
+            18,
+        ],
+    },
+}
+```
+
 ## Rendering templates
 
 Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:
@@ -776,6 +1083,19 @@ then it will produce the output:
 
 ```text
 Hello, World!
+```
+
+## Troubleshooting
+
+Emitters write their own diagnostics to an alternative `emit` runtime, which you can configure to debug them:
+
+```
+# mod emit_term { pub fn stdout() -> impl emit::runtime::InternalEmitter { emit::runtime::AssertInternal(emit::emitter::from_fn(|_| {})) } }
+let internal_rt = emit::setup()
+    .emit_to(emit_term::stdout())
+    .init_internal();
+
+internal_rt.blocking_flush(std::time::Duration::from_secs(5));
 ```
 */
 
