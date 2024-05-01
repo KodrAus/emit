@@ -1,16 +1,18 @@
 use core::{borrow::Borrow, fmt, hash, marker::PhantomData};
 
 #[cfg(feature = "alloc")]
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 
 pub struct Str<'k> {
     // This type is an optimized `Cow<str>`
     // It avoids the cost of matching the variant to get the inner value
     value: *const str,
-    // Only one of `value_static` or `value_owned` will be set
+    // Only one of `value_static`, `value_owned`, or `value_shared` will be set
     value_static: Option<&'static str>,
     #[cfg(feature = "alloc")]
     value_owned: Option<Box<str>>,
+    #[cfg(feature = "alloc")]
+    value_shared: Option<Arc<str>>,
     _marker: PhantomData<&'k str>,
 }
 
@@ -31,41 +33,65 @@ unsafe impl<'k> Sync for Str<'k> {}
 
 impl<'k> Clone for Str<'k> {
     fn clone(&self) -> Self {
-        match self {
-            #[cfg(feature = "alloc")]
-            Str {
-                value_static,
-                value_owned,
-                value,
-                _marker,
-            } => match value_owned {
-                Some(value_owned) => {
+        #[cfg(feature = "alloc")]
+        {
+            match self {
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: Some(value_owned),
+                    value_shared: _,
+                    _marker,
+                } => {
                     let value_owned = value_owned.clone();
 
                     Str {
                         value: &*value_owned as *const str,
                         value_owned: Some(value_owned),
+                        value_shared: None,
                         value_static: None,
                         _marker: PhantomData,
                     }
                 }
-                None => Str {
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: _,
+                    value_shared: Some(value_shared),
+                    _marker,
+                } => {
+                    let value_shared = value_shared.clone();
+
+                    Str {
+                        value: &*value_shared as *const str,
+                        value_shared: Some(value_shared),
+                        value_owned: None,
+                        value_static: None,
+                        _marker: PhantomData,
+                    }
+                }
+                Str {
+                    value,
+                    value_static,
+                    value_owned: _,
+                    value_shared: _,
+                    _marker,
+                } => Str {
                     value: *value,
                     value_static: *value_static,
                     value_owned: None,
+                    value_shared: None,
                     _marker: PhantomData,
                 },
-            },
-            #[cfg(not(feature = "alloc"))]
+            }
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
             Str {
-                value,
-                value_static,
-                _marker,
-            } => Str {
-                value: *value,
-                value_static: *value_static,
+                value: self.value,
+                value_static: self.value_static,
                 _marker: PhantomData,
-            },
+            }
         }
     }
 }
@@ -77,6 +103,8 @@ impl Str<'static> {
             value_static: Some(k),
             #[cfg(feature = "alloc")]
             value_owned: None,
+            #[cfg(feature = "alloc")]
+            value_shared: None,
             _marker: PhantomData,
         }
     }
@@ -89,6 +117,8 @@ impl<'k> Str<'k> {
             value_static: None,
             #[cfg(feature = "alloc")]
             value_owned: None,
+            #[cfg(feature = "alloc")]
+            value_shared: None,
             _marker: PhantomData,
         }
     }
@@ -99,11 +129,16 @@ impl<'k> Str<'k> {
             value_static: self.value_static,
             #[cfg(feature = "alloc")]
             value_owned: None,
+            #[cfg(feature = "alloc")]
+            value_shared: None,
             _marker: PhantomData,
         }
     }
 
     pub const fn get(&self) -> &str {
+        // NOTE: It's important here that the lifetime returned is not `'k`
+        // If it was it would be possible to return a `&'static str` from
+        // an owned value
         unsafe { &(*self.value) }
     }
 
@@ -260,8 +295,21 @@ mod alloc_support {
 
             Str {
                 value: &*value as *const str,
-                value_static: None,
                 value_owned: Some(value),
+                value_shared: None,
+                value_static: None,
+                _marker: PhantomData,
+            }
+        }
+
+        pub fn new_shared(key: impl Into<Arc<str>>) -> Self {
+            let value = key.into();
+
+            Str {
+                value: &*value as *const str,
+                value_shared: Some(value),
+                value_owned: None,
+                value_static: None,
                 _marker: PhantomData,
             }
         }
@@ -283,9 +331,56 @@ mod alloc_support {
         }
 
         pub fn to_owned(&self) -> Str<'static> {
-            match self.value_static {
-                Some(key) => Str::new(key),
-                None => Str::new_owned(self.get()),
+            match self {
+                Str {
+                    value: _,
+                    value_static: Some(value_static),
+                    value_owned: _,
+                    value_shared: _,
+                    _marker,
+                } => Str::new(value_static),
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: Some(value_owned),
+                    value_shared: _,
+                    _marker,
+                } => Str::new_owned(value_owned.clone()),
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: _,
+                    value_shared: Some(value_shared),
+                    _marker,
+                } => Str::new_shared(value_shared.clone()),
+                str => Str::new_owned(str.get()),
+            }
+        }
+
+        pub fn to_shared(&self) -> Str<'static> {
+            match self {
+                Str {
+                    value: _,
+                    value_static: Some(value_static),
+                    value_owned: _,
+                    value_shared: _,
+                    _marker,
+                } => Str::new(value_static),
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: Some(value_owned),
+                    value_shared: _,
+                    _marker,
+                } => Str::new_shared(value_owned.clone()),
+                Str {
+                    value: _,
+                    value_static: _,
+                    value_owned: _,
+                    value_shared: Some(value_shared),
+                    _marker,
+                } => Str::new_shared(value_shared.clone()),
+                str => Str::new_shared(str.get()),
             }
         }
     }
@@ -299,6 +394,18 @@ mod alloc_support {
     impl From<String> for Str<'static> {
         fn from(value: String) -> Self {
             Str::new_owned(value)
+        }
+    }
+
+    impl From<Box<str>> for Str<'static> {
+        fn from(value: Box<str>) -> Self {
+            Str::new_owned(value)
+        }
+    }
+
+    impl From<Arc<str>> for Str<'static> {
+        fn from(value: Arc<str>) -> Self {
+            Str::new_shared(value)
         }
     }
 

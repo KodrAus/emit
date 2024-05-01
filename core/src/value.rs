@@ -318,6 +318,10 @@ mod alloc_support {
             OwnedValue(self.0.to_owned())
         }
 
+        pub fn to_shared(&self) -> OwnedValue {
+            OwnedValue(self.0.to_shared())
+        }
+
         pub fn to_cow_str(&self) -> Option<Cow<'v, str>> {
             self.0.to_str()
         }

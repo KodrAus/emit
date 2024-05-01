@@ -19,7 +19,6 @@ async fn main() {
     let internal = emit::setup().emit_to(emit_term::stdout()).init_internal();
 
     // Setup via emit_otlp
-    /*
     let emitter = emit::setup()
         .emit_to(
             emit_otlp::new()
@@ -33,7 +32,11 @@ async fn main() {
                     #[emit::key("telemetry.sdk.version")]
                     version: emit_otlp::telemetry_sdk_version(),
                 })
-                .scope(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), emit::props! {})
+                .scope(
+                    env!("CARGO_PKG_NAME"),
+                    env!("CARGO_PKG_VERSION"),
+                    emit::props! {},
+                )
                 .logs(
                     emit_otlp::logs_proto(
                         emit_otlp::grpc("http://localhost:4319").headers([("X-ApiKey", "1234")]),
@@ -51,7 +54,7 @@ async fn main() {
         )
         .and_emit_to(emit_term::stdout())
         .and_emit_to(
-            emit::level::min_level_filter(emit::Level::Warn).wrap_emitter(
+            emit::level::min_filter(emit::Level::Warn).wrap_emitter(
                 emit_file::set("./target/logs/log.txt")
                     .reuse_files(true)
                     .roll_by_minute()
@@ -61,9 +64,9 @@ async fn main() {
             ),
         )
         .init();
-    */
 
     // Setup via opentelemetry
+    /*
     let channel = tonic::transport::Channel::from_static("http://localhost:4319")
         .connect()
         .await
@@ -104,6 +107,7 @@ async fn main() {
             ),
         )
         .init();
+    */
 
     sample_metrics();
 

@@ -1,9 +1,7 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    ops::ControlFlow::{self, *},
-};
+use core::mem;
+use std::{cell::RefCell, collections::HashMap, ops::ControlFlow, sync::Mutex};
 
+use alloc::sync::Arc;
 use emit_core::{
     ctxt::Ctxt,
     props::Props,
@@ -12,19 +10,56 @@ use emit_core::{
     value::{OwnedValue, Value},
 };
 
-// TODO: Optimize this
-thread_local! {
-    static ACTIVE: RefCell<ThreadLocalSpan> = RefCell::new(ThreadLocalSpan {
-        props: HashMap::new(),
-    });
+static NEXT_CTXT_ID: Mutex<usize> = Mutex::new(0);
+
+fn ctxt_id() -> usize {
+    let mut next_id = NEXT_CTXT_ID.lock().unwrap();
+    let id = *next_id;
+    *next_id = id.wrapping_add(1);
+
+    id
 }
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct ThreadLocalCtxt;
+thread_local! {
+    static ACTIVE: RefCell<HashMap<usize, ThreadLocalSpan>> = RefCell::new(HashMap::new());
+}
+
+fn current(id: usize) -> ThreadLocalSpan {
+    ACTIVE.with(|active| {
+        active
+            .borrow_mut()
+            .entry(id)
+            .or_insert_with(|| ThreadLocalSpan { props: None })
+            .clone()
+    })
+}
+
+fn swap(id: usize, incoming: &mut ThreadLocalSpan) {
+    ACTIVE.with(|active| {
+        let mut active = active.borrow_mut();
+
+        let current = active
+            .entry(id)
+            .or_insert_with(|| ThreadLocalSpan { props: None });
+
+        mem::swap(current, incoming);
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ThreadLocalCtxt {
+    id: usize,
+}
+
+impl Default for ThreadLocalCtxt {
+    fn default() -> Self {
+        ThreadLocalCtxt { id: ctxt_id() }
+    }
+}
 
 #[derive(Clone)]
 pub struct ThreadLocalSpan {
-    props: HashMap<Str<'static>, OwnedValue>,
+    props: Option<Arc<HashMap<Str<'static>, OwnedValue>>>,
 }
 
 impl Props for ThreadLocalSpan {
@@ -32,11 +67,13 @@ impl Props for ThreadLocalSpan {
         &'a self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        for (k, v) in &self.props {
-            for_each(k.by_ref(), v.by_ref())?;
+        if let Some(ref props) = self.props {
+            for (k, v) in &**props {
+                for_each(k.by_ref(), v.by_ref())?;
+            }
         }
 
-        Continue(())
+        ControlFlow::Continue(())
     }
 }
 
@@ -45,39 +82,46 @@ impl Ctxt for ThreadLocalCtxt {
     type Frame = ThreadLocalSpan;
 
     fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
-        ACTIVE.with(|span| with(&*span.borrow()))
+        let current = current(self.id);
+        with(&current)
     }
 
     fn open_root<P: Props>(&self, props: P) -> Self::Frame {
-        let mut span = ThreadLocalSpan {
-            props: HashMap::new(),
-        };
+        let mut span = HashMap::new();
 
         props.for_each(|k, v| {
-            span.props.insert(k.to_owned(), v.to_owned());
-            Continue(())
+            span.insert(k.to_shared(), v.to_shared());
+            ControlFlow::Continue(())
         });
 
-        span
+        ThreadLocalSpan {
+            props: Some(Arc::new(span)),
+        }
     }
 
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
-        let mut span = ACTIVE.with(|span| span.borrow().clone());
+        let mut span = current(self.id);
+
+        if span.props.is_none() {
+            span.props = Some(Arc::new(HashMap::new()));
+        }
+
+        let span_props = Arc::make_mut(span.props.as_mut().unwrap());
 
         props.for_each(|k, v| {
-            span.props.insert(k.to_owned(), v.to_owned());
-            Continue(())
+            span_props.insert(k.to_shared(), v.to_shared());
+            ControlFlow::Continue(())
         });
 
         span
     }
 
     fn enter(&self, link: &mut Self::Frame) {
-        ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
+        swap(self.id, link);
     }
 
     fn exit(&self, link: &mut Self::Frame) {
-        ACTIVE.with(|span| std::mem::swap(link, &mut *span.borrow_mut()));
+        swap(self.id, link);
     }
 
     fn close(&self, _: Self::Frame) {}
