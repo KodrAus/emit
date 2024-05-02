@@ -2,13 +2,13 @@
 use emit_core::{clock::ErasedClock, rng::ErasedRng, runtime::AssertInternal};
 
 #[cfg(feature = "std")]
-pub(crate) mod system_clock;
+pub mod system_clock;
 
 #[cfg(feature = "std")]
-pub(crate) mod thread_local_ctxt;
+pub mod thread_local_ctxt;
 
 #[cfg(feature = "rng")]
-pub(crate) mod thread_rng;
+pub mod system_rng;
 
 #[cfg(feature = "std")]
 type DefaultClock = system_clock::SystemClock;
@@ -16,7 +16,7 @@ type DefaultClock = system_clock::SystemClock;
 type DefaultClock = emit_core::empty::Empty;
 
 #[cfg(feature = "rng")]
-type DefaultIdGen = thread_rng::ThreadRng;
+type DefaultIdGen = system_rng::SystemRng;
 #[cfg(not(feature = "rng"))]
 type DefaultIdGen = emit_core::empty::Empty;
 

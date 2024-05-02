@@ -10,7 +10,8 @@ use emit_core::{
     value::{OwnedValue, Value},
 };
 
-static NEXT_CTXT_ID: Mutex<usize> = Mutex::new(0);
+// Start this id from 1 so it doesn't intersect with the `shared` variant below
+static NEXT_CTXT_ID: Mutex<usize> = Mutex::new(1);
 
 fn ctxt_id() -> usize {
     let mut next_id = NEXT_CTXT_ID.lock().unwrap();
@@ -53,7 +54,17 @@ pub struct ThreadLocalCtxt {
 
 impl Default for ThreadLocalCtxt {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ThreadLocalCtxt {
+    pub fn new() -> Self {
         ThreadLocalCtxt { id: ctxt_id() }
+    }
+
+    pub const fn shared() -> Self {
+        ThreadLocalCtxt { id: 0 }
     }
 }
 

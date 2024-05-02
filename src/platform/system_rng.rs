@@ -2,9 +2,15 @@ use emit_core::{rng::Rng, runtime::InternalRng};
 use rand::{Rng as _, RngCore};
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct ThreadRng;
+pub struct SystemRng {}
 
-impl Rng for ThreadRng {
+impl SystemRng {
+    pub const fn new() -> Self {
+        SystemRng {}
+    }
+}
+
+impl Rng for SystemRng {
     fn fill<A: AsMut<[u8]>>(&self, mut arr: A) -> Option<A> {
         rand::thread_rng().fill_bytes(arr.as_mut());
 
@@ -20,4 +26,4 @@ impl Rng for ThreadRng {
     }
 }
 
-impl InternalRng for ThreadRng {}
+impl InternalRng for SystemRng {}
