@@ -516,21 +516,17 @@ let rt = emit::runtime::shared();
 
 // Create a span
 let mut span = emit::Span::filtered_new(
+    |span| rt.filter().matches(&span.to_event()),
+    "my_app",
     emit::Timer::start(rt.clock()),
     "wait a bit",
-    emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
+    emit::span::SpanCtxt::current(rt.ctxt()).new_child(rt.rng()),
     emit::Empty,
-    |extent, props| {
-        rt.filter().matches(&emit::event! {
-            extent,
-            props,
-            "wait a bit",
-        })
-    },
-    |extent, props| {
+    |span| {
         emit::emit!(
-            extent,
-            props,
+            module: span.module(),
+            extent: span.extent(),
+            props: span.props(),
             when: emit::filter::always(),
             "wait a bit",
         );
@@ -568,7 +564,7 @@ let sleep_ms = 1200;
 let rt = emit::runtime::shared();
 
 let timer = emit::Timer::start(rt.clock());
-let props = emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng());
+let props = emit::span::SpanCtxt::current(rt.ctxt()).new_child(rt.rng());
 
 // Check whether the span should be created or not
 let frame = if rt.filter().matches(&emit::event! {
@@ -811,8 +807,14 @@ fn wait_a_bit(sleep_ms: u64) {
     thread::sleep(Duration::from_millis(sleep_ms));
 
     if sleep_ms > 500 {
-        span.complete_with(|extent, props| {
-            emit::warn!(extent, props, when: emit::filter::always(), "wait a bit took too long");
+        span.complete_with(|span| {
+            emit::warn!(
+                module: span.module(),
+                extent: span.extent(),
+                props: span.props(),
+                when: emit::filter::always(),
+                "wait a bit took too long",
+            );
         });
     }
 }

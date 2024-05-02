@@ -871,11 +871,11 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                     .await
                 {
                     Ok(res) => {
-                        span.complete_with(|extent, props| {
+                        span.complete_with(|span| {
                             emit::debug!(
                                 rt: emit::runtime::internal(),
-                                props,
-                                extent,
+                                extent: span.extent(),
+                                props: span.props(),
                                 "OTLP batch of {batch_size} events to {uri}",
                                 batch_size,
                             )
@@ -884,11 +884,11 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
                         res
                     }
                     Err(err) => {
-                        span.complete_with(|extent, props| {
+                        span.complete_with(|span| {
                             emit::warn!(
                                 rt: emit::runtime::internal(),
-                                props,
-                                extent,
+                                extent: span.extent(),
+                                props: span.props(),
                                 "OTLP batch of {batch_size} events to {uri} failed: {err}",
                                 batch_size,
                                 err,

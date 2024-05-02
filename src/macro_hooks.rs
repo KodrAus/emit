@@ -4,7 +4,7 @@ use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
     emitter::Emitter,
-    extent::{Extent, ToExtent},
+    extent::ToExtent,
     filter::Filter,
     path::Path,
     props::Props,
@@ -17,13 +17,13 @@ use emit_core::{
 
 use emit_core::{empty::Empty, event::Event};
 
-use crate::frame::Frame;
+use crate::{frame::Frame, span::SpanEvent};
 
 #[cfg(feature = "std")]
 use std::error::Error;
 
 use crate::{
-    span::{Span, SpanCtxtProps, SpanEventProps, SpanId, TraceId},
+    span::{Span, SpanCtxt, SpanId, TraceId},
     Level, Timer,
 };
 
@@ -528,10 +528,10 @@ pub fn __private_begin_span<
     C: Ctxt,
     T: Clock,
     R: Rng,
-    S: FnOnce(Option<Extent>, SpanEventProps<Empty>),
+    S: FnOnce(SpanEvent<'static, Empty>),
 >(
     rt: &'a Runtime<E, F, C, T, R>,
-    module: impl Into<Path<'b>>,
+    module: impl Into<Path<'static>>,
     when: Option<impl Filter>,
     tpl: Template<'b>,
     ctxt_props: impl Props,
@@ -540,24 +540,40 @@ pub fn __private_begin_span<
     default_complete: S,
 ) -> (Frame<Option<&'a C>>, Span<'static, &'a T, Empty, S>) {
     let mut span = Span::filtered_new(
+        |span| {
+            FirstDefined(when, rt.filter()).matches(
+                &span
+                    .to_event()
+                    .with_tpl(tpl)
+                    .map_props(|props| props.chain(&ctxt_props).chain(&evt_props)),
+            )
+        },
+        module,
         Timer::start(rt.clock()),
         name,
-        SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
+        SpanCtxt::current(rt.ctxt()).new_child(rt.rng()),
         Empty,
-        |extent, props| {
-            FirstDefined(when, rt.filter()).matches(&Event::new(
-                module,
-                extent,
-                tpl,
-                ctxt_props.by_ref().chain(props).chain(&evt_props),
-            ))
-        },
         default_complete,
     );
 
     let frame = span.push_ctxt(rt.ctxt(), ctxt_props);
 
     (frame, span)
+}
+
+#[track_caller]
+pub fn __private_complete_span<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
+    span: SpanEvent<'static, Empty>,
+    tpl: Template<'b>,
+    evt_props: impl Props,
+) {
+    rt.emitter().emit(
+        &span
+            .to_event()
+            .with_tpl(tpl)
+            .map_props(|props| props.chain(evt_props)),
+    );
 }
 
 #[repr(transparent)]

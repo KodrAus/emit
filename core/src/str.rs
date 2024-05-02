@@ -215,6 +215,12 @@ impl<'a> From<&'a str> for Str<'a> {
     }
 }
 
+impl<'a, 'b> From<&'a Str<'b>> for Str<'a> {
+    fn from(value: &'a Str<'b>) -> Self {
+        value.by_ref()
+    }
+}
+
 impl<'k> ToValue for Str<'k> {
     fn to_value(&self) -> Value {
         self.get().to_value()

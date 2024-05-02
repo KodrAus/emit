@@ -25,6 +25,12 @@ impl<'a> From<Str<'a>> for Path<'a> {
     }
 }
 
+impl<'a, 'b> From<&'a Path<'b>> for Path<'a> {
+    fn from(value: &'a Path<'b>) -> Self {
+        value.by_ref()
+    }
+}
+
 impl<'a> ToValue for Path<'a> {
     fn to_value(&self) -> Value {
         self.0.to_value()

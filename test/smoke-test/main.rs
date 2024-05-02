@@ -189,53 +189,35 @@ async fn in_ctxt(a: i32) -> Result<(), io::Error> {
     .await;
 
     if let Err(ref err) = r {
-        span.complete_with(|extent, props| emit::warn!(extent, props, "in_ctxt failed with {err}"));
+        span.complete_with(|span| {
+            emit::warn!(
+                module: span.module(),
+                extent: span.extent(),
+                props: span.props(),
+                "in_ctxt failed with {err}",
+            );
+        });
     }
 
     r
 }
 
+#[emit::span(arg: span, "in_ctxt2", b, bx: 90)]
 async fn in_ctxt2(b: i32) {
-    let rt = emit::runtime::shared();
+    tokio::time::sleep(Duration::from_millis(17)).await;
 
-    let span = emit::Span::filtered_new(
-        emit::Timer::start(rt.clock()),
-        "in_ctxt2",
-        emit::span::SpanCtxtProps::current(rt.ctxt()).new_child(rt.rng()),
-        emit::empty::Empty,
-        |extent, props| {
-            rt.filter()
-                .matches(&emit::event!(extent, props, "in_ctxt2", b))
-        },
-        |extent, props| {
-            emit::emit!(
-                rt,
-                extent,
-                props,
-                "in_ctxt2",
-                b,
-                bx: 90,
-            )
-        },
-    );
-
-    // TODO: This is a bit of a nasty pattern; should add `span::push`
-    emit::Frame::push(rt.ctxt(), span.ctxt())
-        .in_future(async {
-            tokio::time::sleep(Duration::from_millis(17)).await;
-
-            emit::warn!(
-                rt,
-                "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
-                #[emit::fmt(">08")]
-                x: 15,
-                #[emit::optional]
-                z: None::<i32>,
-            );
-
-            drop(span);
-        })
-        .await
+    span.complete_with(|span| {
+        emit::warn!(
+            module: span.module(),
+            extent: span.extent(),
+            props: span.props(),
+            "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
+            #[emit::fmt(">08")]
+            x: 15,
+            #[emit::optional]
+            z: None::<i32>,
+        );
+    });
 }
 
 static COUNT: AtomicUsize = AtomicUsize::new(0);

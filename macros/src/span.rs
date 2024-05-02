@@ -166,14 +166,12 @@ fn inject_sync(
             #ctxt_props_tokens,
             #evt_props_tokens,
             #template_literal_tokens,
-            |extent, props| {
-                emit::__private::__private_emit(
+            |span| {
+                emit::__private::__private_complete_span(
                     #rt_tokens,
-                    #module_tokens,
-                    emit::__private::__private_filter_span_complete(),
-                    extent,
+                    span,
                     #template_tokens,
-                    emit::Props::chain(props, #evt_props_tokens),
+                    #evt_props_tokens,
                 )
             }
         );
@@ -209,14 +207,12 @@ fn inject_async(
             #ctxt_props_tokens,
             #evt_props_tokens,
             #template_literal_tokens,
-            |extent, props| {
-                emit::__private::__private_emit(
+            |span| {
+                emit::__private::__private_complete_span(
                     #rt_tokens,
-                    #module_tokens,
-                    emit::__private::__private_filter_span_complete(),
-                    extent,
+                    span,
                     #template_tokens,
-                    emit::Props::chain(props, #evt_props_tokens),
+                    #evt_props_tokens,
                 )
             }
         );

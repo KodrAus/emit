@@ -85,6 +85,15 @@ impl<'a, P> Event<'a, P> {
             props,
         }
     }
+
+    pub fn map_props<U>(self, map: impl FnOnce(P) -> U) -> Event<'a, U> {
+        Event {
+            module: self.module,
+            extent: self.extent,
+            tpl: self.tpl,
+            props: map(self.props),
+        }
+    }
 }
 
 impl<'a, P: Props> Event<'a, P> {

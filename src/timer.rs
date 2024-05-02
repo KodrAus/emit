@@ -33,6 +33,13 @@ impl<C: Clock> Timer<C> {
         self.extent().and_then(|extent| extent.len())
     }
 
+    pub fn by_ref(&self) -> Timer<&C> {
+        Timer {
+            start: self.start,
+            clock: &self.clock,
+        }
+    }
+
     pub fn on_drop<F: FnOnce(Option<Extent>)>(self, complete: F) -> TimerGuard<C, F> {
         TimerGuard::new(self, complete)
     }

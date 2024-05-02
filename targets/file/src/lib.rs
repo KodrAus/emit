@@ -395,11 +395,11 @@ impl Worker {
 
         if file.is_none() {
             if let Err(err) = fs::create_dir_all(&self.dir) {
-                span.complete_with(|extent, props| {
+                span.complete_with(|span| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
-                        extent,
-                        props,
+                        extent: span.extent(),
+                        props: span.props(),
                         "failed to create root directory {path}: {err}",
                         #[emit::as_debug]
                         path: &self.dir,
@@ -507,11 +507,11 @@ impl Worker {
             if let Err(err) = file.write_event(buf) {
                 self.metrics.file_write_failed.increment();
 
-                span.complete_with(|extent, props| {
+                span.complete_with(|span| {
                     emit::warn!(
                         rt: emit::runtime::internal(),
-                        extent,
-                        props,
+                        extent: span.extent(),
+                        props: span.props(),
                         "failed to write event to {path}: {err}",
                         #[emit::as_debug]
                         path: file.file_path,
@@ -532,11 +532,11 @@ impl Worker {
             .sync_all()
             .map_err(|e| emit_batcher::BatchError::no_retry(e))?;
 
-        span.complete_with(|extent, props| {
+        span.complete_with(|span| {
             emit::debug!(
                 rt: emit::runtime::internal(),
-                extent,
-                props,
+                extent: span.extent(),
+                props: span.props(),
                 "wrote {written_bytes} bytes to {path}",
                 written_bytes,
                 #[emit::as_debug]
