@@ -515,6 +515,27 @@ pub fn __private_emit<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 }
 
 #[track_caller]
+pub fn __private_emit_event<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
+    when: Option<impl Filter>,
+    mut event: Event<'b, impl Props>,
+    tpl: Option<Template<'b>>,
+    props: impl Props,
+) {
+    rt.ctxt().with_current(|ctxt| {
+        if let Some(tpl) = tpl {
+            event = event.with_tpl(tpl);
+        }
+
+        let event = event.map_props(|event_props| props.chain(event_props).chain(ctxt));
+
+        if FirstDefined(when, rt.filter()).matches(&event) {
+            rt.emitter().emit(&event);
+        }
+    });
+}
+
+#[track_caller]
 pub fn __private_begin_span<
     'a,
     'b,

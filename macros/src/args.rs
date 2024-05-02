@@ -114,6 +114,10 @@ impl<T> Arg<T> {
         }
     }
 
+    pub fn peek(&self) -> Option<&T> {
+        self.value.as_ref()
+    }
+
     pub fn take(self) -> Option<T> {
         self.value
     }

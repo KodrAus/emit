@@ -30,17 +30,17 @@ impl Parse for Args {
         let mut rt = Arg::token_stream("rt", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
         let mut module = Arg::token_stream("module", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
         let mut when = Arg::token_stream("when", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
         let mut arg = Arg::ident("arg");
 

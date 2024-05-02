@@ -47,7 +47,7 @@ impl Parse for Args {
                 {
                     Ok(Name::Str(lit.value()))
                 } else {
-                    Ok(Name::Any(quote!(#expr)))
+                    Ok(Name::Any(quote_spanned!(expr.span()=> #expr)))
                 }
             });
 

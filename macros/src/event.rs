@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use syn::{parse::Parse, FieldValue, Ident};
+use syn::{parse::Parse, spanned::Spanned, FieldValue, Ident};
 
 use crate::{
     args::{self, Arg},
@@ -24,18 +24,18 @@ impl Parse for Args {
         let mut module = Arg::token_stream("module", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
         let mut extent = Arg::token_stream("extent", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
 
         let mut props = Arg::token_stream("props", |fv| {
             let expr = &fv.expr;
 
-            Ok(quote!(#expr))
+            Ok(quote_spanned!(expr.span()=> #expr))
         });
 
         args::set_from_field_values(

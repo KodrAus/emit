@@ -524,9 +524,7 @@ let mut span = emit::Span::filtered_new(
     emit::Empty,
     |span| {
         emit::emit!(
-            module: span.module(),
-            extent: span.extent(),
-            props: span.props(),
+            event: span.to_event(),
             when: emit::filter::always(),
             "wait a bit",
         );
@@ -809,9 +807,7 @@ fn wait_a_bit(sleep_ms: u64) {
     if sleep_ms > 500 {
         span.complete_with(|span| {
             emit::warn!(
-                module: span.module(),
-                extent: span.extent(),
-                props: span.props(),
+                event: span.to_event(),
                 when: emit::filter::always(),
                 "wait a bit took too long",
             );
