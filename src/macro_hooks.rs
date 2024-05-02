@@ -492,11 +492,6 @@ impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
 }
 
 #[track_caller]
-pub fn __private_filter_span_complete() -> Option<impl Filter + Send + Sync + 'static> {
-    Some(crate::filter::always())
-}
-
-#[track_caller]
 pub fn __private_emit<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
     module: impl Into<Path<'b>>,
@@ -568,11 +563,13 @@ pub fn __private_complete_span<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock,
     tpl: Template<'b>,
     evt_props: impl Props,
 ) {
-    rt.emitter().emit(
-        &span
-            .to_event()
-            .with_tpl(tpl)
-            .map_props(|props| props.chain(evt_props)),
+    __private_emit(
+        rt,
+        span.module(),
+        Some(crate::filter::always()),
+        span.extent(),
+        tpl,
+        evt_props.chain(&span),
     );
 }
 

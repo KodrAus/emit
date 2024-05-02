@@ -217,7 +217,7 @@ fn inject_async(
             }
         );
 
-        __ctxt.in_future(async {
+        __ctxt.in_future(async move {
             let #span_arg = __span_arg;
 
             async #body.await
