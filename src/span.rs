@@ -64,10 +64,7 @@ impl<'v> FromValue<'v> for TraceId {
 
 impl TraceId {
     pub fn random<R: Rng>(rng: R) -> Option<Self> {
-        let a = rng.gen_u64()? as u128;
-        let b = (rng.gen_u64()? as u128) << 64;
-
-        Some(TraceId::new(NonZeroU128::new(a | b)?))
+        Some(TraceId::new(NonZeroU128::new(rng.gen_u128()?)?))
     }
 
     pub const fn new(v: NonZeroU128) -> Self {
@@ -180,9 +177,7 @@ impl<'v> FromValue<'v> for SpanId {
 
 impl SpanId {
     pub fn random<R: Rng>(rng: R) -> Option<Self> {
-        let a = rng.gen_u64()?;
-
-        Some(SpanId::new(NonZeroU64::new(a)?))
+        Some(SpanId::new(NonZeroU64::new(rng.gen_u64()?)?))
     }
 
     pub const fn new(v: NonZeroU64) -> Self {

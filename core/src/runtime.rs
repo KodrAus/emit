@@ -247,8 +247,16 @@ impl<T: Clock> Clock for AssertInternal<T> {
 }
 
 impl<T: Rng> Rng for AssertInternal<T> {
+    fn fill<A: AsMut<[u8]>>(&self, arr: A) -> Option<A> {
+        self.0.fill(arr)
+    }
+
     fn gen_u64(&self) -> Option<u64> {
         self.0.gen_u64()
+    }
+
+    fn gen_u128(&self) -> Option<u128> {
+        self.0.gen_u128()
     }
 }
 
