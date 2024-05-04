@@ -87,17 +87,17 @@ impl Arg<TokenStream> {
     }
 
     pub fn take_rt(self) -> Result<TokenStream, syn::Error> {
-        #[cfg(feature = "implicit-rt")]
+        #[cfg(feature = "implicit_rt")]
         {
             Ok(self
                 .take()
                 .unwrap_or_else(|| quote!(emit::runtime::shared())))
         }
-        #[cfg(not(feature = "implicit-rt"))]
+        #[cfg(not(feature = "implicit_rt"))]
         {
             use proc_macro2::Span;
 
-            self.take().ok_or_else(|| syn::Error::new(Span::call_site(), "a runtime must be specified by the `rt` parameter unless the `implicit-rt` feature of `emit` is enabled"))
+            self.take().ok_or_else(|| syn::Error::new(Span::call_site(), "a runtime must be specified by the `rt` parameter unless the `implicit_rt` feature of `emit` is enabled"))
         }
     }
 }

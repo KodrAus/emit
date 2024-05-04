@@ -19,19 +19,20 @@ authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2021"
 
 [features]
-default = ["std", "rng", "implicit-rt"]
+default = ["std", "rng", "implicit_rt"]
 std = ["alloc", "emit_macros/std", "emit_core/std", "rng"]
 alloc = ["emit_core/alloc"]
 sval = ["emit_macros/sval", "emit_core/sval", "dep:sval"]
 serde = ["emit_macros/serde", "emit_core/serde", "dep:serde"]
 rng = ["dep:rand"]
-implicit-rt = ["emit_macros/implicit-rt"]
+implicit_rt = ["emit_core/implicit_rt", "emit_macros/implicit_rt"]
 
 [dependencies.emit_macros]
 path = "macros"
 
 [dependencies.emit_core]
 path = "core"
+default-features = false
 
 [dependencies.value-bag]
 version = "1"

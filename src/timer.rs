@@ -1,6 +1,6 @@
 use core::time::Duration;
 
-use crate::{Clock, Extent, Timestamp, ToExtent};
+use crate::{extent::ToExtent, Clock, Extent, Timestamp};
 
 #[derive(Clone, Copy)]
 pub struct Timer<C> {

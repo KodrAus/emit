@@ -1130,13 +1130,13 @@ static RUNTIME: emit::runtime::Runtime<
     emit::Empty,
     emit::platform::thread_local_ctxt::ThreadLocalCtxt,
     emit::platform::system_clock::SystemClock,
-    emit::platform::system_rng::SystemRng,
+    emit::platform::rand_rng::RandRng,
 > = emit::runtime::Runtime::build(
     MyEmitter,
     emit::Empty,
     emit::platform::thread_local_ctxt::ThreadLocalCtxt::shared(),
     emit::platform::system_clock::SystemClock::new(),
-    emit::platform::system_rng::SystemRng::new(),
+    emit::platform::rand_rng::RandRng::new(),
 );
 
 struct MyEmitter;
@@ -1191,9 +1191,7 @@ fn main() {
 extern crate alloc;
 extern crate core;
 
-use emit_core::extent::ToExtent;
-
-pub use std::module_path as module;
+pub use core::module_path as module;
 
 #[doc(inline)]
 pub use emit_macros::*;

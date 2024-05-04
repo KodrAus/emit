@@ -3,21 +3,27 @@ use crate::{
     filter::Filter, props::Props, rng::Rng, timestamp::Timestamp,
 };
 
+#[cfg(feature = "implicit_rt")]
 static SHARED: AmbientSlot = AmbientSlot::new();
+#[cfg(feature = "implicit_rt")]
 static INTERNAL: AmbientInternalSlot = AmbientInternalSlot::new();
 
+#[cfg(feature = "implicit_rt")]
 pub fn shared() -> &'static AmbientRuntime<'static> {
     SHARED.get()
 }
 
+#[cfg(feature = "implicit_rt")]
 pub fn shared_slot() -> &'static AmbientSlot {
     &SHARED
 }
 
+#[cfg(feature = "implicit_rt")]
 pub fn internal() -> &'static AmbientRuntime<'static> {
     INTERNAL.get()
 }
 
+#[cfg(feature = "implicit_rt")]
 pub fn internal_slot() -> &'static AmbientInternalSlot {
     &INTERNAL
 }
@@ -418,6 +424,7 @@ mod std_support {
 
     pub struct AmbientSlot(OnceLock<AmbientSync>);
 
+    #[cfg(feature = "implicit_rt")]
     pub struct AmbientInternalSlot(AmbientSlot);
 
     struct AmbientSync {
@@ -525,6 +532,7 @@ mod std_support {
         }
     }
 
+    #[cfg(feature = "implicit_rt")]
     impl AmbientInternalSlot {
         pub(in crate::runtime) const fn new() -> Self {
             AmbientInternalSlot(AmbientSlot(OnceLock::new()))
@@ -564,6 +572,7 @@ mod no_std_support {
 
     pub struct AmbientSlot {}
 
+    #[cfg(feature = "implicit_rt")]
     pub struct AmbientInternalSlot(AmbientSlot);
 
     impl AmbientSlot {
@@ -583,6 +592,7 @@ mod no_std_support {
         }
     }
 
+    #[cfg(feature = "implicit_rt")]
     impl AmbientInternalSlot {
         pub(in crate::runtime) const fn new() -> Self {
             AmbientInternalSlot(AmbientSlot::new())
