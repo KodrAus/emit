@@ -1,3 +1,15 @@
+/*!
+A diagnostic framework for Rust applications.
+
+This library is the core API of `emit`, defining the fundamental abstractions used by the higher-level `emit` crate. This library is home to [`event::Event`], `emit`'s model of diagnostic data through with their [`template::Template`], [`props::Props`], and [`extent::Extent`].
+
+In this library is also the all-encapsulating [`runtime::Runtime`], which collects the platform capabilities and event processing pipeline into a single value that powers the diagnostics for your applications.
+
+If you're looking to explore and understand `emit`'s API, you can start with [`runtime::Runtime`] and [`event::Event`] and follow their encapsulated types.
+
+If you're looking to use `emit` in an application you can use this library directly, but `emit` itself is recommended.
+*/
+
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 #[cfg(feature = "alloc")]

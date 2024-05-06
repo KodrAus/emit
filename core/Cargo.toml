@@ -13,6 +13,7 @@ implicit_rt = []
 [dependencies.value-bag]
 version = "1"
 features = ["inline-i128", "seq"]
+default-features = false
 
 [dependencies.sval]
 version = "2"
