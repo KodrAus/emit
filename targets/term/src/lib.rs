@@ -51,8 +51,10 @@ fn with_shared_buf(writer: &BufferWriter, with_buf: impl FnOnce(&BufferWriter, &
 }
 
 impl emit::emitter::Emitter for Stdout {
-    fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
-        with_shared_buf(&self.writer, |writer, buf| print_event(writer, buf, evt));
+    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
+        let evt = evt.to_event();
+
+        with_shared_buf(&self.writer, |writer, buf| print_event(writer, buf, &evt));
     }
 
     fn blocking_flush(&self, _: Duration) {}

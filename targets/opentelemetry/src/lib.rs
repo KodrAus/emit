@@ -273,8 +273,10 @@ impl OpenTelemetryEmitter {
 }
 
 impl emit::Emitter for OpenTelemetryEmitter {
-    fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
-        if emit::kind::is_span_filter().matches(evt) {
+    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
+        let evt = evt.to_event();
+
+        if emit::kind::is_span_filter().matches(&evt) {
             let mut emitted = false;
             with_current(|frame| {
                 if frame.open {
@@ -294,7 +296,7 @@ impl emit::Emitter for OpenTelemetryEmitter {
                             "{}",
                             MessageRenderer {
                                 fmt: &self.span_name,
-                                evt
+                                evt: &evt,
                             }
                         );
 
@@ -357,7 +359,7 @@ impl emit::Emitter for OpenTelemetryEmitter {
             "{}",
             MessageRenderer {
                 fmt: &self.log_body,
-                evt
+                evt: &evt,
             }
         );
         record = record.with_body(body);

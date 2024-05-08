@@ -4,6 +4,7 @@ use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
     emitter::Emitter,
+    event::ToEvent,
     extent::ToExtent,
     filter::Filter,
     path::Path,
@@ -482,7 +483,9 @@ pub fn __private_format(tpl: Template, props: impl Props) -> alloc::string::Stri
 struct FirstDefined<A, B>(Option<A>, B);
 
 impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
-    fn matches<P: Props>(&self, evt: &emit_core::event::Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        let evt = evt.to_event();
+
         if let Some(ref first) = self.0 {
             return first.matches(evt);
         }
@@ -518,11 +521,13 @@ pub fn __private_emit<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
 pub fn __private_emit_event<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
     rt: &'a Runtime<E, F, C, T, R>,
     when: Option<impl Filter>,
-    mut event: Event<'b, impl Props>,
+    event: &'b impl ToEvent,
     tpl: Option<Template<'b>>,
     props: impl Props,
 ) {
     rt.ctxt().with_current(|ctxt| {
+        let mut event = event.to_event();
+
         if let Some(tpl) = tpl {
             event = event.with_tpl(tpl);
         }

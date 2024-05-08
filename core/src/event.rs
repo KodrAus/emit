@@ -4,6 +4,8 @@ The [`Event`] type.
 Events are the timestamped combination of [`Template`] and [`Props`] that describe what the event was and any ambient state surrounding it.
 
 Events are a generic abstraction. They only directly define the concepts that are common to all diagnostics. Specific kinds of diagnostic events, like logs, traces, or metric samples, are modeled on top of events using [crate::well_known] key-values in their props.
+
+Events can be constructed directly, or generically through the [`ToEvent`] trait.
 */
 
 use core::{fmt, ops::ControlFlow};
@@ -216,5 +218,38 @@ impl<'a, P: Props> fmt::Debug for Event<'a, P> {
         f.field("props", &AsDebug(&self.props));
 
         f.finish()
+    }
+}
+
+/**
+Convert a value into an [`Event`].
+*/
+pub trait ToEvent {
+    /**
+    The kind of [`Props`] on the resulting value.
+    */
+    type Props<'a>: Props
+    where
+        Self: 'a;
+
+    /**
+    Perform the conversion.
+    */
+    fn to_event<'a>(&'a self) -> Event<Self::Props<'a>>;
+}
+
+impl<'a, T: ToEvent + ?Sized> ToEvent for &'a T {
+    type Props<'b> = T::Props<'b> where Self: 'b;
+
+    fn to_event<'b>(&'b self) -> Event<Self::Props<'b>> {
+        (**self).to_event()
+    }
+}
+
+impl<'a, P: Props> ToEvent for Event<'a, P> {
+    type Props<'b> = ByRef<'b, P> where Self: 'b;
+
+    fn to_event<'b>(&'b self) -> Event<Self::Props<'b>> {
+        self.by_ref()
     }
 }

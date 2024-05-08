@@ -172,7 +172,9 @@ impl FileSet {
 }
 
 impl emit::Emitter for FileSet {
-    fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
+    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
+        let evt = evt.to_event();
+
         let mut buf = FileBuf::new();
 
         match (self.writer)(&mut buf, &evt.erase()) {
@@ -199,7 +201,7 @@ impl emit::Emitter for FileSet {
             let rt = rt.get();
 
             for metric in self.sample_metrics() {
-                rt.emit(&metric.to_event());
+                rt.emit(metric);
             }
         }
     }

@@ -104,7 +104,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
             emit::__private::__private_emit_event(
                 #rt_tokens,
                 #when_tokens,
-                #event_tokens,
+                &#event_tokens,
                 Some(#template_tokens),
                 #props_tokens,
             );

@@ -1,3 +1,5 @@
+// TODO: Treat `_` props as "silent" or reserved?
+
 // Event
 pub const KEY_MODULE: &'static str = "module";
 pub const KEY_TS: &'static str = "ts";

@@ -31,21 +31,23 @@ impl Otlp {
 }
 
 impl emit::emitter::Emitter for Otlp {
-    fn emit<P: emit::props::Props>(&self, evt: &emit::event::Event<P>) {
+    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
+        let evt = evt.to_event();
+
         if let Some(ref encoder) = self.otlp_metrics {
-            if let Some(encoded) = encoder.encode_event(evt) {
+            if let Some(encoded) = encoder.encode_event(&evt) {
                 return self.sender.send(ChannelItem::Metric(encoded));
             }
         }
 
         if let Some(ref encoder) = self.otlp_traces {
-            if let Some(encoded) = encoder.encode_event(evt) {
+            if let Some(encoded) = encoder.encode_event(&evt) {
                 return self.sender.send(ChannelItem::Span(encoded));
             }
         }
 
         if let Some(ref encoder) = self.otlp_logs {
-            if let Some(encoded) = encoder.encode_event(evt) {
+            if let Some(encoded) = encoder.encode_event(&evt) {
                 return self.sender.send(ChannelItem::LogRecord(encoded));
             }
         }
@@ -61,7 +63,7 @@ impl emit::emitter::Emitter for Otlp {
             let rt = rt.get();
 
             for metric in self.sample_metrics() {
-                rt.emit(&metric.to_event());
+                rt.emit(metric);
             }
         }
     }

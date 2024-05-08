@@ -1,7 +1,7 @@
 use core::ops::ControlFlow;
 
 use emit_core::{
-    event::Event,
+    event::{Event, ToEvent},
     extent::{Extent, ToExtent},
     path::Path,
     props::{ByRef, ErasedProps, Props},
@@ -100,8 +100,12 @@ impl<'a, P> Metric<'a, P> {
             props,
         }
     }
+}
 
-    pub fn to_event(&self) -> Event<&Self> {
+impl<'a, P: Props> ToEvent for Metric<'a, P> {
+    type Props<'b> = &'b Self where Self: 'b;
+
+    fn to_event<'b>(&'b self) -> Event<Self::Props<'b>> {
         // "{metric_agg} of {metric_name} is {metric_value}"
         const TEMPLATE: &'static [template::Part<'static>] = &[
             template::Part::hole("metric_agg"),

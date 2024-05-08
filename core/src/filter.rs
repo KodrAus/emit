@@ -3,12 +3,12 @@ use core::time::Duration;
 use crate::{
     emitter::Emitter,
     empty::Empty,
-    event::Event,
-    props::{ErasedProps, Props},
+    event::{Event, ToEvent},
+    props::ErasedProps,
 };
 
 pub trait Filter {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool;
+    fn matches<E: ToEvent>(&self, evt: E) -> bool;
 
     fn and_when<U>(self, other: U) -> And<Self, U>
     where
@@ -46,20 +46,20 @@ pub trait Filter {
 }
 
 impl<'a, F: Filter + ?Sized> Filter for &'a F {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         (**self).matches(evt)
     }
 }
 
 #[cfg(feature = "alloc")]
 impl<'a, F: Filter + ?Sized + 'a> Filter for alloc::boxed::Box<F> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         (**self).matches(evt)
     }
 }
 
 impl<F: Filter> Filter for Option<F> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         match self {
             Some(filter) => filter.matches(evt),
             None => Empty.matches(evt),
@@ -68,22 +68,22 @@ impl<F: Filter> Filter for Option<F> {
 }
 
 impl Filter for Empty {
-    fn matches<P: Props>(&self, _: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, _: E) -> bool {
         true
     }
 }
 
 impl Filter for fn(&Event<&dyn ErasedProps>) -> bool {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        (self)(&evt.erase())
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        (self)(&evt.to_event().erase())
     }
 }
 
 pub struct FromFn<F>(F);
 
 impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        (self.0)(&evt.erase())
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        (self.0)(&evt.to_event().erase())
     }
 }
 
@@ -97,8 +97,10 @@ pub struct Wrap<F, E> {
 }
 
 impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
-        if self.filter.matches(evt) {
+    fn emit<T: ToEvent>(&self, evt: T) {
+        let evt = evt.to_event();
+
+        if self.filter.matches(&evt) {
             self.emitter.emit(evt);
         }
     }
@@ -128,8 +130,10 @@ impl<T, U> And<T, U> {
 }
 
 impl<T: Filter, U: Filter> Filter for And<T, U> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.left.matches(evt) && self.right.matches(evt)
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        let evt = evt.to_event();
+
+        self.left.matches(&evt) && self.right.matches(&evt)
     }
 }
 
@@ -149,15 +153,17 @@ impl<T, U> Or<T, U> {
 }
 
 impl<T: Filter, U: Filter> Filter for Or<T, U> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.left.matches(evt) || self.right.matches(evt)
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        let evt = evt.to_event();
+
+        self.left.matches(&evt) || self.right.matches(&evt)
     }
 }
 
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         self.0.matches(evt)
     }
 }
@@ -195,13 +201,15 @@ impl<T: Filter> internal::DispatchFilter for T {
 }
 
 impl<'a> Filter for dyn ErasedFilter + 'a {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        self.erase_when().0.dispatch_matches(&evt.erase())
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        self.erase_when()
+            .0
+            .dispatch_matches(&evt.to_event().erase())
     }
 }
 
 impl<'a> Filter for dyn ErasedFilter + Send + Sync + 'a {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         (self as &(dyn ErasedFilter + 'a)).matches(evt)
     }
 }

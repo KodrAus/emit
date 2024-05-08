@@ -1,5 +1,5 @@
 use crate::{
-    clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::Event, extent::ToExtent,
+    clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::ToEvent, extent::ToExtent,
     filter::Filter, props::Props, rng::Rng, timestamp::Timestamp,
 };
 
@@ -181,19 +181,19 @@ impl<TEmitter, TFilter, TCtxt, TClock, TRng> Runtime<TEmitter, TFilter, TCtxt, T
 impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
     Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
 {
-    pub fn emit<P: Props>(&self, evt: &Event<P>) {
+    pub fn emit<E: ToEvent>(&self, evt: E) {
         self.ctxt.with_current(|ctxt| {
-            let evt = Event::new(
-                evt.module().by_ref(),
-                evt.extent()
-                    .cloned()
-                    .or_else(|| self.clock.now().to_extent()),
-                evt.tpl().by_ref(),
-                ctxt.chain(evt.props()),
-            );
+            let evt = evt.to_event();
+
+            let extent = evt
+                .extent()
+                .cloned()
+                .or_else(|| self.clock.now().to_extent());
+
+            let evt = evt.with_extent(extent).map_props(|props| props.chain(ctxt));
 
             if self.filter.matches(&evt) {
-                self.emitter.emit(&evt);
+                self.emitter.emit(evt);
             }
         });
     }
@@ -202,7 +202,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
 pub struct AssertInternal<T>(pub T);
 
 impl<T: Emitter> Emitter for AssertInternal<T> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         self.0.emit(evt)
     }
 
@@ -212,7 +212,7 @@ impl<T: Emitter> Emitter for AssertInternal<T> {
 }
 
 impl<T: Filter> Filter for AssertInternal<T> {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
         self.0.matches(evt)
     }
 }

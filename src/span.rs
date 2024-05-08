@@ -1,7 +1,7 @@
 use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
-    event::Event,
+    event::{Event, ToEvent},
     extent::{Extent, ToExtent},
     path::Path,
     props::Props,
@@ -408,8 +408,12 @@ impl<'a, P: Props> SpanEvent<'a, P> {
     pub fn props(&self) -> &P {
         &self.props
     }
+}
 
-    pub fn to_event<'b>(&'b self) -> Event<&Self> {
+impl<'a, P: Props> ToEvent for SpanEvent<'a, P> {
+    type Props<'b> = &'b Self where Self: 'b;
+
+    fn to_event<'b>(&'b self) -> Event<Self::Props<'b>> {
         // "{span_name} completed"
         const TEMPLATE: &'static [template::Part<'static>] = &[
             template::Part::hole("span_name"),
@@ -438,7 +442,6 @@ impl<'a, P: Props> Props for SpanEvent<'a, P> {
     }
 }
 
-// TODO: Make this `SpanCtxt`
 #[derive(Debug, Clone, Copy)]
 pub struct SpanCtxt {
     trace_id: Option<TraceId>,

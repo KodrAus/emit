@@ -516,7 +516,7 @@ let rt = emit::runtime::shared();
 
 // Create a span
 let mut span = emit::Span::filtered_new(
-    |span| rt.filter().matches(&span.to_event()),
+    |span| rt.filter().matches(&span),
     "my_app",
     emit::Timer::start(rt.clock()),
     "wait a bit",
@@ -524,7 +524,7 @@ let mut span = emit::Span::filtered_new(
     emit::Empty,
     |span| {
         emit::emit!(
-            event: span.to_event(),
+            event: span,
             when: emit::filter::always(),
             "wait a bit",
         );
@@ -807,7 +807,7 @@ fn wait_a_bit(sleep_ms: u64) {
     if sleep_ms > 500 {
         span.complete_with(|span| {
             emit::warn!(
-                event: span.to_event(),
+                event: span,
                 when: emit::filter::always(),
                 "wait a bit took too long",
             );
@@ -869,14 +869,14 @@ let now = rt.clock().now();
 let sample = sample_bytes_written();
 
 rt.emit(
-    &emit::Metric::new(
+    emit::Metric::new(
         emit::module!(),
         now,
         "bytes_written",
         METRIC_AGG_COUNT,
         sample,
         emit::Empty,
-    ).to_event()
+    )
 );
 ```
 
@@ -939,14 +939,14 @@ let rt = emit::runtime::shared();
 let now = rt.clock().now();
 
 rt.emit(
-    &emit::Metric::new(
+    emit::Metric::new(
         emit::module!(),
         now,
         "bytes_written",
         METRIC_AGG_COUNT,
         591,
         emit::Empty,
-    ).to_event()
+    )
 );
 ```
 
@@ -981,14 +981,14 @@ let now = rt.clock().now();
 let last_sample = now.map(|now| now - std::time::Duration::from_secs(30));
 
 rt.emit(
-    &emit::Metric::new(
+    emit::Metric::new(
         emit::module!(),
         last_sample..now,
         "bytes_written",
         METRIC_AGG_COUNT,
         17,
         emit::Empty,
-    ).to_event()
+    )
 );
 ```
 
@@ -1023,7 +1023,7 @@ let now = rt.clock().now();
 let last_sample = now.map(|now| now - std::time::Duration::from_secs(15));
 
 rt.emit(
-    &emit::Metric::new(
+    emit::Metric::new(
         emit::module!(),
         last_sample..now,
         "bytes_written",
@@ -1046,7 +1046,7 @@ rt.emit(
             18,
         ],
         emit::Empty,
-    ).to_event()
+    )
 );
 ```
 
@@ -1142,8 +1142,8 @@ static RUNTIME: emit::runtime::Runtime<
 struct MyEmitter;
 
 impl emit::Emitter for MyEmitter {
-    fn emit<P: emit::Props>(&self, evt: &emit::Event<P>) {
-        println!("{}", evt.msg());
+    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
+        println!("{}", evt.to_event().msg());
     }
 
     fn blocking_flush(&self, _: std::time::Duration) {

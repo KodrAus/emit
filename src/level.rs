@@ -1,5 +1,5 @@
 use emit_core::{
-    event::Event,
+    event::ToEvent,
     filter::Filter,
     props::Props,
     runtime::InternalFilter,
@@ -137,8 +137,9 @@ impl MinLevel {
 }
 
 impl Filter for MinLevel {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        evt.props()
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        evt.to_event()
+            .props()
             .pull::<Level, _>(KEY_LVL)
             .unwrap_or(self.default)
             >= self.min
@@ -189,7 +190,9 @@ mod alloc_support {
     }
 
     impl Filter for MinLevelPathMap {
-        fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
+        fn matches<E: ToEvent>(&self, evt: E) -> bool {
+            let evt = evt.to_event();
+
             let evt_path = evt.module();
 
             if let Ok(index) = self.paths.binary_search_by_key(&evt_path, |(path, _)| path) {

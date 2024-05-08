@@ -1,7 +1,7 @@
 use core::{fmt, str::FromStr};
 
 use emit_core::{
-    event::Event,
+    event::ToEvent,
     filter::Filter,
     props::Props,
     value::{FromValue, ToValue, Value},
@@ -80,7 +80,7 @@ pub fn is_metric_filter() -> IsKind {
 }
 
 impl Filter for IsKind {
-    fn matches<P: Props>(&self, evt: &Event<P>) -> bool {
-        evt.props().pull::<Kind, _>(KEY_EVENT_KIND) == Some(self.0)
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        evt.to_event().props().pull::<Kind, _>(KEY_EVENT_KIND) == Some(self.0)
     }
 }

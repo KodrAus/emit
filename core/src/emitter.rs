@@ -2,12 +2,12 @@ use core::time::Duration;
 
 use crate::{
     empty::Empty,
-    event::Event,
-    props::{ErasedProps, Props},
+    event::{Event, ToEvent},
+    props::ErasedProps,
 };
 
 pub trait Emitter {
-    fn emit<P: Props>(&self, evt: &Event<P>);
+    fn emit<E: ToEvent>(&self, evt: E);
 
     fn blocking_flush(&self, timeout: Duration);
 
@@ -27,7 +27,7 @@ pub trait Emitter {
 }
 
 impl<'a, T: Emitter + ?Sized> Emitter for &'a T {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         (**self).emit(evt)
     }
 
@@ -38,7 +38,7 @@ impl<'a, T: Emitter + ?Sized> Emitter for &'a T {
 
 #[cfg(feature = "alloc")]
 impl<'a, T: Emitter + ?Sized + 'a> Emitter for alloc::boxed::Box<T> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         (**self).emit(evt)
     }
 
@@ -48,7 +48,7 @@ impl<'a, T: Emitter + ?Sized + 'a> Emitter for alloc::boxed::Box<T> {
 }
 
 impl<T: Emitter> Emitter for Option<T> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         match self {
             Some(target) => target.emit(evt),
             None => Empty.emit(evt),
@@ -64,13 +64,13 @@ impl<T: Emitter> Emitter for Option<T> {
 }
 
 impl Emitter for Empty {
-    fn emit<P: Props>(&self, _: &Event<P>) {}
+    fn emit<E: ToEvent>(&self, _: E) {}
     fn blocking_flush(&self, _: Duration) {}
 }
 
 impl Emitter for fn(&Event<&dyn ErasedProps>) {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
-        (self)(&evt.erase())
+    fn emit<E: ToEvent>(&self, evt: E) {
+        (self)(&evt.to_event().erase())
     }
 
     fn blocking_flush(&self, _: Duration) {}
@@ -79,8 +79,8 @@ impl Emitter for fn(&Event<&dyn ErasedProps>) {
 pub struct FromFn<F>(F);
 
 impl<F: Fn(&Event<&dyn ErasedProps>)> Emitter for FromFn<F> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
-        (self.0)(&evt.erase())
+    fn emit<E: ToEvent>(&self, evt: E) {
+        (self.0)(&evt.to_event().erase())
     }
 
     fn blocking_flush(&self, _: Duration) {}
@@ -106,9 +106,11 @@ impl<T, U> And<T, U> {
 }
 
 impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
-        self.left.emit(evt);
-        self.right.emit(evt);
+    fn emit<E: ToEvent>(&self, evt: E) {
+        let evt = evt.to_event();
+
+        self.left.emit(&evt);
+        self.right.emit(&evt);
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -126,7 +128,7 @@ impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
 pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, T: Emitter + ?Sized> Emitter for ByRef<'a, T> {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         self.0.emit(evt)
     }
 
@@ -171,8 +173,8 @@ impl<T: Emitter> internal::DispatchEmitter for T {
 }
 
 impl<'a> Emitter for dyn ErasedEmitter + 'a {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
-        self.erase_target().0.dispatch_emit(&evt.erase())
+    fn emit<E: ToEvent>(&self, evt: E) {
+        self.erase_target().0.dispatch_emit(&evt.to_event().erase())
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -181,7 +183,7 @@ impl<'a> Emitter for dyn ErasedEmitter + 'a {
 }
 
 impl<'a> Emitter for dyn ErasedEmitter + Send + Sync + 'a {
-    fn emit<P: Props>(&self, evt: &Event<P>) {
+    fn emit<E: ToEvent>(&self, evt: E) {
         (self as &(dyn ErasedEmitter + 'a)).emit(evt)
     }
 
