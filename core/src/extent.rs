@@ -1,6 +1,17 @@
+/*!
+The [`Extent`] type.
+
+An extent is the time for which an event is active. It may be either a point for an event that occurred at a particular time, or a span for an event that was active over a particular period.
+
+Extents can be constructed directly, or generically through the [`ToExtent`] trait.
+*/
+
 use crate::{empty::Empty, timestamp::Timestamp};
 use core::{fmt, ops::Range, time::Duration};
 
+/**
+Either a single [`Timestamp`] for a point in time, or a pair of [`Timestamp`]s for a span of time.
+*/
 #[derive(Clone)]
 pub struct Extent {
     range: Range<Timestamp>,
@@ -8,6 +19,9 @@ pub struct Extent {
 }
 
 impl Extent {
+    /**
+    Create an extent for a point in time.
+    */
     pub fn point(ts: Timestamp) -> Self {
         Extent {
             range: ts..ts,
@@ -15,6 +29,11 @@ impl Extent {
         }
     }
 
+    /**
+    Create an extent for a span of time.
+
+    The end of the range should be after the start, but an empty range is still considered a span.
+    */
     pub fn span(ts: Range<Timestamp>) -> Self {
         Extent {
             range: ts,
@@ -22,14 +41,29 @@ impl Extent {
         }
     }
 
+    /**
+    Get the extent as a range of timestamps.
+
+    For point extents, this will return an empty range with the start and end bounds being equal. For span extents, this will return exactly the range the extent was created from.
+    */
     pub fn as_range(&self) -> &Range<Timestamp> {
         &self.range
     }
 
+    /**
+    Get the extent as a point in time.
+
+    For point extents, this will return exactly the value the extent was created from. For span extents, this will return the end bound.
+    */
     pub fn as_point(&self) -> &Timestamp {
         &self.range.end
     }
 
+    /**
+    Try get the extent as a span of time.
+
+    This method will return `Some` if the extent is a span, even if that span is empty. It will return `None` for point extents.
+    */
     pub fn as_span(&self) -> Option<&Range<Timestamp>> {
         if self.is_span() {
             Some(&self.range)
@@ -38,6 +72,11 @@ impl Extent {
         }
     }
 
+    /**
+    Try get the length of the extent.
+
+    This method will return `Some` if the extent is a span, even if that span is empty. It will return `None` for point extents.
+    */
     pub fn len(&self) -> Option<Duration> {
         if self.is_span() {
             self.range.end.duration_since(self.range.start)
@@ -46,10 +85,16 @@ impl Extent {
         }
     }
 
+    /**
+    Whether the extent is a point in time.
+    */
     pub fn is_point(&self) -> bool {
         !self.is_span()
     }
 
+    /**
+    Whether the extent is a span of time.
+    */
     pub fn is_span(&self) -> bool {
         self.is_span
     }
@@ -79,7 +124,13 @@ impl fmt::Display for Extent {
     }
 }
 
+/**
+Try convert a value into an [`Extent`].
+*/
 pub trait ToExtent {
+    /**
+    Perform the conversion.
+    */
     fn to_extent(&self) -> Option<Extent>;
 }
 
