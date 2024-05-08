@@ -1,9 +1,11 @@
 use core::time::Duration;
 
 use crate::{
+    and::And,
     emitter::Emitter,
     empty::Empty,
     event::{Event, ToEvent},
+    or::Or,
     props::ErasedProps,
 };
 
@@ -14,20 +16,14 @@ pub trait Filter {
     where
         Self: Sized,
     {
-        And {
-            left: self,
-            right: other,
-        }
+        And::new(self, other)
     }
 
     fn or_when<U>(self, other: U) -> Or<Self, U>
     where
         Self: Sized,
     {
-        Or {
-            left: self,
-            right: other,
-        }
+        Or::new(self, other)
     }
 
     fn wrap_emitter<E>(self, emitter: E) -> Wrap<Self, E>
@@ -114,41 +110,11 @@ pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> Wrap<F, E> {
     filter.wrap_emitter(emitter)
 }
 
-pub struct And<T, U> {
-    left: T,
-    right: U,
-}
-
-impl<T, U> And<T, U> {
-    pub fn left(&self) -> &T {
-        &self.left
-    }
-
-    pub fn right(&self) -> &U {
-        &self.right
-    }
-}
-
 impl<T: Filter, U: Filter> Filter for And<T, U> {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
         let evt = evt.to_event();
 
-        self.left.matches(&evt) && self.right.matches(&evt)
-    }
-}
-
-pub struct Or<T, U> {
-    left: T,
-    right: U,
-}
-
-impl<T, U> Or<T, U> {
-    pub fn left(&self) -> &T {
-        &self.left
-    }
-
-    pub fn right(&self) -> &U {
-        &self.right
+        self.left().matches(&evt) && self.right().matches(&evt)
     }
 }
 
@@ -156,7 +122,7 @@ impl<T: Filter, U: Filter> Filter for Or<T, U> {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
         let evt = evt.to_event();
 
-        self.left.matches(&evt) || self.right.matches(&evt)
+        self.left().matches(&evt) || self.right().matches(&evt)
     }
 }
 

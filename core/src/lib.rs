@@ -17,6 +17,7 @@ extern crate alloc;
 
 extern crate core;
 
+pub mod and;
 pub mod clock;
 pub mod ctxt;
 pub mod emitter;
@@ -24,6 +25,7 @@ pub mod empty;
 pub mod event;
 pub mod extent;
 pub mod filter;
+pub mod or;
 pub mod path;
 pub mod props;
 pub mod rng;

@@ -1,6 +1,7 @@
 use core::time::Duration;
 
 use crate::{
+    and::And,
     empty::Empty,
     event::{Event, ToEvent},
     props::ErasedProps,
@@ -15,10 +16,7 @@ pub trait Emitter {
     where
         Self: Sized,
     {
-        And {
-            left: self,
-            right: other,
-        }
+        And::new(self, other)
     }
 
     fn by_ref(&self) -> ByRef<Self> {
@@ -90,27 +88,12 @@ pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
-pub struct And<T, U> {
-    left: T,
-    right: U,
-}
-
-impl<T, U> And<T, U> {
-    pub fn left(&self) -> &T {
-        &self.left
-    }
-
-    pub fn right(&self) -> &U {
-        &self.right
-    }
-}
-
 impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
     fn emit<E: ToEvent>(&self, evt: E) {
         let evt = evt.to_event();
 
-        self.left.emit(&evt);
-        self.right.emit(&evt);
+        self.left().emit(&evt);
+        self.right().emit(&evt);
     }
 
     fn blocking_flush(&self, timeout: Duration) {
@@ -120,8 +103,8 @@ impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
         // to flush and track in our timeout
         let timeout = timeout / 2;
 
-        self.left.blocking_flush(timeout);
-        self.right.blocking_flush(timeout);
+        self.left().blocking_flush(timeout);
+        self.right().blocking_flush(timeout);
     }
 }
 

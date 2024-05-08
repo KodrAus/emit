@@ -167,3 +167,57 @@ impl<'a, P: Props> Props for Metric<'a, P> {
         self.props.for_each(for_each)
     }
 }
+
+pub trait Source {
+    fn sample<S: sampler::Sampler>(&self, sampler: S);
+}
+
+impl<'a, T: Source + ?Sized> Source for &'a T {
+    fn sample<S: sampler::Sampler>(&self, sampler: S) {
+        (**self).sample(sampler)
+    }
+}
+
+pub mod sampler {
+    use emit_core::{emitter::Emitter, empty::Empty};
+
+    use super::*;
+
+    pub trait Sampler {
+        fn metric<P: Props>(&self, metric: &Metric<P>);
+    }
+
+    impl<'a, T: Sampler + ?Sized> Sampler for &'a T {
+        fn metric<P: Props>(&self, metric: &Metric<P>) {
+            (**self).metric(metric)
+        }
+    }
+
+    impl Sampler for Empty {
+        fn metric<P: Props>(&self, _: &Metric<P>) {}
+    }
+
+    pub fn from_fn<F: Fn(&Metric<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
+        FromFn(f)
+    }
+
+    pub struct FromFn<F>(F);
+
+    impl<F: Fn(&Metric<&dyn ErasedProps>)> Sampler for FromFn<F> {
+        fn metric<P: Props>(&self, metric: &Metric<P>) {
+            (self.0)(&metric.erase())
+        }
+    }
+
+    pub fn from_emitter<E: Emitter>(emitter: E) -> FromEmitter<E> {
+        FromEmitter(emitter)
+    }
+
+    pub struct FromEmitter<E>(E);
+
+    impl<E: Emitter> Sampler for FromEmitter<E> {
+        fn metric<P: Props>(&self, metric: &Metric<P>) {
+            self.0.emit(metric)
+        }
+    }
+}

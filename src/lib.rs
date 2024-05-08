@@ -1197,10 +1197,7 @@ pub use core::module_path as module;
 pub use emit_macros::*;
 
 #[doc(inline)]
-pub use emit_core::{
-    clock, ctxt, emitter, empty, event, extent, filter, path, props, rng, runtime, str, template,
-    timestamp, value, well_known,
-};
+pub use emit_core::*;
 
 pub mod frame;
 pub mod kind;

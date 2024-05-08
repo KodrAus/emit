@@ -272,7 +272,7 @@ impl<T: Emitter> InternalEmitter for AssertInternal<T> {}
 
 impl InternalEmitter for Empty {}
 
-impl<T: InternalEmitter, U: InternalEmitter> InternalEmitter for crate::emitter::And<T, U> {}
+impl<T: InternalEmitter, U: InternalEmitter> InternalEmitter for crate::and::And<T, U> {}
 
 impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::emitter::ByRef<'a, T> {}
 
@@ -285,9 +285,9 @@ impl<T: Filter> InternalFilter for AssertInternal<T> {}
 
 impl InternalFilter for Empty {}
 
-impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::And<T, U> {}
+impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::and::And<T, U> {}
 
-impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::filter::Or<T, U> {}
+impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::or::Or<T, U> {}
 
 impl<T: InternalFilter, U: InternalEmitter> InternalEmitter for crate::filter::Wrap<T, U> {}
 

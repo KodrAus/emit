@@ -1,8 +1,9 @@
 use core::time::Duration;
 
 use emit_core::{
+    and::And,
     ctxt::Ctxt,
-    emitter::{self, Emitter},
+    emitter::Emitter,
     empty::Empty,
     filter::Filter,
     runtime::{InternalCtxt, InternalEmitter, InternalFilter},
@@ -56,7 +57,7 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt> Setup<TEmitter, TFilter, T
     pub fn and_emit_to<UEmitter: Emitter>(
         self,
         emitter: UEmitter,
-    ) -> Setup<emitter::And<TEmitter, UEmitter>, TFilter, TCtxt> {
+    ) -> Setup<And<TEmitter, UEmitter>, TFilter, TCtxt> {
         Setup {
             emitter: self.emitter.and_to(emitter),
             filter: self.filter,
