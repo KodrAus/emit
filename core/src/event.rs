@@ -11,9 +11,10 @@ Events can be constructed directly, or generically through the [`ToEvent`] trait
 use core::{fmt, ops::ControlFlow};
 
 use crate::{
+    by_ref::ByRef,
     extent::{Extent, ToExtent},
     path::Path,
-    props::{ByRef, ErasedProps, Props},
+    props::{ErasedProps, Props},
     template::{Render, Template},
     timestamp::Timestamp,
 };

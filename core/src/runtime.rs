@@ -190,7 +190,9 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
                 .cloned()
                 .or_else(|| self.clock.now().to_extent());
 
-            let evt = evt.with_extent(extent).map_props(|props| props.chain(ctxt));
+            let evt = evt
+                .with_extent(extent)
+                .map_props(|props| props.and_props(ctxt));
 
             if self.filter.matches(&evt) {
                 self.emitter.emit(evt);
@@ -274,7 +276,7 @@ impl InternalEmitter for Empty {}
 
 impl<T: InternalEmitter, U: InternalEmitter> InternalEmitter for crate::and::And<T, U> {}
 
-impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::emitter::ByRef<'a, T> {}
+impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::by_ref::ByRef<'a, T> {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::boxed::Box<T> {}
@@ -291,7 +293,7 @@ impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::or::Or<T, U
 
 impl<T: InternalFilter, U: InternalEmitter> InternalEmitter for crate::filter::Wrap<T, U> {}
 
-impl<'a, T: InternalFilter + ?Sized> InternalFilter for crate::filter::ByRef<'a, T> {}
+impl<'a, T: InternalFilter + ?Sized> InternalFilter for crate::by_ref::ByRef<'a, T> {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}
@@ -302,7 +304,7 @@ impl<T: Ctxt> InternalCtxt for AssertInternal<T> {}
 
 impl InternalCtxt for Empty {}
 
-impl<'a, T: InternalCtxt + ?Sized> InternalCtxt for crate::ctxt::ByRef<'a, T> {}
+impl<'a, T: InternalCtxt + ?Sized> InternalCtxt for crate::by_ref::ByRef<'a, T> {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::boxed::Box<T> {}

@@ -622,7 +622,7 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
         }
 
         if self.is_enabled() {
-            Frame::push(Some(ctxt), self.ctxt().chain(ctxt_props))
+            Frame::push(Some(ctxt), self.ctxt().and_props(ctxt_props))
         } else {
             Frame::current(None)
         }

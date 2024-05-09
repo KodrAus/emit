@@ -1,4 +1,4 @@
-use crate::{empty::Empty, props::Props};
+use crate::{by_ref::ByRef, empty::Empty, props::Props};
 
 pub trait Ctxt {
     type Current: Props + ?Sized;
@@ -7,7 +7,7 @@ pub trait Ctxt {
     fn open_root<P: Props>(&self, props: P) -> Self::Frame;
 
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
-        self.with_current(|current| self.open_root(props.chain(current)))
+        self.with_current(|current| self.open_root(props.and_props(current)))
     }
 
     fn enter(&self, local: &mut Self::Frame);
@@ -17,10 +17,6 @@ pub trait Ctxt {
     fn exit(&self, local: &mut Self::Frame);
 
     fn close(&self, frame: Self::Frame);
-
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
-    }
 }
 
 impl<'a, C: Ctxt + ?Sized> Ctxt for &'a C {
@@ -122,35 +118,33 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
     }
 }
 
-pub struct ByRef<'a, T: ?Sized>(&'a T);
-
 impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
     type Current = T::Current;
 
     type Frame = T::Frame;
 
     fn open_root<P: Props>(&self, props: P) -> Self::Frame {
-        self.0.open_root(props)
+        self.inner().open_root(props)
     }
 
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
-        self.0.open_push(props)
+        self.inner().open_push(props)
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
-        self.0.enter(frame)
+        self.inner().enter(frame)
     }
 
     fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
-        self.0.with_current(with)
+        self.inner().with_current(with)
     }
 
     fn exit(&self, frame: &mut Self::Frame) {
-        self.0.exit(frame)
+        self.inner().exit(frame)
     }
 
     fn close(&self, frame: Self::Frame) {
-        self.0.close(frame)
+        self.inner().close(frame)
     }
 }
 

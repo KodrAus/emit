@@ -2,6 +2,7 @@ use core::time::Duration;
 
 use crate::{
     and::And,
+    by_ref::ByRef,
     emitter::Emitter,
     empty::Empty,
     event::{Event, ToEvent},
@@ -34,10 +35,6 @@ pub trait Filter {
             filter: self,
             emitter,
         }
-    }
-
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
     }
 }
 
@@ -126,11 +123,9 @@ impl<T: Filter, U: Filter> Filter for Or<T, U> {
     }
 }
 
-pub struct ByRef<'a, T: ?Sized>(&'a T);
-
 impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
-        self.0.matches(evt)
+        self.inner().matches(evt)
     }
 }
 

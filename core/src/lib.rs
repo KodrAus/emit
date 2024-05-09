@@ -18,6 +18,7 @@ extern crate alloc;
 extern crate core;
 
 pub mod and;
+pub mod by_ref;
 pub mod clock;
 pub mod ctxt;
 pub mod emitter;

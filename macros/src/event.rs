@@ -63,7 +63,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let module_tokens = args.module;
 
     Ok(
-        quote!(emit::Event::new(#module_tokens, #extent_tokens, #template_tokens, emit::Props::chain(&#base_props_tokens, #props_tokens))),
+        quote!(emit::Event::new(#module_tokens, #extent_tokens, #template_tokens, emit::Props::and_props(&#base_props_tokens, #props_tokens))),
     )
 }
 

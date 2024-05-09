@@ -8,7 +8,7 @@ impl<T, U> And<T, U> {
         And { left, right }
     }
 
-    pub fn left(&self) -> &T {
+    pub const fn left(&self) -> &T {
         &self.left
     }
 
@@ -16,7 +16,7 @@ impl<T, U> And<T, U> {
         &mut self.left
     }
 
-    pub fn right(&self) -> &U {
+    pub const fn right(&self) -> &U {
         &self.right
     }
 

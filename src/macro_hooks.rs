@@ -508,7 +508,7 @@ pub fn __private_emit<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
             module,
             extent.to_extent().or_else(|| rt.clock().now().to_extent()),
             tpl,
-            props.chain(ctxt),
+            props.and_props(ctxt),
         );
 
         if FirstDefined(when, rt.filter()).matches(&evt) {
@@ -532,7 +532,7 @@ pub fn __private_emit_event<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R:
             event = event.with_tpl(tpl);
         }
 
-        let event = event.map_props(|event_props| props.chain(event_props).chain(ctxt));
+        let event = event.map_props(|event_props| props.and_props(event_props).and_props(ctxt));
 
         if FirstDefined(when, rt.filter()).matches(&event) {
             rt.emitter().emit(&event);
@@ -566,7 +566,7 @@ pub fn __private_begin_span<
                 &span
                     .to_event()
                     .with_tpl(tpl)
-                    .map_props(|props| props.chain(&ctxt_props).chain(&evt_props)),
+                    .map_props(|props| props.and_props(&ctxt_props).and_props(&evt_props)),
             )
         },
         module,
@@ -595,7 +595,7 @@ pub fn __private_complete_span<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock,
         Some(crate::filter::always()),
         span.extent(),
         tpl,
-        evt_props.chain(&span),
+        evt_props.and_props(&span),
     );
 }
 

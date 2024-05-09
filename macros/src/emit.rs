@@ -121,7 +121,7 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
                 #when_tokens,
                 #extent_tokens,
                 #template_tokens,
-                emit::Props::chain(&#base_props_tokens, #props_tokens),
+                emit::Props::and_props(&#base_props_tokens, #props_tokens),
             );
         )
     };

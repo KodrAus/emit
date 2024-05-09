@@ -1,6 +1,8 @@
 use core::{borrow::Borrow, ops::ControlFlow};
 
 use crate::{
+    and::And,
+    by_ref::ByRef,
     empty::Empty,
     str::{Str, ToStr},
     value::{FromValue, ToValue, Value},
@@ -53,14 +55,11 @@ pub trait Props {
         false
     }
 
-    fn chain<U: Props>(self, other: U) -> Chain<Self, U>
+    fn and_props<U: Props>(self, other: U) -> And<Self, U>
     where
         Self: Sized,
     {
-        Chain {
-            first: self,
-            second: other,
-        }
+        And::new(self, other)
     }
 
     fn filter<F: Fn(Str, Value) -> bool>(self, filter: F) -> Filter<Self, F>
@@ -71,7 +70,7 @@ pub trait Props {
     }
 
     fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
+        ByRef::new(self)
     }
 
     #[cfg(feature = "alloc")]
@@ -257,62 +256,40 @@ impl Props for Empty {
     }
 }
 
-pub struct Chain<T, U> {
-    first: T,
-    second: U,
-}
-
-impl<T, U> Chain<T, U> {
-    pub fn first(&self) -> &T {
-        &self.first
-    }
-
-    pub fn second(&self) -> &U {
-        &self.second
-    }
-}
-
-impl<A: Props, B: Props> Props for Chain<A, B> {
+impl<A: Props, B: Props> Props for And<A, B> {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
     ) -> ControlFlow<()> {
-        if self.first.is_sorted() && self.second.is_sorted() {
-            // Use a joining strategy that yields from `first` until `second` is more recent
-            todo!()
-        }
-
-        self.first.for_each(&mut for_each)?;
-        self.second.for_each(for_each)
+        self.left().for_each(&mut for_each)?;
+        self.right().for_each(for_each)
     }
 
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         let key = key.borrow();
 
-        self.first.get(key).or_else(|| self.second.get(key))
+        self.left().get(key).or_else(|| self.right().get(key))
     }
 
     fn count(&self) -> usize {
-        self.first.count() + self.second.count()
+        self.left().count() + self.right().count()
     }
 
     fn is_sorted(&self) -> bool {
-        self.first.is_sorted() && self.second.is_sorted()
+        self.left().is_sorted() && self.right().is_sorted()
     }
 }
-
-pub struct ByRef<'a, T: ?Sized>(&'a T);
 
 impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         for_each: F,
     ) -> ControlFlow<()> {
-        self.0.for_each(for_each)
+        self.inner().for_each(for_each)
     }
 
     fn count(&self) -> usize {
-        self.0.count()
+        self.inner().count()
     }
 }
 

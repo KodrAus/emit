@@ -1,10 +1,11 @@
 use core::ops::ControlFlow;
 
 use emit_core::{
+    by_ref::ByRef,
     event::{Event, ToEvent},
     extent::{Extent, ToExtent},
     path::Path,
-    props::{ByRef, ErasedProps, Props},
+    props::{ErasedProps, Props},
     str::{Str, ToStr},
     template::{self, Template},
     value::{ToValue, Value},

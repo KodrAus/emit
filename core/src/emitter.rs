@@ -2,6 +2,7 @@ use core::time::Duration;
 
 use crate::{
     and::And,
+    by_ref::ByRef,
     empty::Empty,
     event::{Event, ToEvent},
     props::ErasedProps,
@@ -17,10 +18,6 @@ pub trait Emitter {
         Self: Sized,
     {
         And::new(self, other)
-    }
-
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef(self)
     }
 }
 
@@ -108,15 +105,13 @@ impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
     }
 }
 
-pub struct ByRef<'a, T: ?Sized>(&'a T);
-
 impl<'a, T: Emitter + ?Sized> Emitter for ByRef<'a, T> {
     fn emit<E: ToEvent>(&self, evt: E) {
-        self.0.emit(evt)
+        self.inner().emit(evt)
     }
 
     fn blocking_flush(&self, timeout: Duration) {
-        self.0.blocking_flush(timeout)
+        self.inner().blocking_flush(timeout)
     }
 }
 
