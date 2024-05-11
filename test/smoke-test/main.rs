@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use emit::{Clock as _, Filter as _};
+use emit::{metric::Source as _, Clock as _, Filter as _};
 
 #[macro_use]
 extern crate serde_derive;
@@ -17,6 +17,8 @@ async fn main() {
     );
 
     let internal = emit::setup().emit_to(emit_term::stdout()).init_internal();
+
+    let mut reporter = emit::metric::Reporter::new();
 
     // Setup via emit_otlp
     let emitter = emit::setup()
@@ -50,7 +52,8 @@ async fn main() {
                 )
                 .metrics(emit_otlp::metrics_grpc_proto("http://localhost:4319"))
                 .spawn()
-                .unwrap(),
+                .unwrap()
+                .report_to(&mut reporter),
         )
         .and_emit_to(emit_term::stdout())
         .and_emit_to(
@@ -137,6 +140,8 @@ async fn main() {
     );
 
     emit::info!("shutting down");
+
+    reporter.emit_metrics(&internal.emitter());
 
     emitter.blocking_flush(Duration::from_secs(60));
     internal.blocking_flush(Duration::from_secs(5));

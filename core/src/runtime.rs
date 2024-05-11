@@ -276,10 +276,11 @@ impl InternalEmitter for Empty {}
 
 impl<T: InternalEmitter, U: InternalEmitter> InternalEmitter for crate::and::And<T, U> {}
 
-impl<'a, T: InternalEmitter + ?Sized> InternalEmitter for crate::by_ref::ByRef<'a, T> {}
-
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::boxed::Box<T> {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalEmitter> InternalEmitter for alloc::sync::Arc<T> {}
 
 pub trait InternalFilter: Filter {}
 
@@ -293,10 +294,11 @@ impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::or::Or<T, U
 
 impl<T: InternalFilter, U: InternalEmitter> InternalEmitter for crate::filter::Wrap<T, U> {}
 
-impl<'a, T: InternalFilter + ?Sized> InternalFilter for crate::by_ref::ByRef<'a, T> {}
-
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::sync::Arc<T> {}
 
 pub trait InternalCtxt: Ctxt {}
 
@@ -304,10 +306,11 @@ impl<T: Ctxt> InternalCtxt for AssertInternal<T> {}
 
 impl InternalCtxt for Empty {}
 
-impl<'a, T: InternalCtxt + ?Sized> InternalCtxt for crate::by_ref::ByRef<'a, T> {}
-
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::boxed::Box<T> {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalCtxt> InternalCtxt for alloc::sync::Arc<T> {}
 
 pub trait InternalClock: Clock {}
 
@@ -318,6 +321,9 @@ impl InternalClock for Empty {}
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalClock> InternalClock for alloc::boxed::Box<T> {}
 
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalClock> InternalClock for alloc::sync::Arc<T> {}
+
 pub trait InternalRng: Rng {}
 
 impl<T: Rng> InternalRng for AssertInternal<T> {}
@@ -326,6 +332,9 @@ impl InternalRng for Empty {}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalRng> InternalRng for alloc::boxed::Box<T> {}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: ?Sized + InternalRng> InternalRng for alloc::sync::Arc<T> {}
 
 #[cfg(feature = "std")]
 mod std_support {

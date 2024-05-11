@@ -1,4 +1,4 @@
-use crate::{by_ref::ByRef, empty::Empty, props::Props};
+use crate::{empty::Empty, props::Props};
 
 pub trait Ctxt {
     type Current: Props + ?Sized;
@@ -118,33 +118,33 @@ impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::boxed::Box<C> {
     }
 }
 
-impl<'a, T: Ctxt + ?Sized> Ctxt for ByRef<'a, T> {
-    type Current = T::Current;
+#[cfg(feature = "alloc")]
+impl<'a, C: Ctxt + ?Sized + 'a> Ctxt for alloc::sync::Arc<C> {
+    type Current = C::Current;
+    type Frame = C::Frame;
 
-    type Frame = T::Frame;
+    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
+        (**self).with_current(with)
+    }
 
     fn open_root<P: Props>(&self, props: P) -> Self::Frame {
-        self.inner().open_root(props)
+        (**self).open_root(props)
     }
 
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
-        self.inner().open_push(props)
+        (**self).open_push(props)
     }
 
     fn enter(&self, frame: &mut Self::Frame) {
-        self.inner().enter(frame)
-    }
-
-    fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
-        self.inner().with_current(with)
+        (**self).enter(frame)
     }
 
     fn exit(&self, frame: &mut Self::Frame) {
-        self.inner().exit(frame)
+        (**self).exit(frame)
     }
 
     fn close(&self, frame: Self::Frame) {
-        self.inner().close(frame)
+        (**self).close(frame)
     }
 }
 

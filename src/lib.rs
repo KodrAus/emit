@@ -1226,3 +1226,7 @@ pub mod __private {
     pub extern crate core;
     pub use crate::macro_hooks::*;
 }
+
+mod internal {
+    pub struct Erased<T>(pub(crate) T);
+}

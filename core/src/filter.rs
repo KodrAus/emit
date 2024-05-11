@@ -2,7 +2,6 @@ use core::time::Duration;
 
 use crate::{
     and::And,
-    by_ref::ByRef,
     emitter::Emitter,
     empty::Empty,
     event::{Event, ToEvent},
@@ -46,6 +45,13 @@ impl<'a, F: Filter + ?Sized> Filter for &'a F {
 
 #[cfg(feature = "alloc")]
 impl<'a, F: Filter + ?Sized + 'a> Filter for alloc::boxed::Box<F> {
+    fn matches<E: ToEvent>(&self, evt: E) -> bool {
+        (**self).matches(evt)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, F: Filter + ?Sized + 'a> Filter for alloc::sync::Arc<F> {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
         (**self).matches(evt)
     }
@@ -123,12 +129,6 @@ impl<T: Filter, U: Filter> Filter for Or<T, U> {
     }
 }
 
-impl<'a, T: Filter + ?Sized> Filter for ByRef<'a, T> {
-    fn matches<E: ToEvent>(&self, evt: E) -> bool {
-        self.inner().matches(evt)
-    }
-}
-
 pub fn always() -> Empty {
     Empty
 }
@@ -141,7 +141,7 @@ mod internal {
     }
 
     pub trait SealedFilter {
-        fn erase_when(&self) -> crate::internal::Erased<&dyn DispatchFilter>;
+        fn erase_filter(&self) -> crate::internal::Erased<&dyn DispatchFilter>;
     }
 }
 
@@ -150,7 +150,7 @@ pub trait ErasedFilter: internal::SealedFilter {}
 impl<T: Filter> ErasedFilter for T {}
 
 impl<T: Filter> internal::SealedFilter for T {
-    fn erase_when(&self) -> crate::internal::Erased<&dyn internal::DispatchFilter> {
+    fn erase_filter(&self) -> crate::internal::Erased<&dyn internal::DispatchFilter> {
         crate::internal::Erased(self)
     }
 }
@@ -163,7 +163,7 @@ impl<T: Filter> internal::DispatchFilter for T {
 
 impl<'a> Filter for dyn ErasedFilter + 'a {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
-        self.erase_when()
+        self.erase_filter()
             .0
             .dispatch_matches(&evt.to_event().erase())
     }

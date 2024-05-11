@@ -11,7 +11,6 @@ Events can be constructed directly, or generically through the [`ToEvent`] trait
 use core::{fmt, ops::ControlFlow};
 
 use crate::{
-    by_ref::ByRef,
     extent::{Extent, ToExtent},
     path::Path,
     props::{ErasedProps, Props},
@@ -170,12 +169,12 @@ impl<'a, P: Props> Event<'a, P> {
     /**
     Get a new event, borrowing data from this one.
     */
-    pub fn by_ref<'b>(&'b self) -> Event<'b, ByRef<'b, P>> {
+    pub fn by_ref<'b>(&'b self) -> Event<'b, &'b P> {
         Event {
             module: self.module.by_ref(),
             extent: self.extent.clone(),
             tpl: self.tpl.by_ref(),
-            props: self.props.by_ref(),
+            props: &self.props,
         }
     }
 
@@ -248,7 +247,7 @@ impl<'a, T: ToEvent + ?Sized> ToEvent for &'a T {
 }
 
 impl<'a, P: Props> ToEvent for Event<'a, P> {
-    type Props<'b> = ByRef<'b, P> where Self: 'b;
+    type Props<'b> = &'b P where Self: 'b;
 
     fn to_event<'b>(&'b self) -> Event<Self::Props<'b>> {
         self.by_ref()

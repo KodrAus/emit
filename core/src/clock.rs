@@ -27,6 +27,13 @@ impl<'a, T: Clock + ?Sized + 'a> Clock for alloc::boxed::Box<T> {
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<'a, T: Clock + ?Sized + 'a> Clock for alloc::sync::Arc<T> {
+    fn now(&self) -> Option<Timestamp> {
+        (**self).now()
+    }
+}
+
 impl Clock for Empty {
     fn now(&self) -> Option<Timestamp> {
         None

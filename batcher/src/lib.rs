@@ -148,11 +148,13 @@ impl<T: Channel> Sender<T> {
             state.next_batch.watchers.push(watcher);
         }
     }
+}
 
-    pub fn sample_metrics(
-        &self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-        self.shared.sample_metrics()
+impl<T: Channel> emit::metric::Source for Sender<T> {
+    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
+        for metric in self.shared.sample_metrics() {
+            sampler.metric(&metric)
+        }
     }
 }
 
@@ -351,11 +353,13 @@ impl<T: Channel> Receiver<T> {
             }
         }
     }
+}
 
-    pub fn sample_metrics(
-        &self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-        self.shared.sample_metrics()
+impl<T: Channel> emit::metric::Source for Receiver<T> {
+    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
+        for metric in self.shared.sample_metrics() {
+            sampler.metric(&metric)
+        }
     }
 }
 

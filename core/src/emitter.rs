@@ -2,7 +2,6 @@ use core::time::Duration;
 
 use crate::{
     and::And,
-    by_ref::ByRef,
     empty::Empty,
     event::{Event, ToEvent},
     props::ErasedProps,
@@ -33,6 +32,17 @@ impl<'a, T: Emitter + ?Sized> Emitter for &'a T {
 
 #[cfg(feature = "alloc")]
 impl<'a, T: Emitter + ?Sized + 'a> Emitter for alloc::boxed::Box<T> {
+    fn emit<E: ToEvent>(&self, evt: E) {
+        (**self).emit(evt)
+    }
+
+    fn blocking_flush(&self, timeout: Duration) {
+        (**self).blocking_flush(timeout)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, T: Emitter + ?Sized + 'a> Emitter for alloc::sync::Arc<T> {
     fn emit<E: ToEvent>(&self, evt: E) {
         (**self).emit(evt)
     }
@@ -102,16 +112,6 @@ impl<T: Emitter, U: Emitter> Emitter for And<T, U> {
 
         self.left().blocking_flush(timeout);
         self.right().blocking_flush(timeout);
-    }
-}
-
-impl<'a, T: Emitter + ?Sized> Emitter for ByRef<'a, T> {
-    fn emit<E: ToEvent>(&self, evt: E) {
-        self.inner().emit(evt)
-    }
-
-    fn blocking_flush(&self, timeout: Duration) {
-        self.inner().blocking_flush(timeout)
     }
 }
 

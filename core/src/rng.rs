@@ -55,6 +55,21 @@ impl<'a, T: Rng + ?Sized + 'a> Rng for alloc::boxed::Box<T> {
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<'a, T: Rng + ?Sized + 'a> Rng for alloc::sync::Arc<T> {
+    fn fill<A: AsMut<[u8]>>(&self, arr: A) -> Option<A> {
+        (**self).fill(arr)
+    }
+
+    fn gen_u64(&self) -> Option<u64> {
+        (**self).gen_u64()
+    }
+
+    fn gen_u128(&self) -> Option<u128> {
+        (**self).gen_u128()
+    }
+}
+
 impl Rng for Empty {
     fn fill<A: AsMut<[u8]>>(&self, _: A) -> Option<A> {
         None

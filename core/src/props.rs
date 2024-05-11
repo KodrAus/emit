@@ -2,7 +2,6 @@ use core::{borrow::Borrow, ops::ControlFlow};
 
 use crate::{
     and::And,
-    by_ref::ByRef,
     empty::Empty,
     str::{Str, ToStr},
     value::{FromValue, ToValue, Value},
@@ -69,10 +68,6 @@ pub trait Props {
         Filter { src: self, filter }
     }
 
-    fn by_ref(&self) -> ByRef<Self> {
-        ByRef::new(self)
-    }
-
     #[cfg(feature = "alloc")]
     fn dedup(self) -> Dedup<Self>
     where
@@ -117,6 +112,16 @@ impl<P: Props> Props for Option<P> {
 
 #[cfg(feature = "alloc")]
 impl<'a, P: Props + ?Sized + 'a> Props for alloc::boxed::Box<P> {
+    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        for_each: F,
+    ) -> ControlFlow<()> {
+        (**self).for_each(for_each)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a, P: Props + ?Sized + 'a> Props for alloc::sync::Arc<P> {
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         for_each: F,
@@ -277,19 +282,6 @@ impl<A: Props, B: Props> Props for And<A, B> {
 
     fn is_sorted(&self) -> bool {
         self.left().is_sorted() && self.right().is_sorted()
-    }
-}
-
-impl<'a, P: Props + ?Sized> Props for ByRef<'a, P> {
-    fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        for_each: F,
-    ) -> ControlFlow<()> {
-        self.inner().for_each(for_each)
-    }
-
-    fn count(&self) -> usize {
-        self.inner().count()
     }
 }
 

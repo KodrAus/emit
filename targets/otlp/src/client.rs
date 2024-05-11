@@ -19,14 +19,16 @@ pub struct Otlp {
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
-impl Otlp {
-    pub fn sample_metrics<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'a {
+impl emit::metric::Source for Otlp {
+    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
         self.sender
-            .sample_metrics()
-            .map(|metric| metric.with_module(env!("CARGO_PKG_NAME")))
-            .chain(self.metrics.sample())
+            .sample_metrics(emit::metric::sampler::from_fn(|metric| {
+                sampler.metric(&metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
+            }));
+
+        for metric in self.metrics.sample() {
+            sampler.metric(&metric);
+        }
     }
 }
 
@@ -57,15 +59,6 @@ impl emit::emitter::Emitter for Otlp {
 
     fn blocking_flush(&self, timeout: Duration) {
         emit_batcher::tokio::blocking_flush(&self.sender, timeout);
-
-        let rt = emit::runtime::internal_slot();
-        if rt.is_enabled() {
-            let rt = rt.get();
-
-            for metric in self.sample_metrics() {
-                rt.emit(metric);
-            }
-        }
     }
 }
 
