@@ -19,9 +19,14 @@ pub struct Otlp {
     sender: emit_batcher::Sender<Channel<PreEncoded>>,
 }
 
-impl emit::metric::Source for Otlp {
+pub struct OtlpMetrics {
+    channel_metrics: emit_batcher::ChannelMetrics<Channel<PreEncoded>>,
+    metrics: Arc<InternalMetrics>,
+}
+
+impl emit::metric::Source for OtlpMetrics {
     fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        self.sender
+        self.channel_metrics
             .sample_metrics(emit::metric::sampler::from_fn(|metric| {
                 sampler.metric(&metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
             }));
@@ -59,6 +64,15 @@ impl emit::emitter::Emitter for Otlp {
 
     fn blocking_flush(&self, timeout: Duration) {
         emit_batcher::tokio::blocking_flush(&self.sender, timeout);
+    }
+}
+
+impl Otlp {
+    pub fn metric_source(&self) -> OtlpMetrics {
+        OtlpMetrics {
+            channel_metrics: self.sender.metric_source(),
+            metrics: self.metrics.clone(),
+        }
     }
 }
 

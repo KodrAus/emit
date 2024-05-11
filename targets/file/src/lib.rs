@@ -160,9 +160,14 @@ pub struct FileSet {
     _handle: thread::JoinHandle<()>,
 }
 
-impl emit::metric::Source for FileSet {
+pub struct FileSetMetrics {
+    channel_metrics: emit_batcher::ChannelMetrics<EventBatch>,
+    metrics: Arc<InternalMetrics>,
+}
+
+impl emit::metric::Source for FileSetMetrics {
     fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        self.sender
+        self.channel_metrics
             .sample_metrics(emit::metric::sampler::from_fn(|metric| {
                 sampler.metric(&metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
             }));
@@ -197,6 +202,15 @@ impl emit::Emitter for FileSet {
 
     fn blocking_flush(&self, timeout: std::time::Duration) {
         emit_batcher::sync::blocking_flush(&self.sender, timeout);
+    }
+}
+
+impl FileSet {
+    pub fn metric_source(&self) -> FileSetMetrics {
+        FileSetMetrics {
+            channel_metrics: self.sender.metric_source(),
+            metrics: self.metrics.clone(),
+        }
     }
 }
 

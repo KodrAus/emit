@@ -22,8 +22,8 @@ async fn main() {
 
     // Setup via emit_otlp
     let emitter = emit::setup()
-        .emit_to(
-            emit_otlp::new()
+        .emit_to({
+            let otlp = emit_otlp::new()
                 .resource(emit::props! {
                     #[emit::key("service.name")]
                     service_name: env!("CARGO_PKG_NAME"),
@@ -52,20 +52,25 @@ async fn main() {
                 )
                 .metrics(emit_otlp::metrics_grpc_proto("http://localhost:4319"))
                 .spawn()
-                .unwrap()
-                .report_to(&mut reporter),
-        )
+                .unwrap();
+
+            reporter.source(otlp.metric_source());
+
+            otlp
+        })
         .and_emit_to(emit_term::stdout())
-        .and_emit_to(
-            emit::level::min_filter(emit::Level::Warn).wrap_emitter(
-                emit_file::set("./target/logs/log.txt")
-                    .reuse_files(true)
-                    .roll_by_minute()
-                    .max_files(6)
-                    .spawn()
-                    .unwrap(),
-            ),
-        )
+        .and_emit_to(emit::level::min_filter(emit::Level::Warn).wrap_emitter({
+            let file_set = emit_file::set("./target/logs/log.txt")
+                .reuse_files(true)
+                .roll_by_minute()
+                .max_files(6)
+                .spawn()
+                .unwrap();
+
+            reporter.source(file_set.metric_source());
+
+            file_set
+        }))
         .init();
 
     // Setup via opentelemetry
@@ -141,13 +146,13 @@ async fn main() {
 
     emit::info!("shutting down");
 
-    reporter.emit_metrics(&internal.emitter());
-
     emitter.blocking_flush(Duration::from_secs(60));
     internal.blocking_flush(Duration::from_secs(5));
 
     //opentelemetry::global::shutdown_logger_provider();
     //opentelemetry::global::shutdown_tracer_provider();
+
+    reporter.emit_metrics(&internal.emitter());
 }
 
 #[emit::span("in_trace")]

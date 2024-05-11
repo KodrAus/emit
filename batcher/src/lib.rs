@@ -148,12 +148,10 @@ impl<T: Channel> Sender<T> {
             state.next_batch.watchers.push(watcher);
         }
     }
-}
 
-impl<T: Channel> emit::metric::Source for Sender<T> {
-    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        for metric in self.shared.sample_metrics() {
-            sampler.metric(&metric)
+    pub fn metric_source(&self) -> ChannelMetrics<T> {
+        ChannelMetrics {
+            shared: self.shared.clone(),
         }
     }
 }
@@ -353,12 +351,10 @@ impl<T: Channel> Receiver<T> {
             }
         }
     }
-}
 
-impl<T: Channel> emit::metric::Source for Receiver<T> {
-    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        for metric in self.shared.sample_metrics() {
-            sampler.metric(&metric)
+    pub fn metric_source(&self) -> ChannelMetrics<T> {
+        ChannelMetrics {
+            shared: self.shared.clone(),
         }
     }
 }
@@ -441,20 +437,38 @@ struct Shared<T> {
     state: Mutex<State<T>>,
 }
 
-impl<T: Channel> Shared<T> {
-    fn sample_metrics(
-        &self,
-    ) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-        let queue_length = { self.state.lock().unwrap().next_batch.channel.remaining() };
+pub struct ChannelMetrics<T> {
+    shared: Arc<Shared<T>>,
+}
 
-        self.metrics.sample().chain(Some(emit::metric::Metric::new(
-            env!("CARGO_PKG_NAME"),
-            emit::empty::Empty,
-            "queue_length",
-            emit::well_known::METRIC_AGG_LAST,
-            queue_length,
-            emit::empty::Empty,
-        )))
+impl<T: Channel> emit::metric::Source for ChannelMetrics<T> {
+    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
+        let queue_length = {
+            self.shared
+                .state
+                .lock()
+                .unwrap()
+                .next_batch
+                .channel
+                .remaining()
+        };
+
+        let metrics = self
+            .shared
+            .metrics
+            .sample()
+            .chain(Some(emit::metric::Metric::new(
+                env!("CARGO_PKG_NAME"),
+                emit::empty::Empty,
+                "queue_length",
+                emit::well_known::METRIC_AGG_LAST,
+                queue_length,
+                emit::empty::Empty,
+            )));
+
+        for metric in metrics {
+            sampler.metric(&metric);
+        }
     }
 }
 
