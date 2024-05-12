@@ -46,8 +46,8 @@ impl EventEncoder for TracesEventEncoder {
             .filter(|extent| extent.is_span())
             .map(|extent| {
                 (
-                    extent.as_range().start.to_unix_time().as_nanos() as u64,
-                    extent.as_range().end.to_unix_time().as_nanos() as u64,
+                    extent.as_range().start.to_unix().as_nanos() as u64,
+                    extent.as_range().end.to_unix().as_nanos() as u64,
                 )
             })?;
 

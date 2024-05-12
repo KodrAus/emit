@@ -11,7 +11,7 @@ impl SystemClock {
 
 impl Clock for SystemClock {
     fn now(&self) -> Option<Timestamp> {
-        Timestamp::new(std::time::UNIX_EPOCH.elapsed().unwrap_or_default())
+        Timestamp::from_unix(std::time::UNIX_EPOCH.elapsed().unwrap_or_default())
     }
 }
 

@@ -1,3 +1,13 @@
+/*!
+The [`Timestamp`] type.
+
+A timestamp is a point in time, represented as the number of nanoseconds since the Unix epoch.
+
+Timestamps can be constructed manually through [`Timestamp::from_unix`], or the current timestamp can be read from an instance of [`crate::clock::Clock`].
+
+A timestamp can be converted into a point [`crate::extent::Extent`]. A pair of timestamps representing a timespan can be converted into a span [`crate::extent::Extent`].
+*/
+
 /*
 Parts of this file are adapted from other libraries:
 
@@ -19,6 +29,49 @@ use core::{
 
 use crate::value::{FromValue, ToValue, Value};
 
+/**
+A Unix timestamp with nanosecond precision.
+*/
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Timestamp(Duration);
+
+/**
+The individual date and time portions of a timestamp.
+
+Values in parts are represented exactly as they would be when formatted into a timestamp. So months and days are both one-based instead of zero-based values.
+*/
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Parts {
+    /**
+    The zero-based year.
+    */
+    pub years: u16,
+    /**
+    The one-based month.
+    */
+    pub months: u8,
+    /**
+    The one-based day.
+    */
+    pub days: u8,
+    /**
+    The zero-based hour of the day.
+    */
+    pub hours: u8,
+    /**
+    The zero-based minute of the hour.
+    */
+    pub minutes: u8,
+    /**
+    The zero-based second of the minute.
+    */
+    pub seconds: u8,
+    /**
+    The zero-based subsecond precision.
+    */
+    pub nanos: u32,
+}
+
 // 2000-03-01 (mod 400 year, immediately after feb29
 const LEAPOCH_SECS: u64 = 946_684_800 + 86400 * (31 + 29);
 const DAYS_PER_400Y: i32 = 365 * 400 + 97;
@@ -26,42 +79,67 @@ const DAYS_PER_100Y: i32 = 365 * 100 + 24;
 const DAYS_PER_4Y: i32 = 365 * 4 + 1;
 const DAYS_IN_MONTH: [u8; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Timestamp(Duration);
+// 1970-01-01T00:00:00.000000000Z
+const MIN: Duration = Duration::new(0, 0);
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Parts {
-    pub years: u16,
-    pub months: u8,
-    pub days: u8,
-    pub hours: u8,
-    pub minutes: u8,
-    pub seconds: u8,
-    pub nanos: u32,
-}
+// 9999-12-31T23:59:59.999999999Z
+const MAX: Duration = Duration::new(253402300799, 999999999);
 
 impl Timestamp {
-    pub fn new(unix_time: Duration) -> Option<Self> {
-        if unix_time.as_secs() < LEAPOCH_SECS {
-            None
-        } else {
+    /**
+    The minimum timestamp, `1970-01-01T00:00:00Z`.
+    */
+    pub const MIN: Self = Timestamp(MIN);
+
+    /**
+    The maximum timestamp, `9999-12-31T23:59:59.999999999Z`.
+    */
+    pub const MAX: Self = Timestamp(MAX);
+
+    /**
+    Try create a timestamp from time since the Unix epoch.
+
+    If the `unix_time` is within [`MIN`]..=[`MAX`] then this method will return `Some`. Otherwise it will return `None`.
+    */
+    pub fn from_unix(unix_time: Duration) -> Option<Self> {
+        if unix_time >= MIN && unix_time <= MAX {
             Some(Timestamp(unix_time))
+        } else {
+            None
         }
     }
 
-    pub fn to_unix_time(&self) -> Duration {
+    /**
+    Get the value of the timestamp as time since the Unix epoch.
+    */
+    pub fn to_unix(&self) -> Duration {
         self.0
     }
 
+    /**
+    Calculate the timespan between two timestamps.
+
+    This method will return `None` if `earlier` is actually after `self`.
+    */
     pub fn duration_since(self, earlier: Self) -> Option<Duration> {
         self.0.checked_sub(earlier.0)
     }
 
+    /**
+    Convert the timestamp into a system timestamp.
+
+    This method can be used for interoperability with code expecting a standard library timestamp.
+    */
     #[cfg(feature = "std")]
     pub fn to_system_time(&self) -> std::time::SystemTime {
         std::time::SystemTime::UNIX_EPOCH + self.0
     }
 
+    /**
+    Try get a timestamp from its individual date and time parts.
+
+    If the resulting timestamp is within [`MIN`]..=[`MAX`] then this method will return `Some`. Otherwise it will return `None`.
+    */
     pub fn from_parts(parts: Parts) -> Option<Self> {
         let is_leap;
         let start_of_year;
@@ -148,7 +226,7 @@ impl Timestamp {
             seconds_within_year += 86400
         }
 
-        Timestamp::new(Duration::new(
+        Timestamp::from_unix(Duration::new(
             (start_of_year + i128::from(seconds_within_year))
                 .try_into()
                 .ok()?,
@@ -233,7 +311,7 @@ impl Add<Duration> for Timestamp {
     type Output = Timestamp;
 
     fn add(self, rhs: Duration) -> Self::Output {
-        match Timestamp::new(self.to_unix_time() + rhs) {
+        match Timestamp::from_unix(self.to_unix() + rhs) {
             Some(ts) => ts,
             None => panic!("overflow adding to timestamp"),
         }
@@ -250,7 +328,7 @@ impl Sub<Duration> for Timestamp {
     type Output = Timestamp;
 
     fn sub(self, rhs: Duration) -> Self::Output {
-        match Timestamp::new(self.to_unix_time() - rhs) {
+        match Timestamp::from_unix(self.to_unix() - rhs) {
             Some(ts) => ts,
             None => panic!("overflow subtracting from timestamp"),
         }
@@ -398,12 +476,44 @@ mod tests {
 
     #[test]
     fn timestamp_roundtrip() {
-        let ts = Timestamp::new(Duration::new(1691961703, 17532)).unwrap();
+        let ts = Timestamp::from_unix(Duration::new(1691961703, 17532)).unwrap();
 
         let fmt = ts.to_string();
 
         let parsed: Timestamp = fmt.parse().unwrap();
 
         assert_eq!(ts, parsed, "{}", fmt);
+    }
+
+    #[test]
+    fn timestamp_parts_max() {
+        let ts = Timestamp::from_parts(Parts {
+            years: 9999,
+            months: 12,
+            days: 31,
+            hours: 23,
+            minutes: 59,
+            seconds: 59,
+            nanos: 999999999,
+        })
+        .unwrap();
+
+        assert_eq!(ts.to_unix(), MAX);
+    }
+
+    #[test]
+    fn timestamp_parts_min() {
+        let ts = Timestamp::from_parts(Parts {
+            years: 1970,
+            months: 1,
+            days: 1,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+            nanos: 0,
+        })
+        .unwrap();
+
+        assert_eq!(ts.to_unix(), MIN);
     }
 }

@@ -117,10 +117,9 @@ fn local_ts(ts: emit::Timestamp) -> Option<LocalTime> {
     // any multi-threaded program. It needs to be fixed in the standard
     // library and propagated through libraries like `time`. Until then,
     // you probably won't get local timestamps outside of Windows.
-    let local = time::OffsetDateTime::from_unix_timestamp_nanos(
-        ts.to_unix_time().as_nanos().try_into().ok()?,
-    )
-    .ok()?;
+    let local =
+        time::OffsetDateTime::from_unix_timestamp_nanos(ts.to_unix().as_nanos().try_into().ok()?)
+            .ok()?;
     let local = local.checked_to_offset(time::UtcOffset::local_offset_at(local).ok()?)?;
 
     let (h, m, s, ms) = local.time().as_hms_milli();

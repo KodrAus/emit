@@ -10,7 +10,7 @@ use crate::{empty::Empty, timestamp::Timestamp};
 use core::{fmt, ops::Range, time::Duration};
 
 /**
-Either a single [`Timestamp`] for a point in time, or a pair of [`Timestamp`]s for a span of time.
+Either a single [`Timestamp`] for a point in time, or a pair of [`Timestamp`]s for a timespan.
 */
 #[derive(Clone)]
 pub struct Extent {
@@ -30,7 +30,7 @@ impl Extent {
     }
 
     /**
-    Create an extent for a span of time.
+    Create an extent for a timespan.
 
     The end of the range should be after the start, but an empty range is still considered a span.
     */
@@ -60,7 +60,7 @@ impl Extent {
     }
 
     /**
-    Try get the extent as a span of time.
+    Try get the extent as a timespan.
 
     This method will return `Some` if the extent is a span, even if that span is empty. It will return `None` for point extents.
     */
@@ -93,7 +93,7 @@ impl Extent {
     }
 
     /**
-    Whether the extent is a span of time.
+    Whether the extent is a timespan.
     */
     pub fn is_span(&self) -> bool {
         self.is_span

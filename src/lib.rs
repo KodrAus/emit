@@ -65,7 +65,7 @@ This example is a perfect opportunity to introduce `emit`'s model of diagnostics
 
 - `module`: The component that raised the event.
 - `tpl`: A text template that can be rendered to describe the event.
-- `extent`: The point in time when the event occurred, or the span of time for which it was active.
+- `extent`: The point in time when the event occurred, or the timespan for which it was active.
 - `props`: A set of key-value pairs that define the event and capture the context surrounding it.
 
 `emit`'s events are general enough to represent many observability paradigms including logs, distributed traces, metric samples, and more.
@@ -179,7 +179,7 @@ The `extent` control parameter sets the extent:
 ```
 # use std::time::Duration;
 emit::emit!(
-    extent: emit::Timestamp::new(Duration::from_secs(1000000000)),
+    extent: emit::Timestamp::from_unix(Duration::from_secs(1000000000)),
     "Hello, World!",
 );
 ```

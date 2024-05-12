@@ -40,7 +40,7 @@ impl<'a, P> Event<'a, P> {
     Events are composed of:
 
     - `module`: A [`Path`] to the module that produced the event. This will typically be a [`module_path!`].
-    - `extent`: The [`Extent`] of the event. This is the point in time at which it occurred, or the span of time for which it was active.
+    - `extent`: The [`Extent`] of the event. This is the point in time at which it occurred, or the timespan for which it was active.
     - `tpl`: The [`Template`] of the event. This is the user-facing description of the event that can be rendered into a readable form.
     - `props`: The [`Props`] attached to the event, captured from the surrounding environment.
     */
@@ -102,7 +102,7 @@ impl<'a, P> Event<'a, P> {
     /**
     Get the start point of the extent of the event.
 
-    If the event has an extent, and that extent covers a span of time then this method will return `Some`. Otherwise this method will return `None`.
+    If the event has an extent, and that extent covers a timespan then this method will return `Some`. Otherwise this method will return `None`.
     */
     pub fn ts_start(&self) -> Option<&Timestamp> {
         self.extent

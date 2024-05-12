@@ -61,8 +61,8 @@ impl EventEncoder for MetricsEventEncoder {
                     let range = extent.as_range();
 
                     (
-                        range.start.to_unix_time().as_nanos() as u64,
-                        range.end.to_unix_time().as_nanos() as u64,
+                        range.start.to_unix().as_nanos() as u64,
+                        range.end.to_unix().as_nanos() as u64,
                         if extent.is_span() {
                             AggregationTemporality::Delta
                         } else {
