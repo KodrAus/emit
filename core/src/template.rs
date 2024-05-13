@@ -1,3 +1,21 @@
+/*!
+The [`Template`] type.
+
+Templates are the primary way of describing [`crate::event::Event`]s. A template is a block of text with named holes for [`Value`]s to be interpolated into. When the template is fed a set of [`Props`] it can be rendered into text using an instance of [`Write`]. Here's an example of a template:
+
+```text
+Hello, {user}.
+```
+
+If this template is fed the property `user: "Rust"`, it can be rendered into text:
+
+```text
+Hello, Rust.
+```
+
+`Template`s are conceptually similar to the standard library's `Arguments` type. The key difference between them is that templates are a runtime construct rather than a compile time one. You can construct a template programmatically, inspect its holes, and choose to render it in any way you like. The standard library's formatting APIs are optimized for producing strings. Templates are both a property capturing and a formatting tool.
+*/
+
 use core::{cmp, fmt};
 
 #[cfg(feature = "alloc")]
@@ -10,6 +28,9 @@ use crate::{
     value::{ToValue, Value},
 };
 
+/**
+A lazily evaluated text template with named holes for interpolating properties into.
+*/
 #[derive(Clone)]
 pub struct Template<'a>(TemplateKind<'a>);
 
@@ -51,24 +72,43 @@ impl<'a> From<&'a [Part<'a>]> for Template<'a> {
 }
 
 impl Template<'static> {
+    /**
+    Create a template from a set of tokens.
+    */
     pub fn new(parts: &'static [Part<'static>]) -> Self {
         Template(TemplateKind::Parts(parts))
     }
 
+    /**
+    Create a template from a string literal with no holes.
+    */
     pub fn literal(text: &'static str) -> Self {
         Template(TemplateKind::Literal([Part::text(text)]))
     }
 }
 
 impl<'a> Template<'a> {
+    /**
+    Create a template from a borrowed set of tokens.
+
+    The [`Template::new`] method should be preferred where possible.
+    */
     pub fn new_ref(parts: &'a [Part<'a>]) -> Self {
         Template(TemplateKind::Parts(parts))
     }
 
+    /**
+    Create a template from a string literal with no holes.
+
+    The [`Template::literal`] method should be preferred where possible.
+    */
     pub fn literal_ref(text: &'a str) -> Self {
         Template(TemplateKind::Literal([Part::text_ref(text)]))
     }
 
+    /**
+    Get a new template, borrowing data from this one.
+    */
     pub fn by_ref<'b>(&'b self) -> Template<'b> {
         match self.0 {
             TemplateKind::Literal([ref part]) => Template(TemplateKind::Literal([part.by_ref()])),
@@ -78,13 +118,21 @@ impl<'a> Template<'a> {
         }
     }
 
-    pub fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
+    /**
+    Try get the value of the template as a string literal.
+
+    If the template only has a single token, and that token is text, then this method will return `Some`. Otherwise this method will return `None`.
+    */
+    pub fn as_literal(&'_ self) -> Option<&'_ Str<'a>> {
         match self.0.parts() {
-            [part] => part.as_str(),
+            [part] => part.as_text(),
             _ => None,
         }
     }
 
+    /**
+    Lazily render the template, using the given properties for interpolation.
+    */
     pub fn render<'b, P>(&'b self, props: P) -> Render<'b, P> {
         Render {
             tpl: self.by_ref(),
@@ -95,7 +143,7 @@ impl<'a> Template<'a> {
 
 impl<'a> ToValue for Template<'a> {
     fn to_value(&self) -> Value {
-        if let Some(tpl) = self.as_str() {
+        if let Some(tpl) = self.as_literal() {
             Value::from_any(tpl)
         } else {
             Value::from_display(self)
@@ -103,10 +151,15 @@ impl<'a> ToValue for Template<'a> {
     }
 }
 
+/**
+Template equality is based on the equality of their renderings.
+
+Two templates can be equal if they'd render to the same outputs. That means they must have the same holes in the same positions, but their text tokens may be split differently, so long as they produce the same text.
+*/
 impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
     fn eq(&self, other: &Template<'b>) -> bool {
         // Optimize for the case where both templates are just text literals
-        if let (Some(a), Some(b)) = (self.as_str(), other.as_str()) {
+        if let (Some(a), Some(b)) = (self.as_literal(), other.as_literal()) {
             return a == b;
         }
 
@@ -186,12 +239,20 @@ impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
 
 impl<'a> Eq for Template<'a> {}
 
+/**
+The result of calling [`Template::render`].
+
+The template can be converted to text either using the [`fmt::Display`] implementation of `Render`, or by calling [`Render::write`] with an instance of [`Write`].
+*/
 pub struct Render<'a, P> {
     tpl: Template<'a>,
     props: P,
 }
 
 impl<'a, P> Render<'a, P> {
+    /**
+    Set the properties to interpolate.
+    */
     pub fn with_props<U>(self, props: U) -> Render<'a, U> {
         Render {
             tpl: self.tpl,
@@ -199,12 +260,20 @@ impl<'a, P> Render<'a, P> {
         }
     }
 
-    pub fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
-        self.tpl.as_str()
+    /**
+    Try get the value of the template as a string literal.
+    */
+    pub fn as_literal(&'_ self) -> Option<&'_ Str<'a>> {
+        self.tpl.as_literal()
     }
 }
 
 impl<'a, P: Props> Render<'a, P> {
+    /**
+    Format the template into the given writer, interpolating its properties.
+
+    The [`Write`] is fed the tokens of the template along with properties matching the labels of its holes.
+    */
     pub fn write(&self, mut writer: impl Write) -> fmt::Result {
         for part in self.tpl.0.parts() {
             part.write(&mut writer, &self.props)?;
@@ -216,7 +285,7 @@ impl<'a, P: Props> Render<'a, P> {
 
 impl<'a, P: Props> ToValue for Render<'a, P> {
     fn to_value(&self) -> Value {
-        if let Some(tpl) = self.as_str() {
+        if let Some(tpl) = self.as_literal() {
             Value::from_any(tpl)
         } else {
             Value::from_display(self)
@@ -224,21 +293,44 @@ impl<'a, P: Props> ToValue for Render<'a, P> {
     }
 }
 
+/**
+A template-aware writer used by [`Render::write`] to format a template.
+*/
 pub trait Write: fmt::Write {
+    /**
+    Write a text fragment.
+
+    This method is called for any [`Part::text`] in the template.
+    */
     fn write_text(&mut self, text: &str) -> fmt::Result {
         self.write_str(text)
     }
 
+    /**
+    Write a hole with a matching value.
+
+    This method is called for any [`Part::hole`] in the template without special formatting requirements where a matching property exists.
+    */
     fn write_hole_value(&mut self, label: &str, value: Value) -> fmt::Result {
         let _ = label;
         self.write_fmt(format_args!("{}", value))
     }
 
+    /**
+    Write a hole with a matching value and formatter.
+
+    This method is called for any [`Part::hole`] in the template with special formatting requirements where a matching property exists.
+    */
     fn write_hole_fmt(&mut self, label: &str, value: Value, formatter: Formatter) -> fmt::Result {
         let _ = label;
         self.write_fmt(format_args!("{}", formatter.apply(value)))
     }
 
+    /**
+    Write a hole without a matching value.
+
+    This method is called for any [`Part::hole`] in the template where a matching property doesn't exist.
+    */
     fn write_hole_label(&mut self, label: &str) -> fmt::Result {
         self.write_fmt(format_args!("`{}`", label))
     }
@@ -349,9 +441,17 @@ impl<W: Write> Write for WriteBraced<W> {
     }
 }
 
+/**
+The result of [`Render::braced`].
+
+This type will render a template by wrapping hole labels in braces where a matching property doesn't exist.
+*/
 pub struct Braced<'a, P>(Render<'a, P>);
 
 impl<'a, P> Render<'a, P> {
+    /**
+    Render holes that have missing properties between braces, like `Hello, {user}`.
+    */
     pub fn braced(self) -> Braced<'a, P> {
         Braced(self)
     }
@@ -363,32 +463,61 @@ impl<'a, P: Props> fmt::Display for Braced<'a, P> {
     }
 }
 
+/**
+An individual token in a [`Template`].
+*/
 #[derive(Clone)]
 pub struct Part<'a>(PartKind<'a>);
 
 impl Part<'static> {
+    /**
+    Create a token for a fragment of literal text.
+    */
     pub const fn text(text: &'static str) -> Self {
         Self::text_str(Str::new(text))
     }
 
+    /**
+    Create a token for a hole to interpolate a [`Value`] into.
+    */
     pub const fn hole(label: &'static str) -> Self {
         Self::hole_str(Str::new(label))
     }
 }
 
 impl<'a> Part<'a> {
+    /**
+    Create a token for a borrowed fragment of literal text.
+
+    The [`Part::text`] method should be preferred where possible.
+    */
     pub const fn text_ref(text: &'a str) -> Self {
         Self::text_str(Str::new_ref(text))
     }
 
+    /**
+    Create a token for a hole with a borrowed label to interpolate a [`Value`] into.
+
+    The [`Part::hole`] method should be preferred where possible.
+    */
     pub const fn hole_ref(label: &'a str) -> Self {
         Self::hole_str(Str::new_ref(label))
     }
 
+    /**
+    Create a token for a fragment of literal text from a [`Str`] instead of `&str`.
+
+    This method allows creating parts from potentially owned or borrowed string values.
+    */
     pub const fn text_str(text: Str<'a>) -> Self {
         Part(PartKind::Text { value: text })
     }
 
+    /**
+    Create a token for a hole with a label from a [`Str`] instead of `&str` to interpolate a [`Value`] into.
+
+    This method allows creating parts from potentially owned or borrowed string values.
+    */
     pub const fn hole_str(label: Str<'a>) -> Self {
         Part(PartKind::Hole {
             label,
@@ -396,13 +525,19 @@ impl<'a> Part<'a> {
         })
     }
 
-    pub const fn as_str(&'_ self) -> Option<&'_ Str<'a>> {
+    /**
+    Try get the value of the part as a literal text fragment.
+    */
+    pub const fn as_text(&'_ self) -> Option<&'_ Str<'a>> {
         match self.0 {
             PartKind::Text { ref value, .. } => Some(value),
             _ => None,
         }
     }
 
+    /**
+    Get a new part, borrowing data from this one.
+    */
     pub fn by_ref<'b>(&'b self) -> Part<'b> {
         match self.0 {
             PartKind::Text { ref value } => Part(PartKind::Text {
@@ -418,6 +553,11 @@ impl<'a> Part<'a> {
         }
     }
 
+    /**
+    Set a formatter for a value interpolated into this part to use.
+
+    This method only applies to [`Part::hole`]s. It's a no-op in other cases.
+    */
     pub fn with_formatter(self, formatter: Formatter) -> Self {
         match self.0 {
             PartKind::Hole {
@@ -455,20 +595,36 @@ impl<'a> Part<'a> {
     }
 }
 
+/**
+A specialized formatter for a [`Value`] interpolated into a [`Part::hole`].
+
+This type supports formatting values using standard Rust flags like padding and precision.
+*/
 #[derive(Clone)]
 pub struct Formatter {
     fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result,
 }
 
 impl Formatter {
+    /**
+    Create a formatter from the given function.
+
+    It's the responsibility of the function to actually write the value into the formatter.
+    */
     pub fn new(fmt: fn(Value, &mut fmt::Formatter) -> fmt::Result) -> Self {
         Formatter { fmt }
     }
 
+    /**
+    Invoke the formatter on a given value.
+    */
     pub fn fmt(&self, value: Value, f: &mut fmt::Formatter) -> fmt::Result {
         (self.fmt)(value, f)
     }
 
+    /**
+    Get a lazily formatted value that will apply the formatter.
+    */
     pub fn apply<'b>(&'b self, value: Value<'b>) -> impl fmt::Display + 'b {
         struct FormatValue<'a> {
             value: Value<'a>,
@@ -504,6 +660,9 @@ mod alloc_support {
     use super::*;
 
     impl Template<'static> {
+        /**
+        Create a template from a set of owned parts.
+        */
         pub fn new_owned(parts: impl Into<Box<[Part<'static>]>>) -> Self {
             let parts = parts.into();
 
@@ -512,6 +671,11 @@ mod alloc_support {
     }
 
     impl<'a> Template<'a> {
+        /**
+        Get a new template from this one, converting its parts into owned data.
+
+        If the template already contains owned data then this method will simply clone it.
+        */
         pub fn to_owned(&self) -> Template<'static> {
             match self.0 {
                 TemplateKind::Owned(ref parts) => Template::new_owned(parts.clone()),
@@ -529,12 +693,18 @@ mod alloc_support {
     }
 
     impl Part<'static> {
+        /**
+        Create a token for an owned fragment of literal text.
+        */
         pub fn text_owned(text: impl Into<Box<str>>) -> Self {
             Part(PartKind::Text {
                 value: Str::new_owned(text),
             })
         }
 
+        /**
+        Create a token for a hole with an owned label.
+        */
         pub fn hole_owned(label: impl Into<Box<str>>) -> Self {
             Part(PartKind::Hole {
                 label: Str::new_owned(label),

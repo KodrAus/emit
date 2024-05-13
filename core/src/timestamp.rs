@@ -139,6 +139,8 @@ impl Timestamp {
     Try get a timestamp from its individual date and time parts.
 
     If the resulting timestamp is within [`MIN`]..=[`MAX`] then this method will return `Some`. Otherwise it will return `None`.
+
+    If any field of `parts` would overflow its maximum value, such as `days: 32`, then it will wrap into the next unit.
     */
     pub fn from_parts(parts: Parts) -> Option<Self> {
         let is_leap;
@@ -234,6 +236,11 @@ impl Timestamp {
         ))
     }
 
+    /**
+    Get the individual date and time parts of the timestamp.
+
+    The returned parts are in exactly the form needed to display them. Months and days are both one-based.
+    */
     pub fn to_parts(&self) -> Parts {
         let dur = self.0;
         let secs = dur.as_secs();
@@ -380,6 +387,9 @@ impl<'v> FromValue<'v> for Timestamp {
     }
 }
 
+/**
+An error attempting to parse a [`Timestamp`] from text.
+*/
 #[derive(Debug)]
 pub struct ParseTimestampError {}
 
