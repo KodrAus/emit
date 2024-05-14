@@ -1,3 +1,15 @@
+/*!
+The [`Props`] type.
+
+Properties, also called attributes in some systems, are the structured data associated with an [`crate::event::Event`]. They are the dimensions an event can be categorized and queried on. Each property is a pair of [`Str`] and [`Value`] that can be inspected or serialized.
+
+[`Props`] allow duplicate keys, but can be de-duplicated by taking the first value seen for a given key. This lets consumers searching for a key short-circuit once they see it instead of needing to scan to the end in case a duplicate is found.
+
+[`Props`] can be fed to a [`crate::template::Template`] to render it into a user-facing message.
+
+Well-known properties described in [`crate::well_known`] are used to extend `emit`'s event model with different kinds of diagnostic data.
+*/
+
 use core::{borrow::Borrow, ops::ControlFlow};
 
 use crate::{
@@ -7,12 +19,33 @@ use crate::{
     value::{FromValue, ToValue, Value},
 };
 
+/**
+A collection of [`Str`] and [`Value`] pairs.
+
+The [`Props::for_each`] method can be used to enumerate properties.
+*/
 pub trait Props {
+    /**
+    Enumerate the [`Str`] and [`Value`] pairs.
+
+    The function `for_each` will be called for each property until all properties are visited, or it returns `ControlFlow::Break`.
+
+    Properties may be repeated, but can be de-duplicated by taking the first seen for a given key.
+    */
+    // TODO: Could we do `for_each_entry(E, Str, Value)`, where we pass as input
+    // a type that can be used to resume from?
     fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         for_each: F,
     ) -> ControlFlow<()>;
 
+    /**
+    Get the value for a given key, if it's present.
+
+    If the key is present then this method will return `Some`. Otherwise this method will return `None`.
+
+    If the key appears multiple times, the first value seen should be returned.
+    */
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         let key = key.to_str();
         let mut value = None;
@@ -30,30 +63,29 @@ pub trait Props {
         value
     }
 
+    /**
+    Get the value for a given key, if it's present as an instance of `V`.
+
+    If the key is present, and the raw value can be converted into `V` through [`Value::cast`] then this method will return `Some`. Otherwise this method will return `None`.
+
+    If the key appears multiple times, the first value seen should be returned.
+    */
     fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
         self.get(key).and_then(|v| v.cast())
     }
 
-    fn count(&self) -> usize {
-        let mut count = 0;
+    /**
+    Whether the collection is known not to contain any duplicate keys.
 
-        self.for_each(|_, _| {
-            count += 1;
-
-            ControlFlow::Continue(())
-        });
-
-        count
-    }
-
+    If there's any possibility a key may be duplicated, this method should return `false`.
+    */
     fn is_unique(&self) -> bool {
         false
     }
 
-    fn is_sorted(&self) -> bool {
-        false
-    }
-
+    /**
+    Concatenate `other` to the end of `self`.
+    */
     fn and_props<U: Props>(self, other: U) -> And<Self, U>
     where
         Self: Sized,
@@ -61,19 +93,17 @@ pub trait Props {
         And::new(self, other)
     }
 
-    fn filter<F: Fn(Str, Value) -> bool>(self, filter: F) -> Filter<Self, F>
-    where
-        Self: Sized,
-    {
-        Filter { src: self, filter }
-    }
+    /**
+    Lazily de-duplicate properties in the collection.
 
+    Properties are de-duplicated by taking the first value for a given key.
+    */
     #[cfg(feature = "alloc")]
-    fn dedup(self) -> Dedup<Self>
+    fn dedup(&self) -> &Dedup<Self>
     where
         Self: Sized,
     {
-        Dedup { src: self }
+        Dedup::new(self)
     }
 }
 
@@ -89,12 +119,12 @@ impl<'a, P: Props + ?Sized> Props for &'a P {
         (**self).get(key)
     }
 
-    fn count(&self) -> usize {
-        (**self).count()
-    }
-
     fn pull<'kv, V: FromValue<'kv>, K: ToStr>(&'kv self, key: K) -> Option<V> {
         (**self).pull(key)
+    }
+
+    fn is_unique(&self) -> bool {
+        (**self).is_unique()
     }
 }
 
@@ -138,14 +168,6 @@ impl<K: ToStr, V: ToValue> Props for (K, V) {
         for_each(self.0.to_str(), self.1.to_value())
     }
 
-    fn count(&self) -> usize {
-        1
-    }
-
-    fn is_sorted(&self) -> bool {
-        true
-    }
-
     fn is_unique(&self) -> bool {
         true
     }
@@ -162,10 +184,6 @@ impl<P: Props> Props for [P] {
 
         ControlFlow::Continue(())
     }
-
-    fn count(&self) -> usize {
-        self.iter().map(|props| props.count()).sum()
-    }
 }
 
 impl<T, const N: usize> Props for [T; N]
@@ -177,10 +195,6 @@ where
         for_each: F,
     ) -> ControlFlow<()> {
         (self as &[_]).for_each(for_each)
-    }
-
-    fn count(&self) -> usize {
-        (self as &[_]).count()
     }
 }
 
@@ -205,15 +219,7 @@ where
         self.get(key.to_str().as_ref()).map(|v| v.to_value())
     }
 
-    fn count(&self) -> usize {
-        self.len()
-    }
-
     fn is_unique(&self) -> bool {
-        true
-    }
-
-    fn is_sorted(&self) -> bool {
         true
     }
 }
@@ -239,10 +245,6 @@ where
         self.get(key.to_str().as_ref()).map(|v| v.to_value())
     }
 
-    fn count(&self) -> usize {
-        self.len()
-    }
-
     fn is_unique(&self) -> bool {
         true
     }
@@ -256,8 +258,12 @@ impl Props for Empty {
         ControlFlow::Continue(())
     }
 
-    fn count(&self) -> usize {
-        0
+    fn get<'v, K: ToStr>(&'v self, _: K) -> Option<Value<'v>> {
+        None
+    }
+
+    fn is_unique(&self) -> bool {
+        true
     }
 }
 
@@ -275,65 +281,38 @@ impl<A: Props, B: Props> Props for And<A, B> {
 
         self.left().get(key).or_else(|| self.right().get(key))
     }
-
-    fn count(&self) -> usize {
-        self.left().count() + self.right().count()
-    }
-
-    fn is_sorted(&self) -> bool {
-        self.left().is_sorted() && self.right().is_sorted()
-    }
-}
-
-pub struct Filter<T, F> {
-    src: T,
-    filter: F,
-}
-
-impl<T: Props, F: Fn(Str, Value) -> bool> Props for Filter<T, F> {
-    fn for_each<'kv, FE: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: FE,
-    ) -> ControlFlow<()> {
-        self.src.for_each(|k, v| {
-            if (self.filter)(k.by_ref(), v.by_ref()) {
-                for_each(k, v)
-            } else {
-                ControlFlow::Continue(())
-            }
-        })
-    }
-
-    fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
-        let key = key.to_str();
-
-        match self.src.get(key.by_ref()) {
-            Some(value) if (self.filter)(key, value.by_ref()) => Some(value),
-            _ => None,
-        }
-    }
 }
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
     use super::*;
 
-    pub struct Dedup<P> {
-        pub(super) src: P,
+    /**
+    The result of calling [`Props::dedup`].
+
+    Properties are de-duplicated by taking the first value for a given key.
+    */
+    #[repr(transparent)]
+    pub struct Dedup<P: ?Sized>(P);
+
+    impl<P: ?Sized> Dedup<P> {
+        pub(super) fn new<'a>(props: &'a P) -> &'a Dedup<P> {
+            unsafe { &*(props as *const P as *const Dedup<P>) }
+        }
     }
 
-    impl<P: Props> Props for Dedup<P> {
+    impl<P: Props + ?Sized> Props for Dedup<P> {
         fn for_each<'kv, F: FnMut(Str<'kv>, Value<'kv>) -> ControlFlow<()>>(
             &'kv self,
             mut for_each: F,
         ) -> ControlFlow<()> {
-            if self.src.is_unique() {
-                return self.src.for_each(for_each);
+            if self.0.is_unique() {
+                return self.0.for_each(for_each);
             }
 
             let mut seen = alloc::collections::BTreeMap::new();
 
-            self.src.for_each(|key, value| {
+            self.0.for_each(|key, value| {
                 seen.entry(key).or_insert(value);
 
                 ControlFlow::Continue(())
@@ -347,14 +326,10 @@ mod alloc_support {
         }
 
         fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
-            self.src.get(key)
+            self.0.get(key)
         }
 
         fn is_unique(&self) -> bool {
-            true
-        }
-
-        fn is_sorted(&self) -> bool {
             true
         }
     }
@@ -376,11 +351,7 @@ mod internal {
 
         fn dispatch_get(&self, key: Str) -> Option<Value>;
 
-        fn dispatch_count(&self) -> usize;
-
         fn dispatch_is_unique(&self) -> bool;
-
-        fn dispatch_is_sorted(&self) -> bool;
     }
 
     pub trait SealedProps {
@@ -388,6 +359,11 @@ mod internal {
     }
 }
 
+/**
+An object-safe [`Props`].
+
+A `dyn ErasedProps` can be treated as `impl Props`.
+*/
 pub trait ErasedProps: internal::SealedProps {}
 
 impl<P: Props> ErasedProps for P {}
@@ -410,14 +386,6 @@ impl<P: Props> internal::DispatchProps for P {
         self.get(key)
     }
 
-    fn dispatch_count(&self) -> usize {
-        self.count()
-    }
-
-    fn dispatch_is_sorted(&self) -> bool {
-        self.is_sorted()
-    }
-
     fn dispatch_is_unique(&self) -> bool {
         self.is_unique()
     }
@@ -433,14 +401,6 @@ impl<'a> Props for dyn ErasedProps + 'a {
 
     fn get<'v, K: ToStr>(&'v self, key: K) -> Option<Value<'v>> {
         self.erase_props().0.dispatch_get(key.to_str())
-    }
-
-    fn count(&self) -> usize {
-        self.erase_props().0.dispatch_count()
-    }
-
-    fn is_sorted(&self) -> bool {
-        self.erase_props().0.dispatch_is_sorted()
     }
 
     fn is_unique(&self) -> bool {

@@ -641,14 +641,6 @@ impl<'a> Props for __PrivateMacroProps<'a> {
             .and_then(|i| self.0[i].1.as_ref().map(|v| v.by_ref()))
     }
 
-    fn count(&self) -> usize {
-        self.0.len()
-    }
-
-    fn is_sorted(&self) -> bool {
-        true
-    }
-
     fn is_unique(&self) -> bool {
         true
     }

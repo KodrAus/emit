@@ -86,6 +86,10 @@ impl Props for ThreadLocalSpan {
 
         ControlFlow::Continue(())
     }
+
+    fn is_unique(&self) -> bool {
+        true
+    }
 }
 
 impl Ctxt for ThreadLocalCtxt {

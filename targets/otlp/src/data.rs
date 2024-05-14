@@ -1,10 +1,12 @@
-use std::{collections::HashSet, fmt, ops::ControlFlow};
+use std::{fmt, ops::ControlFlow};
 
 use bytes::Buf;
 use emit_batcher::BatchError;
 use sval_derive::Value;
 use sval_json::JsonStr;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
+
+use emit::Props as _;
 
 pub mod logs;
 pub mod metrics;
@@ -204,9 +206,8 @@ pub(crate) fn stream_attributes<'sval>(
 ) -> sval::Result {
     stream.seq_begin(None)?;
 
-    let mut seen = HashSet::new();
-    props.for_each(|k, v| {
-        if !for_each(&k, &v) && seen.insert(k.to_cow()) {
+    props.dedup().for_each(|k, v| {
+        if !for_each(&k, &v) {
             stream
                 .seq_value_begin()
                 .map(|_| ControlFlow::Continue(()))
