@@ -1,13 +1,36 @@
+/*!
+The [`Str`] type.
+
+This module implements a string type that combines `Cow<'static, str>` with `Cow<'a, str>`. A [`Str`] can hold borrowed, static, owned, or shared data. Internally, it's more efficient than a [`std::borrow::Cow`] to access because it doesn't need to hop through enum variants.
+
+Values can be converted into [`Str`]s either directly using methods like [`Str::new`], or generically through the [`ToStr`] trait.
+
+[`Str`]s are used in place of `str` or `String` as keys in [`crate::props::Props`] and fragments of [`crate::template::Template`]s.
+*/
+
 use core::{borrow::Borrow, fmt, hash, marker::PhantomData};
 
 #[cfg(feature = "alloc")]
 use alloc::{boxed::Box, sync::Arc};
 
+/**
+A string value.
+
+The [`Str::get`] method can be used to operate on the value as if it's a standard [`str`]. Equality, ordering, and hashing all defer to the [`str`] representation.
+
+The value may internally be any one of:
+
+- `&'k str`.
+- `&'static str`.
+- `Box<str>`.
+- `Arc<str>`.
+*/
 pub struct Str<'k> {
     // This type is an optimized `Cow<str>`
     // It avoids the cost of matching the variant to get the inner value
     value: *const str,
     // Only one of `value_static`, `value_owned`, or `value_shared` will be set
+    // NOTE: We could probably save space here by putting these in an enum
     value_static: Option<&'static str>,
     #[cfg(feature = "alloc")]
     value_owned: Option<Box<str>>,
@@ -97,6 +120,9 @@ impl<'k> Clone for Str<'k> {
 }
 
 impl Str<'static> {
+    /**
+    Create a new string from a value borrowed for `'static`.
+    */
     pub const fn new(k: &'static str) -> Self {
         Str {
             value: k as *const str,
@@ -111,6 +137,11 @@ impl Str<'static> {
 }
 
 impl<'k> Str<'k> {
+    /**
+    Create a new string from a value borrowed for `'k`.
+
+    The [`Str::new`] method should be preferred where possible.
+    */
     pub const fn new_ref(k: &'k str) -> Str<'k> {
         Str {
             value: k as *const str,
@@ -123,6 +154,9 @@ impl<'k> Str<'k> {
         }
     }
 
+    /**
+    Get a new string, borrowing data from this one.
+    */
     pub const fn by_ref<'b>(&'b self) -> Str<'b> {
         Str {
             value: self.value,
@@ -135,6 +169,9 @@ impl<'k> Str<'k> {
         }
     }
 
+    /**
+    Get a reference to the underlying value.
+    */
     pub const fn get(&self) -> &str {
         // NOTE: It's important here that the lifetime returned is not `'k`
         // If it was it would be possible to return a `&'static str` from
@@ -142,6 +179,11 @@ impl<'k> Str<'k> {
         unsafe { &(*self.value) }
     }
 
+    /**
+    Try get a reference to the underlying static value.
+
+    If the string was created from [`Str::new`] and contains a `'static` value then this method will return `Some`. Otherwise this method will return `None`.
+    */
     pub const fn get_static(&self) -> Option<&'static str> {
         self.value_static
     }
@@ -240,7 +282,13 @@ impl<'k> FromValue<'k> for Str<'k> {
     }
 }
 
+/**
+Convert a reference to a [`Str`].
+*/
 pub trait ToStr {
+    /**
+    Perform the conversion.
+    */
     fn to_str(&self) -> Str;
 }
 
@@ -296,6 +344,11 @@ mod alloc_support {
     use super::*;
 
     impl Str<'static> {
+        /**
+        Create a string from an owned value.
+
+        Cloning the string will involve cloning the value.
+        */
         pub fn new_owned(key: impl Into<Box<str>>) -> Self {
             let value = key.into();
 
@@ -308,6 +361,11 @@ mod alloc_support {
             }
         }
 
+        /**
+        Create a string from a shared value.
+
+        Cloning the string will involve cloning the `Arc`, which may be cheaper than cloning the value itself.
+        */
         pub fn new_shared(key: impl Into<Arc<str>>) -> Self {
             let value = key.into();
 
@@ -322,6 +380,11 @@ mod alloc_support {
     }
 
     impl<'k> Str<'k> {
+        /**
+        Create a string from a potentially owned value.
+
+        If the value is `Cow::Borrowed` then this method will defer to [`Str::new_ref`]. If the value is `Cow::Owned` then this method will defer to [`Str::new_owned`].
+        */
         pub fn new_cow_ref(key: Cow<'k, str>) -> Self {
             match key {
                 Cow::Borrowed(key) => Str::new_ref(key),
@@ -329,6 +392,11 @@ mod alloc_support {
             }
         }
 
+        /**
+        Get the underlying value as a potentially owned string.
+
+        If the string contains a `'static` value then this method will return `Cow::Borrowed`. Otherwise it will return `Cow::Owned`.
+        */
         pub fn to_cow(&self) -> Cow<'static, str> {
             match self.value_static {
                 Some(key) => Cow::Borrowed(key),
@@ -336,6 +404,11 @@ mod alloc_support {
             }
         }
 
+        /**
+        Get a new string, taking an owned copy of the data in this one.
+
+        If the string contains a `'static` or `Arc` value then this method is cheap and doesn't involve cloning. In other cases the underlying value will be passed through [`Str::new_owned`].
+        */
         pub fn to_owned(&self) -> Str<'static> {
             match self {
                 Str {
@@ -363,6 +436,11 @@ mod alloc_support {
             }
         }
 
+        /**
+        Get a new string, taking an owned copy of the data in this one.
+
+        If the string contains a `'static` or `Arc` value then this method is cheap and doesn't involve cloning. In other cases the underlying value will be passed through [`Str::new_shared`].
+        */
         pub fn to_shared(&self) -> Str<'static> {
             match self {
                 Str {
@@ -394,6 +472,18 @@ mod alloc_support {
     impl ToStr for String {
         fn to_str(&self) -> Str {
             Str::new_ref(self)
+        }
+    }
+
+    impl ToStr for Box<str> {
+        fn to_str(&self) -> Str {
+            Str::new_ref(self)
+        }
+    }
+
+    impl ToStr for Arc<str> {
+        fn to_str(&self) -> Str {
+            Str::new_shared(self.clone())
         }
     }
 

@@ -30,6 +30,12 @@ use crate::{
 
 /**
 A lazily evaluated text template with named holes for interpolating properties into.
+
+The [`Template::render`] method can be used to format a template with [`Props`] into a string or other representation.
+
+Template equality is based on the equality of their renderings.
+
+Two templates can be equal if they'd render to the same outputs. That means they must have the same holes in the same positions, but their text tokens may be split differently, so long as they produce the same text.
 */
 #[derive(Clone)]
 pub struct Template<'a>(TemplateKind<'a>);
@@ -151,11 +157,6 @@ impl<'a> ToValue for Template<'a> {
     }
 }
 
-/**
-Template equality is based on the equality of their renderings.
-
-Two templates can be equal if they'd render to the same outputs. That means they must have the same holes in the same positions, but their text tokens may be split differently, so long as they produce the same text.
-*/
 impl<'a, 'b> PartialEq<Template<'b>> for Template<'a> {
     fn eq(&self, other: &Template<'b>) -> bool {
         // Optimize for the case where both templates are just text literals

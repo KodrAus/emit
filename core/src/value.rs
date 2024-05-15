@@ -257,7 +257,7 @@ impl<'v> serde::Serialize for Value<'v> {
 }
 
 /**
-Convert to a [`Value`].
+Convert a reference to a [`Value`].
 
 This trait is the basis for the [`Value::from_any`] method.
 */

@@ -1,3 +1,23 @@
+/*!
+The [`Path`] type.
+
+A path is a hierarchical identifier with fragments separated by `::`. The following are all valid paths:
+
+- `a`.
+- `a::b`.
+- `::c`.
+
+The path syntax is a subset of Rust's paths. The following are not valid paths:
+
+- `::`.
+- `a::`.
+- `a::::b`.
+- `a::*`.
+- `a::{b, c}`.
+
+Paths are used to represent the module on [`crate::event::Event`]s.
+*/
+
 use core::{
     cmp::Ordering,
     fmt,
@@ -10,6 +30,10 @@ use crate::{
     value::{FromValue, ToValue, Value},
 };
 
+/**
+A hierarchical identifier, such as `a::b::c`.
+*/
+// TODO: Handle cases of invalid paths like `a::`, `::`, `a::::b`
 #[derive(Clone)]
 pub struct Path<'a>(Str<'a>);
 
@@ -44,34 +68,56 @@ impl<'a> FromValue<'a> for Path<'a> {
 }
 
 impl Path<'static> {
+    /**
+    Create a path from a raw value.
+    */
     pub const fn new(path: &'static str) -> Self {
         Path::new_str(Str::new(path))
     }
 }
 
 impl<'a> Path<'a> {
+    /**
+    Create a path from a raw borrowed value.
+
+    The [`Path::new`] method should be preferred where possible.
+    */
     pub const fn new_ref(path: &'a str) -> Self {
         Self::new_str(Str::new_ref(path))
     }
 
+    /**
+    Create a path from a raw [`Str`] value.
+    */
     pub const fn new_str(path: Str<'a>) -> Self {
         Path(path)
     }
 
+    /**
+    Get a path, borrowing data from this one.
+    */
     pub fn by_ref<'b>(&'b self) -> Path<'b> {
         Path(self.0.by_ref())
     }
 
+    /**
+    Iterate over the segments of the path.
+
+    Each segment is the identifier between `::` in the path value.
+    */
     pub fn segments(&self) -> Segments {
         Segments {
             inner: self.0.get().split("::"),
         }
     }
 
-    pub fn as_str(&self) -> Option<&Str<'a>> {
-        Some(&self.0)
-    }
+    /**
+    Whether this path is a child of `other`.
 
+    The path _a_ is a child of the path _b_ if _b_ is a prefix of _a_ up to a path segment. The path `a::b` is a child of `a`. The path `c::a::b` is not a child of `a`. The path `aa::b` is not a child of `a`.
+
+    This method is reflexive. A path is considered a child of itself.
+    */
     pub fn is_child_of<'b>(&self, other: &Path<'b>) -> bool {
         let child = self.0.get();
         let parent = other.0.get();
@@ -86,6 +132,11 @@ impl<'a> Path<'a> {
     }
 }
 
+/**
+The result of [`Path::segments`].
+
+This type is an iterator over the `::` separated fragments in a [`Path`].
+*/
 pub struct Segments<'a> {
     inner: str::Split<'a, &'static str>,
 }
@@ -196,20 +247,27 @@ mod alloc_support {
     use super::*;
 
     impl Path<'static> {
+        /**
+        Create a path from an owned raw value.
+        */
         pub fn new_owned(path: impl Into<Box<str>>) -> Self {
             Path(Str::new_owned(path))
         }
     }
 
     impl<'a> Path<'a> {
+        /**
+        Create a path from a potentially owned raw value.
+
+        If the value is `Cow::Borrowed` then this method will defer to [`Path::new_ref`]. If the value is `Cow::Owned` then this method will defer to [`Path::new_owned`].
+        */
         pub fn new_cow_ref(path: Cow<'a, str>) -> Self {
             Path(Str::new_cow_ref(path))
         }
 
-        pub fn to_cow(&self) -> Cow<'a, str> {
-            self.0.to_cow()
-        }
-
+        /**
+        Get a new path, taking an owned copy of the data in this one.
+        */
         pub fn to_owned(&self) -> Path<'static> {
             Path(self.0.to_owned())
         }
