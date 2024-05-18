@@ -1,12 +1,32 @@
+/*!
+The [`Rng`] type.
+*/
+
 use crate::empty::Empty;
 
+/**
+A non-crypographic source of randomness.
+*/
 pub trait Rng {
+    /**
+    Fill a buffer with random data.
+
+    This method may return `None` if the buffer couldn't be filled with randmo data for any reason.
+
+    The buffer is expected to have a consistent implementation of `AsMut` that always returns a reference to the same underlying bytes. This isn't required for safety, but can lead to unexpected results.
+    */
     fn fill<A: AsMut<[u8]>>(&self, arr: A) -> Option<A>;
 
+    /**
+    Get a random 64bit number.
+    */
     fn gen_u64(&self) -> Option<u64> {
         self.fill([0; 8]).map(u64::from_le_bytes)
     }
 
+    /**
+    Get a random 128bit number.
+    */
     fn gen_u128(&self) -> Option<u128> {
         self.fill([0; 16]).map(u128::from_le_bytes)
     }
@@ -88,6 +108,11 @@ mod internal {
     }
 }
 
+/**
+An object-safe [`Rng`].
+
+A `dyn ErasedRng` can be treated as `impl Rng`.
+*/
 pub trait ErasedRng: internal::SealedRng {}
 
 impl<T: Rng> ErasedRng for T {}
