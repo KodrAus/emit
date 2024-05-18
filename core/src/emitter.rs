@@ -126,7 +126,7 @@ mod internal {
     }
 
     pub trait SealedEmitter {
-        fn erase_target(&self) -> crate::internal::Erased<&dyn DispatchEmitter>;
+        fn erase_emitter(&self) -> crate::internal::Erased<&dyn DispatchEmitter>;
     }
 }
 
@@ -135,7 +135,7 @@ pub trait ErasedEmitter: internal::SealedEmitter {}
 impl<T: Emitter> ErasedEmitter for T {}
 
 impl<T: Emitter> internal::SealedEmitter for T {
-    fn erase_target(&self) -> crate::internal::Erased<&dyn internal::DispatchEmitter> {
+    fn erase_emitter(&self) -> crate::internal::Erased<&dyn internal::DispatchEmitter> {
         crate::internal::Erased(self)
     }
 }
@@ -152,11 +152,13 @@ impl<T: Emitter> internal::DispatchEmitter for T {
 
 impl<'a> Emitter for dyn ErasedEmitter + 'a {
     fn emit<E: ToEvent>(&self, evt: E) {
-        self.erase_target().0.dispatch_emit(&evt.to_event().erase())
+        self.erase_emitter()
+            .0
+            .dispatch_emit(&evt.to_event().erase())
     }
 
     fn blocking_flush(&self, timeout: Duration) {
-        self.erase_target().0.dispatch_blocking_flush(timeout)
+        self.erase_emitter().0.dispatch_blocking_flush(timeout)
     }
 }
 

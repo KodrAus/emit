@@ -1,6 +1,20 @@
+/*!
+The [`Clock`] type.
+
+A clock is a service that returns a [`Timestamp`] representing the current point in time. Clock readings are not guaranteed to be monotonic. They may move forwards or backwards arbitrarily, but for diagnostics to be useful, a clock should strive for accuracy.
+*/
+
 use crate::{empty::Empty, timestamp::Timestamp};
 
+/**
+A service to measure the current time.
+*/
 pub trait Clock {
+    /**
+    Read the current time.
+
+    This method may return `None` if the clock couldn't be read for any reason. That may involve the clock not actually supporting reading now, time moving backwards, or any other reason that could result in an innacurate reading.
+    */
     fn now(&self) -> Option<Timestamp>;
 }
 
@@ -52,6 +66,11 @@ mod internal {
     }
 }
 
+/**
+An object-safe [`Clock`].
+
+A `dyn ErasedClock` can be treated as `impl Clock`.
+*/
 pub trait ErasedClock: internal::SealedClock {}
 
 impl<T: Clock> ErasedClock for T {}
