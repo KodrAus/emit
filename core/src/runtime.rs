@@ -208,7 +208,7 @@ impl<T: Emitter> Emitter for AssertInternal<T> {
         self.0.emit(evt)
     }
 
-    fn blocking_flush(&self, timeout: core::time::Duration) {
+    fn blocking_flush(&self, timeout: core::time::Duration) -> bool {
         self.0.blocking_flush(timeout)
     }
 }
@@ -292,7 +292,10 @@ impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::and::And<T,
 
 impl<T: InternalFilter, U: InternalFilter> InternalFilter for crate::or::Or<T, U> {}
 
-impl<T: InternalFilter, U: InternalEmitter> InternalEmitter for crate::filter::Wrap<T, U> {}
+impl<T: InternalFilter, U: InternalEmitter> InternalEmitter
+    for crate::filter::FilteredEmitter<T, U>
+{
+}
 
 #[cfg(feature = "alloc")]
 impl<'a, T: ?Sized + InternalFilter> InternalFilter for alloc::boxed::Box<T> {}

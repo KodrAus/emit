@@ -1,3 +1,9 @@
+/*!
+The [`Filter`] type.
+
+Filters reduce the burden of diagnostics by limiting the volume of data generated. A typical filter will only match events with a certain level or higher, or it may exclude all events for a particularly noisy module.
+*/
+
 use core::time::Duration;
 
 use crate::{
@@ -9,9 +15,24 @@ use crate::{
     props::ErasedProps,
 };
 
+/**
+A filter over [`Event`]s.
+
+Filters can be evaluated with a call to [`Filter::matches`].
+*/
 pub trait Filter {
+    /**
+    Evaluate an event against the filter.
+
+    If this method return `true` then the event has passed the filter. If this method returns `false` then the event has failed the filter.
+    */
     fn matches<E: ToEvent>(&self, evt: E) -> bool;
 
+    /**
+    `self && other`.
+
+    If `self` evaluates to `true` then `other` will be evaluated.
+    */
     fn and_when<U>(self, other: U) -> And<Self, U>
     where
         Self: Sized,
@@ -19,6 +40,11 @@ pub trait Filter {
         And::new(self, other)
     }
 
+    /**
+    `self || other`.
+
+    If `self` evaluates to `false` then `other` will be evaluated.
+    */
     fn or_when<U>(self, other: U) -> Or<Self, U>
     where
         Self: Sized,
@@ -26,14 +52,14 @@ pub trait Filter {
         Or::new(self, other)
     }
 
-    fn wrap_emitter<E>(self, emitter: E) -> Wrap<Self, E>
+    /**
+    Wrap an [`Emitter`], only emitting events if they pass the filter.
+    */
+    fn wrap_emitter<E>(self, emitter: E) -> FilteredEmitter<Self, E>
     where
         Self: Sized,
     {
-        Wrap {
-            filter: self,
-            emitter,
-        }
+        FilteredEmitter::new(self, emitter)
     }
 }
 
@@ -90,12 +116,24 @@ pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>) -> bool>(f: F) -> FromFn<F> {
     FromFn(f)
 }
 
-pub struct Wrap<F, E> {
+/**
+An [`Emitter`] protected by a [`Filter`].
+*/
+pub struct FilteredEmitter<F, E> {
     filter: F,
     emitter: E,
 }
 
-impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
+impl<F, E> FilteredEmitter<F, E> {
+    /**
+    Create a new filtered emitter with the given filter `F` and emitter `E`.
+    */
+    pub const fn new(filter: F, emitter: E) -> Self {
+        FilteredEmitter { filter, emitter }
+    }
+}
+
+impl<F: Filter, E: Emitter> Emitter for FilteredEmitter<F, E> {
     fn emit<T: ToEvent>(&self, evt: T) {
         let evt = evt.to_event();
 
@@ -104,12 +142,12 @@ impl<F: Filter, E: Emitter> Emitter for Wrap<F, E> {
         }
     }
 
-    fn blocking_flush(&self, timeout: Duration) {
+    fn blocking_flush(&self, timeout: Duration) -> bool {
         self.emitter.blocking_flush(timeout)
     }
 }
 
-pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> Wrap<F, E> {
+pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> FilteredEmitter<F, E> {
     filter.wrap_emitter(emitter)
 }
 
@@ -129,6 +167,9 @@ impl<T: Filter, U: Filter> Filter for Or<T, U> {
     }
 }
 
+/**
+A [`Filter`] that always evaluates to `true`.
+*/
 pub fn always() -> Empty {
     Empty
 }
@@ -145,6 +186,11 @@ mod internal {
     }
 }
 
+/**
+An object-safe [`Filter`].
+
+A `dyn ErasedFilter` can be treated as `impl Filter`.
+*/
 pub trait ErasedFilter: internal::SealedFilter {}
 
 impl<T: Filter> ErasedFilter for T {}

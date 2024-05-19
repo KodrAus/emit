@@ -468,7 +468,9 @@ impl emit::Emitter for OpenTelemetryEmitter {
         self.logger.emit(record.build());
     }
 
-    fn blocking_flush(&self, _: std::time::Duration) {}
+    fn blocking_flush(&self, _: std::time::Duration) -> bool {
+        false
+    }
 }
 
 fn otel_trace_id(trace_id: emit::span::TraceId) -> TraceId {

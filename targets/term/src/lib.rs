@@ -57,7 +57,9 @@ impl emit::emitter::Emitter for Stdout {
         with_shared_buf(&self.writer, |writer, buf| print_event(writer, buf, &evt));
     }
 
-    fn blocking_flush(&self, _: Duration) {}
+    fn blocking_flush(&self, _: Duration) -> bool {
+        true
+    }
 }
 
 impl emit::runtime::InternalEmitter for Stdout {}

@@ -1,21 +1,73 @@
+/*!
+The [`Ctxt`] type.
+
+Context is a shared place to store and retrieve data from the environment. It can be used to enrich [`crate::event::Event`]s with additional [`Props`], without needing to explicitly thread those properties through to them.
+
+Context is modeled like a stack. Pushing properties returns a frame which can be entered and exited to make those properties active on the current thread. Accessing the current context includes the properties for all active frames. This approach makes it possible to isolate context on different threads, as well is in different futures cooperatively executing on the same thread.
+*/
+
 use crate::{empty::Empty, props::Props};
 
+/**
+Storage for ambient properties.
+*/
 pub trait Ctxt {
+    /**
+    The type of [`Props`] used in [`Ctxt::with_current`].
+    */
     type Current: Props + ?Sized;
+
+    /**
+    The type of frame returned by [`Ctxt::open_root`] and [`Ctxt::open_push`].
+    */
     type Frame;
 
+    /**
+    Create a frame that will set the context to just the properties in `P`.
+
+    This method can be used to delete properties from the context, by pushing a frame that includes the current set with unwanted properties removed.
+
+    Once a frame is created, it can be entered to make its properties live by passing it to [`Ctxt::enter`]. The frame needs to be exited on the same thread by a call to [`Ctxt::exit`]. Once it's done, it should be disposed by a call to [`Ctxt::close`].
+    */
     fn open_root<P: Props>(&self, props: P) -> Self::Frame;
 
+    /**
+    Create a frame that will set the context to its current set, plus the properties in `P`.
+
+    Once a frame is created, it can be entered to make its properties live by passing it to [`Ctxt::enter`]. The frame needs to be exited on the same thread by a call to [`Ctxt::exit`]. Once it's done, it should be disposed by a call to [`Ctxt::close`].
+    */
     fn open_push<P: Props>(&self, props: P) -> Self::Frame {
         self.with_current(|current| self.open_root(props.and_props(current)))
     }
 
+    /**
+    Make the properties in a frame active.
+
+    Once a frame is entered, it must be exited by a call to [`Ctxt::exit`] on the same thread.
+    */
     fn enter(&self, local: &mut Self::Frame);
 
+    /**
+    Access the current context.
+
+    The properties passed to `with` are those from the most recently entered frame.
+
+    This method must call `with` exactly once, even if the current context is empty.
+    */
     fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R;
 
+    /**
+    Make the properties in a frame inactive.
+
+    Once a frame is exited, it can be entered again with a new call to [`Ctxt::enter`], potentially on another thread if [`Ctxt::Frame`] allows it.
+    */
     fn exit(&self, local: &mut Self::Frame);
 
+    /**
+    Close a frame, performing any shared cleanup.
+
+    This method should be called whenever a frame is finished. Failing to do so may leak.
+    */
     fn close(&self, frame: Self::Frame);
 }
 
@@ -176,6 +228,10 @@ mod internal {
 
     use crate::{props::Props, str::Str, value::Value};
 
+    // A lifetime-erased borrowed value
+    // This type is used to work around the lifetime relationship between
+    // `Ctxt::Frame` and the borrowed reference used by `Ctxt::with_current`
+    // I looked at using GATs for this, but it wasn't quite capable enough
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
     impl<T: ?Sized> Slot<T> {
@@ -260,8 +316,16 @@ mod alloc_support {
         }
     }
 
+    /**
+    An object-safe [`Ctxt::Frame`].
+    */
     pub struct ErasedFrame(Box<dyn Any + Send>);
 
+    /**
+    An object-safe [`Ctxt`].
+
+    A `dyn ErasedCtxt` can be treated as `impl Ctxt`.
+    */
     pub trait ErasedCtxt: internal::SealedCtxt {}
 
     impl<C: Ctxt> ErasedCtxt for C where C::Frame: Send + 'static {}

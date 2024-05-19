@@ -41,7 +41,7 @@ pub fn spawn<
     }
 }
 
-pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) {
+pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) -> bool {
     tokio::task::block_in_place(|| {
         let (notifier, mut notified) = tokio::sync::oneshot::channel();
 
@@ -51,13 +51,20 @@ pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) {
 
         // If there's nothing to flush then return immediately
         if notified.try_recv().is_ok() {
-            return;
+            return true;
         }
 
         match tokio::runtime::Handle::try_current() {
             // If we're on a `tokio` thread then await the receiver
             Ok(handle) => handle.block_on(async {
-                let _ = tokio::time::timeout(timeout, notified).await;
+                match tokio::time::timeout(timeout, notified).await {
+                    // The notifier was triggered
+                    Ok(Ok(())) => true,
+                    // Unexpected hangup; this should mean the channel was closed
+                    Ok(Err(_)) => true,
+                    // The timeout was reached instead
+                    Err(_) => false,
+                }
             }),
             // If we're not on a `tokio` thread then wait for
             // a notification
@@ -68,7 +75,7 @@ pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) {
 
                 while now.elapsed() < timeout {
                     if notified.try_recv().is_ok() {
-                        return;
+                        return true;
                     }
 
                     // Apply some exponential backoff to avoid spinning
@@ -78,7 +85,9 @@ pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) {
                     std::thread::sleep(wait);
                     wait += cmp::min(wait * 2, max_wait_step);
                 }
+
+                false
             }
         }
-    });
+    })
 }

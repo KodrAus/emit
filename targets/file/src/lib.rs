@@ -202,8 +202,8 @@ impl emit::Emitter for FileSet {
         }
     }
 
-    fn blocking_flush(&self, timeout: std::time::Duration) {
-        emit_batcher::sync::blocking_flush(&self.sender, timeout);
+    fn blocking_flush(&self, timeout: std::time::Duration) -> bool {
+        emit_batcher::sync::blocking_flush(&self.sender, timeout)
     }
 }
 

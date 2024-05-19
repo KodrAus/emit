@@ -62,8 +62,8 @@ impl emit::emitter::Emitter for Otlp {
         self.metrics.otlp_event_discarded.increment();
     }
 
-    fn blocking_flush(&self, timeout: Duration) {
-        emit_batcher::tokio::blocking_flush(&self.sender, timeout);
+    fn blocking_flush(&self, timeout: Duration) -> bool {
+        emit_batcher::tokio::blocking_flush(&self.sender, timeout)
     }
 }
 
