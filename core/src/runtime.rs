@@ -1,3 +1,19 @@
+/*!
+The [`Runtime`] type.
+
+Runtimes combine components into a fully encapsulated diagnostic pipeline. Each runtime includes:
+
+- An [`Emitter`] to receive diagnostic events.
+- A [`Filter`] to limit the volume of diagnostic events.
+- A [`Ctxt`] to capture and attach ambient state to events.
+- A [`Clock`] to timestamp events.
+- A [`Rng`] to generate correlation ids for events.
+
+Runtimes are fully isolated and may be short-lived.
+
+Applications should emit their events through the [`shared()`] runtime. Code running within a runtime itself, such as an implementation of [`Emitter`] should emit their events through the [`internal()`] runtime.
+*/
+
 use crate::{
     clock::Clock, ctxt::Ctxt, emitter::Emitter, empty::Empty, event::ToEvent, extent::ToExtent,
     filter::Filter, props::Props, rng::Rng, timestamp::Timestamp,
