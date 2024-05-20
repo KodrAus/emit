@@ -5,13 +5,13 @@ The [`Rng`] type.
 use crate::empty::Empty;
 
 /**
-A non-crypographic source of randomness.
+A non-cryptographic source of randomness.
 */
 pub trait Rng {
     /**
     Fill a buffer with random data.
 
-    This method may return `None` if the buffer couldn't be filled with randmo data for any reason.
+    This method may return `None` if the buffer couldn't be filled with random data for any reason.
 
     The buffer is expected to have a consistent implementation of `AsMut` that always returns a reference to the same underlying bytes. This isn't required for safety, but can lead to unexpected results.
     */

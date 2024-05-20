@@ -16,7 +16,7 @@ use crate::{
 };
 
 /**
-An asychronous destination for diagnostic datas.
+An asynchronous destination for diagnostic data.
 
 Once [`Event`]s are emitted through [`Emitter::emit`], a call to [`Emitter::blocking_flush`] must be made to ensure they're fully processed. This should be done once before the emitter is disposed, but may be more frequent for auditing.
 */

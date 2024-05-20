@@ -913,7 +913,7 @@ emit::emit!(
 );
 ```
 
-The data model of metrics is an extension of `emit`'s events. Metric events are points or buckets in a timeseries. They don't model the underlying instruments collecting metrics like counters or gauges. They instead model the aggregation of readings from those instruments over their lifetime. Metric events include the following well-known properties:
+The data model of metrics is an extension of `emit`'s events. Metric events are points or buckets in a time-series. They don't model the underlying instruments collecting metrics like counters or gauges. They instead model the aggregation of readings from those instruments over their lifetime. Metric events include the following well-known properties:
 
 - `event_kind`: with a value of `"metric"` to indicate that the event is a metric sample.
 - `metric_agg`: the aggregation over the underlying data stream that produced the sample.
@@ -1008,11 +1008,11 @@ Event {
 }
 ```
 
-### Timeseries metrics
+### Time-series metrics
 
-Metric events with a span extent, where the `metric_value` is an array are a complete timeseries. Each element in the array is a bucket in the timeseries. The width of each bucket is the length of the extent divided by the number of buckets.
+Metric events with a span extent, where the `metric_value` is an array are a complete time-series. Each element in the array is a bucket in the time-series. The width of each bucket is the length of the extent divided by the number of buckets.
 
-The following metric is for a timeseries with 15 buckets, where each bucket covers 1 second:
+The following metric is for a time-series with 15 buckets, where each bucket covers 1 second:
 
 ```
 use emit::{Clock, well_known::METRIC_AGG_COUNT};

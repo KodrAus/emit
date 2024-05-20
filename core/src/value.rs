@@ -78,7 +78,7 @@ impl<'v> Value<'v> {
     /**
     Get a serializable value.
 
-    This mehod can be used instead of [`Value::capture_serde`] when the value can't satisfy the `'static` bound.
+    This method can be used instead of [`Value::capture_serde`] when the value can't satisfy the `'static` bound.
     */
     #[cfg(feature = "serde")]
     #[track_caller]
