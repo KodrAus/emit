@@ -99,7 +99,7 @@ impl Timestamp {
     /**
     Try create a timestamp from time since the Unix epoch.
 
-    If the `unix_time` is within [`MIN`]..=[`MAX`] then this method will return `Some`. Otherwise it will return `None`.
+    If the `unix_time` is within [`Timestamp::MIN`]..=[`Timestamp::MAX`] then this method will return `Some`. Otherwise it will return `None`.
     */
     pub fn from_unix(unix_time: Duration) -> Option<Self> {
         if unix_time >= MIN && unix_time <= MAX {
@@ -138,7 +138,7 @@ impl Timestamp {
     /**
     Try get a timestamp from its individual date and time parts.
 
-    If the resulting timestamp is within [`MIN`]..=[`MAX`] then this method will return `Some`. Otherwise it will return `None`.
+    If the resulting timestamp is within [`Timestamp::MIN`]..=[`Timestamp::MAX`] then this method will return `Some`. Otherwise it will return `None`.
 
     If any field of `parts` would overflow its maximum value, such as `days: 32`, then it will wrap into the next unit.
     */

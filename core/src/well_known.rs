@@ -1,4 +1,6 @@
-// TODO: Treat `_` props as "silent" or reserved?
+/*!
+Extensions to the diagnostic module using well-known properties.
+*/
 
 // Event
 pub const KEY_MODULE: &'static str = "module";
