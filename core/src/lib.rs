@@ -10,6 +10,7 @@ If you're looking to explore and understand `emit`'s API, you can start with [`r
 If you're looking to use `emit` in an application you can use this library directly, but `emit` itself is recommended.
 */
 
+#![deny(missing_docs)]
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 #[cfg(feature = "alloc")]

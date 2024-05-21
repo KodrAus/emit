@@ -104,7 +104,21 @@ impl Filter for fn(&Event<&dyn ErasedProps>) -> bool {
     }
 }
 
+/**
+A [`Filter`] from a function.
+
+This type can be created directly, or via [`from_fn`].
+*/
 pub struct FromFn<F>(F);
+
+impl<F> FromFn<F> {
+    /**
+    Wrap the given filter function.
+    */
+    pub const fn new(filter: F) -> FromFn<F> {
+        FromFn(filter)
+    }
+}
 
 impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
@@ -112,6 +126,9 @@ impl<F: Fn(&Event<&dyn ErasedProps>) -> bool> Filter for FromFn<F> {
     }
 }
 
+/**
+Create a [`Filter`] from a function.
+*/
 pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>) -> bool>(f: F) -> FromFn<F> {
     FromFn(f)
 }
@@ -147,6 +164,11 @@ impl<F: Filter, E: Emitter> Emitter for FilteredEmitter<F, E> {
     }
 }
 
+/**
+Wrap an [`Emitter`] in a [`Filter`].
+
+Only events that pass [`Filter::matches`] will be emitted through [`Emitter::emit`].
+*/
 pub fn wrap<F: Filter, E: Emitter>(filter: F, emitter: E) -> FilteredEmitter<F, E> {
     filter.wrap_emitter(emitter)
 }

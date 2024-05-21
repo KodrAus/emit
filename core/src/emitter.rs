@@ -111,7 +111,21 @@ impl Emitter for fn(&Event<&dyn ErasedProps>) {
     }
 }
 
+/**
+An [`Emitter`] from a function.
+
+This type can be created directly, or via [`from_fn`].
+*/
 pub struct FromFn<F>(F);
+
+impl<F> FromFn<F> {
+    /**
+    Wrap the given emitter function.
+    */
+    pub const fn new(emitter: F) -> FromFn<F> {
+        FromFn(emitter)
+    }
+}
 
 impl<F: Fn(&Event<&dyn ErasedProps>)> Emitter for FromFn<F> {
     fn emit<E: ToEvent>(&self, evt: E) {
@@ -123,6 +137,9 @@ impl<F: Fn(&Event<&dyn ErasedProps>)> Emitter for FromFn<F> {
     }
 }
 
+/**
+Create an [`Emitter`] from a function.
+*/
 pub fn from_fn<F: Fn(&Event<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
     FromFn(f)
 }
@@ -164,6 +181,11 @@ mod internal {
     }
 }
 
+/**
+An object-safe [`Emitter`].
+
+A `dyn ErasedEmitter` can be treated as `impl Emitter`.
+*/
 pub trait ErasedEmitter: internal::SealedEmitter {}
 
 impl<T: Emitter> ErasedEmitter for T {}
