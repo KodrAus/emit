@@ -1,3 +1,7 @@
+/*!
+The [`Level`] type.
+*/
+
 use emit_core::{
     event::ToEvent,
     filter::Filter,
@@ -10,12 +14,66 @@ use emit_core::{
 use crate::value::{ToValue, Value};
 use core::{fmt, str::FromStr};
 
+/**
+A severity level for a diagnostic event.
+
+If a [`crate::Event`] has a level associated with it, it can be pulled from its props:
+
+```
+# use emit::{Event, Props};
+# fn with_event(evt: impl emit::event::ToEvent) {
+# let evt = evt.to_event();
+match evt.props().pull::<emit::Level, _>(emit::well_known::KEY_LVL).unwrap_or_default() {
+    emit::Level::Debug => {
+        // The event is at the debug level
+    }
+    emit::Level::Info => {
+        // The event is at the info level
+    }
+    emit::Level::Warn => {
+        // The event is at the warn level
+    }
+    emit::Level::Error => {
+        // The event is at the error level
+    }
+}
+# }
+```
+
+The default level is [`Level::Info`].
+*/
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {
+    /**
+    The event is weakly informative.
+
+    This variant is equal to [`LVL_DEBUG`].
+    */
     Debug,
+    /**
+    The event is informative.
+
+    This variant is equal to [`LVL_INFO`].
+    */
     Info,
+    /**
+    The event is weakly erroneous.
+
+    This variant is equal to [`LVL_WARN`].
+    */
     Warn,
+    /**
+    The event is erroneous.
+
+    This variant is equal to [`LVL_ERROR`].
+    */
     Error,
+}
+
+impl Default for Level {
+    fn default() -> Self {
+        Level::Info
+    }
 }
 
 impl fmt::Debug for Level {
@@ -83,14 +141,11 @@ fn parse(
     Ok(ok)
 }
 
+/**
+An error attempting to parse a [`Level`] from text.
+*/
 #[derive(Debug)]
 pub struct ParseLevelError {}
-
-impl Default for Level {
-    fn default() -> Self {
-        Level::Info
-    }
-}
 
 impl ToValue for Level {
     fn to_value(&self) -> Value {
@@ -107,36 +162,50 @@ impl<'v> FromValue<'v> for Level {
     }
 }
 
-pub fn min_filter(min: Level) -> MinLevel {
-    MinLevel::new(min)
+/**
+Only match events that carry the given [`Level`].
+*/
+pub fn min_filter(min: Level) -> MinLevelFilter {
+    MinLevelFilter::new(min)
 }
 
-pub struct MinLevel {
+/**
+A [`Filter`] that matches events with a specific [`Level`].
+
+The level to match is pulled from the [`KEY_LVL`] well-known property. Events that don't carry any specific level are treated as carrying a default one, as set by [`MinLevelFilter::treat_unleveled_as`].
+*/
+pub struct MinLevelFilter {
     min: Level,
     default: Level,
 }
 
-impl From<Level> for MinLevel {
+impl From<Level> for MinLevelFilter {
     fn from(min: Level) -> Self {
-        MinLevel::new(min)
+        MinLevelFilter::new(min)
     }
 }
 
-impl MinLevel {
-    pub const fn new(min: Level) -> MinLevel {
-        MinLevel {
+impl MinLevelFilter {
+    /**
+    Construct a new [`MinLevelFilter`], treating unleveled events as [`Level::default`].
+    */
+    pub const fn new(min: Level) -> MinLevelFilter {
+        MinLevelFilter {
             min,
-            default: Level::Debug,
+            default: Level::Info,
         }
     }
 
+    /**
+    Treat events without an explicit level as having `default` when evaluating against the filter.
+    */
     pub fn treat_unleveled_as(mut self, default: Level) -> Self {
         self.default = default;
         self
     }
 }
 
-impl Filter for MinLevel {
+impl Filter for MinLevelFilter {
     fn matches<E: ToEvent>(&self, evt: E) -> bool {
         evt.to_event()
             .props()
@@ -146,7 +215,7 @@ impl Filter for MinLevel {
     }
 }
 
-impl InternalFilter for MinLevel {}
+impl InternalFilter for MinLevelFilter {}
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
@@ -156,25 +225,42 @@ mod alloc_support {
 
     use emit_core::path::Path;
 
-    pub fn min_by_path_filter<P: Into<Path<'static>>, L: Into<MinLevel>>(
+    /**
+    Construct a set of [`MinLevelFilter`]s that are applied based on the module of an event.
+    */
+    pub fn min_by_path_filter<P: Into<Path<'static>>, L: Into<MinLevelFilter>>(
         levels: impl IntoIterator<Item = (P, L)>,
     ) -> MinLevelPathMap {
         MinLevelPathMap::from_iter(levels)
     }
 
+    /**
+    A filter that applies a [`MinLevelFilter`] based on the module of an event.
+
+    This type allows different modules to apply different level filters. In particular, modules generating a lot of diagnostic noise can be silenced without affecting other modules.
+
+    Event modules are matched based on [`Path::is_child_of`]. If an event's module is a child of one in the map then its [`MinLevelFilter`] will be checked against it. If an event's module doesn't match any in the map then it will pass the filter.
+    */
     pub struct MinLevelPathMap {
-        paths: Vec<(Path<'static>, MinLevel)>,
+        // TODO: Ensure more specific paths apply ahead of less specific ones
+        paths: Vec<(Path<'static>, MinLevelFilter)>,
     }
 
     impl MinLevelPathMap {
+        /**
+        Create an empty map.
+        */
         pub const fn new() -> Self {
             MinLevelPathMap { paths: Vec::new() }
         }
 
+        /**
+        Specify the minimum level for a module and its children.
+        */
         pub fn min_level(
             &mut self,
             path: impl Into<Path<'static>>,
-            min_level: impl Into<MinLevel>,
+            min_level: impl Into<MinLevelFilter>,
         ) {
             let path = path.into();
 
@@ -211,7 +297,7 @@ mod alloc_support {
 
     impl InternalFilter for MinLevelPathMap {}
 
-    impl<P: Into<Path<'static>>, L: Into<MinLevel>> FromIterator<(P, L)> for MinLevelPathMap {
+    impl<P: Into<Path<'static>>, L: Into<MinLevelFilter>> FromIterator<(P, L)> for MinLevelPathMap {
         fn from_iter<T: IntoIterator<Item = (P, L)>>(iter: T) -> Self {
             let mut map = MinLevelPathMap::new();
 

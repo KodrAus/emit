@@ -505,8 +505,9 @@ impl emit::Emitter for MyEmitter {
         println!("{}", evt.to_event().msg());
     }
 
-    fn blocking_flush(&self, _: std::time::Duration) {
+    fn blocking_flush(&self, _: std::time::Duration) -> bool {
         // Nothing to flush
+        true
     }
 }
 
