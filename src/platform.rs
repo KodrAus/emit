@@ -1,3 +1,9 @@
+/*!
+Components provided by the underlying platform.
+
+This module defines implementations of [`crate::runtime::Runtime`] components that use capabilities of the host platform.
+*/
+
 #[cfg(feature = "std")]
 use emit_core::{clock::ErasedClock, rng::ErasedRng, runtime::AssertInternal};
 
@@ -19,6 +25,9 @@ type DefaultIdGen = rand_rng::RandRng;
 #[cfg(feature = "std")]
 pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
 
+/**
+A type-erased container for system services used when intiailizing runtimes.
+*/
 pub(crate) struct Platform {
     #[cfg(feature = "std")]
     pub(crate) clock: AssertInternal<Box<dyn ErasedClock + Send + Sync>>,

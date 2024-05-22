@@ -54,7 +54,7 @@ async fn main() {
                 .spawn()
                 .unwrap();
 
-            reporter.source(otlp.metric_source());
+            reporter.add_source(otlp.metric_source());
 
             otlp
         })
@@ -67,7 +67,7 @@ async fn main() {
                 .spawn()
                 .unwrap();
 
-            reporter.source(file_set.metric_source());
+            reporter.add_source(file_set.metric_source());
 
             file_set
         }))

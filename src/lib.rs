@@ -467,57 +467,7 @@ Hello, World!
 
 ## Custom runtimes
 
-All functionality in `emit` is based on a [`runtime::Runtime`]. When you call [`Setup::init`], it initializes the [`runtime::shared`] runtime for you, which is also what macros use by default.
-
-You can implement your own runtime, providing your own implementations of the ambient clock, randomness, and global context. First, disable the default features of `emit` in your `Cargo.toml`:
-
-```toml
-[dependencies.emit]
-version = "*"
-default-features = false
-features = ["std"]
-```
-
-This will ensure the `rt` control parameter is always passed to macros so that your custom runtime will always be used. Next, define your runtime itself and use it in macros:
-
-```
-// Define a static runtime to use
-// In this example, we use the default implementations of most things,
-// but you can also bring-your-own
-static RUNTIME: emit::runtime::Runtime<
-    MyEmitter,
-    emit::Empty,
-    emit::platform::thread_local_ctxt::ThreadLocalCtxt,
-    emit::platform::system_clock::SystemClock,
-    emit::platform::rand_rng::RandRng,
-> = emit::runtime::Runtime::build(
-    MyEmitter,
-    emit::Empty,
-    emit::platform::thread_local_ctxt::ThreadLocalCtxt::shared(),
-    emit::platform::system_clock::SystemClock::new(),
-    emit::platform::rand_rng::RandRng::new(),
-);
-
-struct MyEmitter;
-
-impl emit::Emitter for MyEmitter {
-    fn emit<E: emit::event::ToEvent>(&self, evt: E) {
-        println!("{}", evt.to_event().msg());
-    }
-
-    fn blocking_flush(&self, _: std::time::Duration) -> bool {
-        // Nothing to flush
-        true
-    }
-}
-
-// Use your runtime with the `rt` control parameter
-emit::emit!(rt: &RUNTIME, "emitted through a custom runtime");
-```
-
-```text
-emitted through a custom runtime
-```
+Everything in `emit` is based on a [`runtime::Runtime`]; a fully isolated set of components that provide capabilities like clocks and randomness, as well as your configured emitters and filters. When a runtime isn't specified, it's [`runtime::shared`]. You can define your own runtimes too. The [`mod@setup`] module has more details.
 
 ## Troubleshooting
 

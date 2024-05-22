@@ -247,6 +247,9 @@ use emit_core::{
 
 use crate::kind::Kind;
 
+/**
+A diagnostic event that represents a metric sample.
+*/
 pub struct Metric<'a, P> {
     module: Path<'a>,
     extent: Option<Extent>,
@@ -402,6 +405,9 @@ impl<'a, P: Props> Props for Metric<'a, P> {
     }
 }
 
+/**
+A source of [`Metric`]s.
+*/
 pub trait Source {
     fn sample_metrics<S: sampler::Sampler>(&self, sampler: S);
 
@@ -429,7 +435,7 @@ pub trait Source {
     where
         Self: Sized + Clone + Send + Sync + 'static,
     {
-        reporter.source(self.clone());
+        reporter.add_source(self.clone());
 
         self
     }
@@ -511,6 +517,9 @@ mod alloc_support {
 
     use alloc::{boxed::Box, vec::Vec};
 
+    /**
+    A set of [`Source`]s that are all sampled together.
+    */
     pub struct Reporter(Vec<Box<dyn ErasedSource + Send + Sync>>);
 
     impl Reporter {
@@ -518,7 +527,7 @@ mod alloc_support {
             Reporter(Vec::new())
         }
 
-        pub fn source(&mut self, source: impl Source + Send + Sync + 'static) -> &mut Self {
+        pub fn add_source(&mut self, source: impl Source + Send + Sync + 'static) -> &mut Self {
             self.0.push(Box::new(source));
 
             self
@@ -600,10 +609,17 @@ impl<'a> Source for dyn ErasedSource + Send + Sync + 'a {
 }
 
 pub mod sampler {
+    /*!
+    The [`Sampler`] type.
+    */
+
     use emit_core::empty::Empty;
 
     use super::*;
 
+    /**
+    A receiver of [`Metric`]s as produced by a [`Source`].
+    */
     pub trait Sampler {
         fn metric<P: Props>(&self, metric: &Metric<P>);
     }

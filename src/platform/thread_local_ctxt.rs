@@ -1,3 +1,7 @@
+/*!
+The [`ThreadLocalCtxt`] type.
+*/
+
 use core::mem;
 use std::{cell::RefCell, collections::HashMap, ops::ControlFlow, sync::Mutex};
 
@@ -10,43 +14,11 @@ use emit_core::{
     value::{OwnedValue, Value},
 };
 
-// Start this id from 1 so it doesn't intersect with the `shared` variant below
-static NEXT_CTXT_ID: Mutex<usize> = Mutex::new(1);
+/**
+A [`Ctxt`] that stores ambient state in thread local storage.
 
-fn ctxt_id() -> usize {
-    let mut next_id = NEXT_CTXT_ID.lock().unwrap();
-    let id = *next_id;
-    *next_id = id.wrapping_add(1);
-
-    id
-}
-
-thread_local! {
-    static ACTIVE: RefCell<HashMap<usize, ThreadLocalSpan>> = RefCell::new(HashMap::new());
-}
-
-fn current(id: usize) -> ThreadLocalSpan {
-    ACTIVE.with(|active| {
-        active
-            .borrow_mut()
-            .entry(id)
-            .or_insert_with(|| ThreadLocalSpan { props: None })
-            .clone()
-    })
-}
-
-fn swap(id: usize, incoming: &mut ThreadLocalSpan) {
-    ACTIVE.with(|active| {
-        let mut active = active.borrow_mut();
-
-        let current = active
-            .entry(id)
-            .or_insert_with(|| ThreadLocalSpan { props: None });
-
-        mem::swap(current, incoming);
-    })
-}
-
+Frames fully encapsulate all properties that were active when they were created so can be sent across threads to move that state with them.
+*/
 #[derive(Debug, Clone, Copy)]
 pub struct ThreadLocalCtxt {
     id: usize,
@@ -59,21 +31,30 @@ impl Default for ThreadLocalCtxt {
 }
 
 impl ThreadLocalCtxt {
+    /**
+    Create a new thread local store with fully isolated storage.
+    */
     pub fn new() -> Self {
         ThreadLocalCtxt { id: ctxt_id() }
     }
 
+    /**
+    Create a new thread local store sharing the same storage as any other [`ThreadLocalCtxt::shared`].
+    */
     pub const fn shared() -> Self {
         ThreadLocalCtxt { id: 0 }
     }
 }
 
+/**
+A [`Ctxt::Frame`] on a [`ThreadLocalCtxt`].
+*/
 #[derive(Clone)]
-pub struct ThreadLocalSpan {
+pub struct ThreadLocalCtxtFrame {
     props: Option<Arc<HashMap<Str<'static>, OwnedValue>>>,
 }
 
-impl Props for ThreadLocalSpan {
+impl Props for ThreadLocalCtxtFrame {
     fn for_each<'a, F: FnMut(Str<'a>, Value<'a>) -> ControlFlow<()>>(
         &'a self,
         mut for_each: F,
@@ -87,14 +68,18 @@ impl Props for ThreadLocalSpan {
         ControlFlow::Continue(())
     }
 
+    fn get<'v, K: emit_core::str::ToStr>(&'v self, key: K) -> Option<Value<'v>> {
+        self.props.as_ref().and_then(|props| props.get(key))
+    }
+
     fn is_unique(&self) -> bool {
         true
     }
 }
 
 impl Ctxt for ThreadLocalCtxt {
-    type Current = ThreadLocalSpan;
-    type Frame = ThreadLocalSpan;
+    type Current = ThreadLocalCtxtFrame;
+    type Frame = ThreadLocalCtxtFrame;
 
     fn with_current<R, F: FnOnce(&Self::Current) -> R>(&self, with: F) -> R {
         let current = current(self.id);
@@ -109,7 +94,7 @@ impl Ctxt for ThreadLocalCtxt {
             ControlFlow::Continue(())
         });
 
-        ThreadLocalSpan {
+        ThreadLocalCtxtFrame {
             props: Some(Arc::new(span)),
         }
     }
@@ -143,3 +128,40 @@ impl Ctxt for ThreadLocalCtxt {
 }
 
 impl InternalCtxt for ThreadLocalCtxt {}
+
+// Start this id from 1 so it doesn't intersect with the `shared` variant below
+static NEXT_CTXT_ID: Mutex<usize> = Mutex::new(1);
+
+fn ctxt_id() -> usize {
+    let mut next_id = NEXT_CTXT_ID.lock().unwrap();
+    let id = *next_id;
+    *next_id = id.wrapping_add(1);
+
+    id
+}
+
+thread_local! {
+    static ACTIVE: RefCell<HashMap<usize, ThreadLocalCtxtFrame>> = RefCell::new(HashMap::new());
+}
+
+fn current(id: usize) -> ThreadLocalCtxtFrame {
+    ACTIVE.with(|active| {
+        active
+            .borrow_mut()
+            .entry(id)
+            .or_insert_with(|| ThreadLocalCtxtFrame { props: None })
+            .clone()
+    })
+}
+
+fn swap(id: usize, incoming: &mut ThreadLocalCtxtFrame) {
+    ACTIVE.with(|active| {
+        let mut active = active.borrow_mut();
+
+        let current = active
+            .entry(id)
+            .or_insert_with(|| ThreadLocalCtxtFrame { props: None });
+
+        mem::swap(current, incoming);
+    })
+}

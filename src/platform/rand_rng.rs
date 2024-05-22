@@ -1,10 +1,20 @@
+/*!
+The [`RandRng`] type.
+*/
+
 use emit_core::{rng::Rng, runtime::InternalRng};
 use rand::{Rng as _, RngCore};
 
+/**
+An [`Rng`] based on the [`rand`] library.
+*/
 #[derive(Default, Debug, Clone, Copy)]
 pub struct RandRng {}
 
 impl RandRng {
+    /**
+    Create a new source of randomness.
+    */
     pub const fn new() -> Self {
         RandRng {}
     }
