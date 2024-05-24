@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use core::{any::Any, fmt, ops::ControlFlow};
 
 use emit_core::{

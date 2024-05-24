@@ -348,7 +348,7 @@ impl<'a, P> Metric<'a, P> {
     }
 
     /**
-    Get a reference to the module that owns the underlying data source.
+    Get the module that owns the underlying data source.
     */
     pub fn module(&self) -> &Path<'a> {
         &self.module
@@ -414,8 +414,8 @@ impl<'a, P> Metric<'a, P> {
     /**
     Get the extent for which the sample was generated.
     */
-    pub fn extent(&self) -> &Option<Extent> {
-        &self.extent
+    pub fn extent(&self) -> Option<&Extent> {
+        self.extent.as_ref()
     }
 
     /**

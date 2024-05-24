@@ -418,6 +418,14 @@ Event {
 Take care when completing spans manually that they always match the configured filter. This can be done using the `when` control parameter like in the above example. If a span is created it _must_ be emitted, otherwise the resulting trace will be incomplete.
 */
 
+/*
+Parts of this file are adapted from other libraries:
+
+uuid:
+https://github.com/uuid-rs/uuid/blob/main/src/parser.rs
+Licensed under Apache 2.0
+*/
+
 use emit_core::{
     clock::Clock,
     ctxt::Ctxt,
@@ -444,6 +452,9 @@ use core::{
     str::{self, FromStr},
 };
 
+/**
+A [W3C Trace Id](https://www.w3.org/TR/trace-context/#trace-id).
+*/
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TraceId(NonZeroU128);
 
@@ -483,30 +494,55 @@ impl<'v> FromValue<'v> for TraceId {
 }
 
 impl TraceId {
+    /**
+    Create a random trace id.
+
+    This method will return `None` if the given [`Rng`] fails to produce a random value, or if it produces the value `0`.
+    */
     pub fn random<R: Rng>(rng: R) -> Option<Self> {
         Some(TraceId::new(NonZeroU128::new(rng.gen_u128()?)?))
     }
 
+    /**
+    Create a trace id from a non-zero integer.
+    */
     pub const fn new(v: NonZeroU128) -> Self {
         TraceId(v)
     }
 
+    /**
+    Try create a trace id from an integer.
+
+    This method will return `None` if `v` is `0`.
+    */
     pub fn from_u128(v: u128) -> Option<Self> {
         Some(TraceId(NonZeroU128::new(v)?))
     }
 
+    /**
+    Get the value of the trace id as an integer.
+    */
     pub const fn to_u128(&self) -> u128 {
         self.0.get()
     }
 
+    /**
+    Get a trace id from a 16 byte big-endian array.
+    */
     pub fn from_bytes(v: [u8; 16]) -> Option<Self> {
         Self::from_u128(u128::from_be_bytes(v))
     }
 
+    /**
+    Convert the trace id into a 16 byte big-endian array.
+    */
     pub fn to_bytes(&self) -> [u8; 16] {
         self.0.get().to_be_bytes()
     }
 
+    /**
+    Convert the trace id into a 32 byte ASCII-compatible hex string, like `4bf92f3577b34da6a3ce929d0e0e4736`.
+    */
     pub fn to_hex(&self) -> [u8; 32] {
         let mut dst = [0; 32];
         let src: [u8; 16] = self.0.get().to_be_bytes();
@@ -521,6 +557,11 @@ impl TraceId {
         dst
     }
 
+    /**
+    Try parse a slice of ASCII hex bytes into a trace id.
+
+    If `hex` is not a 32 byte array of valid hex characters (`[a-fA-F0-9]`) then this method will fail.
+    */
     pub fn try_from_hex_slice(hex: &[u8]) -> Result<Self, ParseIdError> {
         let hex: &[u8; 32] = hex.try_into().map_err(|_| ParseIdError {})?;
 
@@ -550,6 +591,11 @@ impl TraceId {
         ))
     }
 
+    /**
+    Try parse ASCII hex characters into a trace id.
+
+    If `hex` is not exactly 32 valid hex characters (`[a-fA-F0-9]`) then this method will fail.
+    */
     pub fn try_from_hex(hex: impl fmt::Display) -> Result<Self, ParseIdError> {
         let mut buf = Buffer::<32>::new();
 
@@ -557,6 +603,9 @@ impl TraceId {
     }
 }
 
+/**
+A [W3C Span Id](https://www.w3.org/TR/trace-context/#parent-id).
+*/
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct SpanId(NonZeroU64);
 
@@ -596,30 +645,55 @@ impl<'v> FromValue<'v> for SpanId {
 }
 
 impl SpanId {
+    /**
+    Create a new random span id.
+
+    This method will return `None` if the given [`Rng`] fails to produce a random value, or if it produces the value `0`.
+    */
     pub fn random<R: Rng>(rng: R) -> Option<Self> {
         Some(SpanId::new(NonZeroU64::new(rng.gen_u64()?)?))
     }
 
+    /**
+    Create a span id from a non-zero integer.
+    */
     pub const fn new(v: NonZeroU64) -> Self {
         SpanId(v)
     }
 
+    /**
+    Create a span id from an integer.
+
+    This method will return `None` if `v` is `0`.
+    */
     pub fn from_u64(v: u64) -> Option<Self> {
         Some(SpanId(NonZeroU64::new(v)?))
     }
 
+    /**
+    Get the value of the span id as an integer.
+    */
     pub const fn to_u64(&self) -> u64 {
         self.0.get()
     }
 
+    /**
+    Get a span id from an 8 byte big-endian array.
+    */
     pub fn from_bytes(v: [u8; 8]) -> Option<Self> {
         Self::from_u64(u64::from_be_bytes(v))
     }
 
+    /**
+    Convert the span id into an 8 byte big-endian array.
+    */
     pub fn to_bytes(&self) -> [u8; 8] {
         self.0.get().to_be_bytes()
     }
 
+    /**
+    Convert the span id into a 16 byte ASCII-compatible hex string, like `00f067aa0ba902b7`.
+    */
     pub fn to_hex(&self) -> [u8; 16] {
         let mut dst = [0; 16];
         let src: [u8; 8] = self.0.get().to_be_bytes();
@@ -634,6 +708,11 @@ impl SpanId {
         dst
     }
 
+    /**
+    Try parse a slice of ASCII hex bytes into a span id.
+
+    If `hex` is not a 16 byte array of valid hex characters (`[a-fA-F0-9]`) then this method will fail.
+    */
     pub fn try_from_hex_slice(hex: &[u8]) -> Result<Self, ParseIdError> {
         let hex: &[u8; 16] = hex.try_into().map_err(|_| ParseIdError {})?;
 
@@ -663,6 +742,11 @@ impl SpanId {
         ))
     }
 
+    /**
+    Try parse ASCII hex characters into a span id.
+
+    If `hex` is not exactly 16 valid hex characters (`[a-fA-F0-9]`) then this method will fail.
+    */
     pub fn try_from_hex(hex: impl fmt::Display) -> Result<Self, ParseIdError> {
         let mut buf = Buffer::<16>::new();
 
@@ -715,6 +799,9 @@ const SHL4_TABLE: &[u8; 256] = &{
     }
 };
 
+/**
+An error encountered attempting to parse a [`TraceId`] or [`SpanId`].
+*/
 #[derive(Debug)]
 pub struct ParseIdError {}
 
@@ -758,9 +845,35 @@ impl<const N: usize> fmt::Write for Buffer<N> {
     }
 }
 
+/**
+An active span in a distributed trace.
+
+This type manages the lifecycle of a span, which includes:
+
+1. Call [`SpanCtxt::current`] and [`SpanCtxt::new_child`] to generate a set of identifiers for the new span.
+2. Call [`Timer::start`] to begin a timer for the new span.
+2. Call [`Span::filtered_new`] with the [`Timer`] and generated [`SpanCtxt`] to produce a [`Span`].
+3. Run some code.
+4. Call [`Span::complete_with`], or just drop the [`Span`] to complete it, emitting a [`SpanEvent`] for its execution.
+*/
 pub struct Span<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> {
     value: Option<ActiveSpanEvent<'a, C, P>>,
     on_drop: Option<F>,
+}
+
+/**
+A diagnostic event that represents a span in a distributed trace.
+
+Spans are an extension of [`Event`]s that explicitly take the well-known properties that signal an event as being a span. See the [`crate::span`] module for details.
+
+A `SpanEvent` can be converted into an [`Event`] through its [`ToEvent`] implemenation, or passed directly to a [`crate::Emitter`] to emit it.
+*/
+pub struct SpanEvent<'a, P: Props> {
+    module: Path<'a>,
+    extent: Option<Extent>,
+    ctxt: SpanCtxt,
+    name: Str<'a>,
+    props: P,
 }
 
 struct ActiveSpanEvent<'a, C: Clock, P: Props> {
@@ -770,14 +883,6 @@ struct ActiveSpanEvent<'a, C: Clock, P: Props> {
     name: Str<'a>,
     props: P,
     include_ctxt: bool,
-}
-
-pub struct SpanEvent<'a, P: Props> {
-    module: Path<'a>,
-    extent: Option<Extent>,
-    ctxt: SpanCtxt,
-    name: Str<'a>,
-    props: P,
 }
 
 impl<'a, C: Clock, P: Props> ActiveSpanEvent<'a, C, P> {
@@ -797,6 +902,17 @@ impl<'a, C: Clock, P: Props> ActiveSpanEvent<'a, C, P> {
 }
 
 impl<'a, P: Props> SpanEvent<'a, P> {
+    /**
+    Create a new span event from its parts.
+
+    Each span consists of:
+
+    - `module`: The module that executed the operation the span is tracking.
+    - `extent`: The time the operation spent executing.
+    - `ctxt`: The [`TraceId`] and [`SpanId`] that identify the span.
+    - `name`: The name of the operation the span is tracking.
+    - `props`: Additional [`Props`] to associate with the span.
+    */
     pub fn new(
         module: impl Into<Path<'a>>,
         extent: impl ToExtent,
@@ -813,18 +929,30 @@ impl<'a, P: Props> SpanEvent<'a, P> {
         }
     }
 
+    /**
+    Get the module that executed the operation.
+    */
     pub fn module(&self) -> &Path<'a> {
         &self.module
     }
 
+    /**
+    Get the name of the operation.
+    */
     pub fn name(&self) -> &Str<'a> {
         &self.name
     }
 
-    pub fn extent(&self) -> &Option<Extent> {
-        &self.extent
+    /**
+    Get the time the operation spent executing.
+    */
+    pub fn extent(&self) -> Option<&Extent> {
+        self.extent.as_ref()
     }
 
+    /**
+    Get the additional properties associated with the span.
+    */
     pub fn props(&self) -> &P {
         &self.props
     }
@@ -862,6 +990,15 @@ impl<'a, P: Props> Props for SpanEvent<'a, P> {
     }
 }
 
+/**
+The trace id, span id, and parent parent span id of a [`SpanEvent`].
+
+These ids can be used to identify the distributed trace a span belongs to, and to identify the span itself within that trace.
+
+The `SpanCtxt` for the currently executing span can be pulled from the ambient context with [`SpanCtxt::current`]. Once a `SpanCtxt` is constructed, a new child context can be generated by [`SpanCtxt::new_child`].
+
+`SpanCtxt` implements [`Props`], so it can be pushed onto the ambient context through [`Frame::push`], or [`Span::push_ctxt`].
+*/
 #[derive(Debug, Clone, Copy)]
 pub struct SpanCtxt {
     trace_id: Option<TraceId>,
@@ -870,6 +1007,13 @@ pub struct SpanCtxt {
 }
 
 impl SpanCtxt {
+    /**
+    Create the context from a set of identifiers.
+
+    The `trace_id` and `span_id` should both be `Some`, but `span_parent` may be `None` if the span is at the root of the distributed trace.
+
+    If `trace_id` or `span_id` are `None` then the context is invalid, but can still be used.
+    */
     pub const fn new(
         trace_id: Option<TraceId>,
         span_parent: Option<SpanId>,
@@ -882,6 +1026,9 @@ impl SpanCtxt {
         }
     }
 
+    /**
+    Create a context where all identifiers are `None`.
+    */
     pub const fn empty() -> Self {
         Self {
             trace_id: None,
@@ -890,6 +1037,11 @@ impl SpanCtxt {
         }
     }
 
+    /**
+    Read the current context from an ambient [`Ctxt`].
+
+    This method will pull the [`TraceId`] from [`KEY_TRACE_ID`], the `SpanId` from [`KEY_SPAN_ID`], and the parent [`SpanId`] from [`KEY_SPAN_PARENT`].
+    */
     pub fn current(ctxt: impl Ctxt) -> Self {
         ctxt.with_current(|current| {
             SpanCtxt::new(
@@ -900,6 +1052,13 @@ impl SpanCtxt {
         })
     }
 
+    /**
+    Generate a new context that is a child of `self`.
+
+    The new context will share the same trace id as `self`, use the span id of `self` as its parent span id, and generate a new random span id as its own through [`SpanId::random`].
+
+    If [`Self::trace_id`] is `None` then a new trace id will be generated through [`TraceId::random`].
+    */
     pub fn new_child(&self, rng: impl Rng) -> Self {
         let trace_id = self.trace_id.or_else(|| TraceId::random(&rng));
         let span_parent = self.span_id;
@@ -908,14 +1067,23 @@ impl SpanCtxt {
         SpanCtxt::new(trace_id, span_parent, span_id)
     }
 
+    /**
+    Get the trace id for the span.
+    */
     pub fn trace_id(&self) -> Option<&TraceId> {
         self.trace_id.as_ref()
     }
 
+    /**
+    Get the parent of the span.
+    */
     pub fn span_parent(&self) -> Option<&SpanId> {
         self.span_parent.as_ref()
     }
 
+    /**
+    Get the id of the span.
+    */
     pub fn span_id(&self) -> Option<&SpanId> {
         self.span_id.as_ref()
     }
@@ -951,6 +1119,18 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Drop for Span<'a, C, P
 }
 
 impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
+    /**
+    Create a span for the given `ctxt`.
+
+    The parameters to this method are:
+
+    - `filter`: A sampler to determine whether the span should actually be created or not. If the filter doesn't match then a [`Span::disabled`] will be returned.
+    - `module`: The name of the module executing the operation the span is tracking. This will become the [`SpanEvent::module`] on the resulting span event.
+    - `timer`: A timer to determine the runtime of the executing operation.
+    - `ctxt`: The trace id, span id, and span parent id for the span.
+    - `event_props`: An additional set of properties. This will become the [`SpanEvent::props`] on the resulting span event. These properties won't be included in [`Span::push_ctxt`].
+    - `default_complete`: A closure called on drop with a [`SpanEvent`] representing the operation the span was tracking.
+    */
     pub fn filtered_new(
         filter: impl FnOnce(SpanEvent<&P>) -> bool,
         module: impl Into<Path<'a>>,
@@ -986,6 +1166,11 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
         }
     }
 
+    /**
+    Create a new span, ignoring any sampling.
+
+    This method is like [`Span::filtered_new`] with a filter that always returns `true`.
+    */
     pub fn new(
         timer: Timer<C>,
         module: impl Into<Path<'a>>,
@@ -1005,6 +1190,11 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
         )
     }
 
+    /**
+    Create an empty span.
+
+    A disabled span can be used exactly like an enabled one, except [`Span::push_ctxt`] won't push any properties, and [`Span::complete_with`] won't invoke the given closure.
+    */
     pub fn disabled() -> Self {
         Span {
             value: None,
@@ -1012,30 +1202,57 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
         }
     }
 
+    /**
+    Whether the span will emit a [`SpanEvent`] or not.
+    */
     pub fn is_enabled(&self) -> bool {
         self.value.is_some()
     }
 
+    /**
+    Get the module of the operation this span is tracking.
+    */
     pub fn module(&self) -> Option<&Path<'a>> {
         self.value.as_ref().map(|value| &value.module)
     }
 
+    /**
+    Get the timer.
+    */
     pub fn timer(&self) -> Option<&Timer<C>> {
         self.value.as_ref().map(|value| &value.timer)
     }
 
+    /**
+    Get the trace id, span id, and parent span id.
+    */
     pub fn ctxt(&self) -> Option<&SpanCtxt> {
         self.value.as_ref().map(|value| &value.ctxt)
     }
 
+    /**
+    Get the name of the operation this span is tracking.
+    */
     pub fn name(&self) -> Option<&Str<'a>> {
         self.value.as_ref().map(|value| &value.name)
     }
 
+    /**
+    Get the additional event properties associated with the span.
+
+    These properties will be attached to the resulting [`SpanEvent`] when the span is completed.
+    */
     pub fn props(&self) -> Option<&P> {
         self.value.as_ref().map(|value| &value.props)
     }
 
+    /**
+    Push the [`SpanCtxt`] onto the ambient context.
+
+    If the span is enabled, then the trace id, span id, and parent span id will be pushed to the context. This ensures diagnostics emitted during the execution of this span are properly linked to it.
+
+    If the span is disabled then this method is a no-op.
+    */
     pub fn push_ctxt<T: Ctxt>(&mut self, ctxt: T, ctxt_props: impl Props) -> Frame<Option<T>> {
         if let Some(ref mut value) = self.value {
             value.include_ctxt = false;
@@ -1048,10 +1265,20 @@ impl<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> Span<'a, C, P, F> {
         }
     }
 
+    /**
+    Complete the span, invoking the default completion closure.
+
+    If the span is disabled then this method is a no-op.
+    */
     pub fn complete(self) {
         drop(self);
     }
 
+    /**
+    Complete the span, invoking the given closure instead of the default one.
+
+    If the span is disabled then the `complete` closure won't be called.
+    */
     pub fn complete_with(mut self, complete: impl FnOnce(SpanEvent<'a, P>)) -> bool {
         if let Some(value) = self.value.take() {
             complete(value.complete());
