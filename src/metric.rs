@@ -1,5 +1,5 @@
 /*!
-Sampling metrics.
+The [`Metric`] type.
 
 Metrics are an effective approach to monitoring applications at scale. They can be cheap to collect, making them suitable for performance sensitive operations. They can also be compact to report, making them suitable for high-volume scenarios. `emit` doesn't provide much infrastructure for collecting or sampling metrics. What it does provide is a standard way to report metric samples as events.
 
@@ -58,6 +58,8 @@ emit::emit!(
     metric_value: sample,
 );
 ```
+
+# Data model
 
 The data model of metrics is an extension of `emit`'s events. Metric events are points or buckets in a time-series. They don't model the underlying instruments collecting metrics like counters or gauges. They instead model the aggregation of readings from those instruments over their lifetime. Metric events include the following well-known properties:
 
@@ -300,6 +302,10 @@ pub use self::{sampler::Sampler, source::Source};
 
 /**
 A diagnostic event that represents a metric sample.
+
+Metrics are an extension of [`Event`]s that explicitly take the well-known properties that signal an event as being a metric sample. See the [`crate::metric`] module for details.
+
+A `Metric` can be converted into an [`Event`] through its [`ToEvent`] implemenation, or passed directly to an [`Emitter`] to emit it.
 */
 pub struct Metric<'a, P> {
     module: Path<'a>,
@@ -311,6 +317,18 @@ pub struct Metric<'a, P> {
 }
 
 impl<'a, P> Metric<'a, P> {
+    /**
+    Create a new metric from its properties.
+
+    Each metric consists of:
+
+    - `module`: The module that owns the underlying data source.
+    - `extent`: The [`Extent`] that the sample covers.
+    - `name`: The name of the underlying data source.
+    - `agg`: The aggregation applied to the underlying data source to produce the sample. See the [`crate::metric`] module for details.
+    - `value`: The value of the sample itself.
+    - `props`: Additional [`Props`] to associate with the sample.
+    */
     pub fn new(
         module: impl Into<Path<'a>>,
         extent: impl ToExtent,
@@ -329,55 +347,95 @@ impl<'a, P> Metric<'a, P> {
         }
     }
 
+    /**
+    Get a reference to the module that owns the underlying data source.
+    */
     pub fn module(&self) -> &Path<'a> {
         &self.module
     }
 
+    /**
+    Set the module of the underlying data source to a new value.
+    */
     pub fn with_module(mut self, module: impl Into<Path<'a>>) -> Self {
         self.module = module.into();
         self
     }
 
+    /**
+    Get the name of the underlying data source.
+    */
     pub fn name(&self) -> &Str<'a> {
         &self.name
     }
 
+    /**
+    Set the name of the underlying data source to a new value.
+    */
     pub fn with_name(mut self, name: impl Into<Str<'a>>) -> Self {
         self.name = name.into();
         self
     }
 
+    /**
+    Get the aggregation applied to the underlying data source to produce the sample.
+
+    The value of the aggregation should be one of the [`crate::well_known`] aggregation types.
+    */
     pub fn agg(&self) -> &Str<'a> {
         &self.agg
     }
 
+    /**
+    Set the aggregation to a new value.
+
+    The value of the aggregation should be one of the [`crate::well_known`] aggregation types.
+    */
     pub fn with_agg(mut self, agg: impl Into<Str<'a>>) -> Self {
         self.agg = agg.into();
         self
     }
 
+    /**
+    Get the value of the sample itself.
+    */
     pub fn value(&self) -> &Value<'a> {
         &self.value
     }
 
+    /**
+    Set the sample to a new value.
+    */
     pub fn with_value(mut self, value: impl Into<Value<'a>>) -> Self {
         self.value = value.into();
         self
     }
 
+    /**
+    Get the extent for which the sample was generated.
+    */
+    pub fn extent(&self) -> &Option<Extent> {
+        &self.extent
+    }
+
+    /**
+    Set the extent of the sample to a new value.
+    */
     pub fn with_extent(mut self, extent: impl ToExtent) -> Self {
         self.extent = extent.to_extent();
         self
     }
 
-    pub fn extent(&self) -> &Option<Extent> {
-        &self.extent
-    }
-
+    /**
+    Get the additional properties associated with the sample.
+    */
     pub fn props(&self) -> &P {
         &self.props
     }
 
+    /**
+    Set the additional properties associated with the sample to a new value.
+    */
     pub fn with_props<U>(self, props: U) -> Metric<'a, U> {
         Metric {
             module: self.module,
@@ -413,6 +471,9 @@ impl<'a, P: Props> ToEvent for Metric<'a, P> {
 }
 
 impl<'a, P: Props> Metric<'a, P> {
+    /**
+    Get a new metric sample, borrowing data from this one.
+    */
     pub fn by_ref<'b>(&'b self) -> Metric<'b, &'b P> {
         Metric {
             module: self.module.by_ref(),
@@ -424,6 +485,9 @@ impl<'a, P: Props> Metric<'a, P> {
         }
     }
 
+    /**
+    Get a type-erased metric sample, borrowing data from this one.
+    */
     pub fn erase<'b>(&'b self) -> Metric<'b, &'b dyn ErasedProps> {
         Metric {
             module: self.module.by_ref(),
@@ -457,6 +521,12 @@ impl<'a, P: Props> Props for Metric<'a, P> {
 }
 
 pub mod source {
+    /*!
+    The [`Source`] type.
+
+    [`Source`]s produce [`Metric`]s on-demand. They can be sampled directly, or combined with a [`crate::metric::Reporter`] and sampled together.
+    */
+
     use self::sampler::ErasedSampler;
 
     use super::*;
@@ -465,8 +535,14 @@ pub mod source {
     A source of [`Metric`]s.
     */
     pub trait Source {
+        /**
+        Produce a current sample for all metrics in the source.
+        */
         fn sample_metrics<S: sampler::Sampler>(&self, sampler: S);
 
+        /**
+        Produce a current sample for all metrics in the source, emitting them as diagnostic events to the given [`Emitter`].
+        */
         fn emit_metrics<E: Emitter>(&self, emitter: E) {
             struct FromEmitter<E>(E);
 
@@ -479,6 +555,9 @@ pub mod source {
             self.sample_metrics(FromEmitter(emitter))
         }
 
+        /**
+        Chain this source to `other`, sampling metrics from both.
+        */
         fn and_sample<U>(self, other: U) -> And<Self, U>
         where
             Self: Sized,
@@ -557,13 +636,24 @@ pub mod source {
         }
     }
 
+    /**
+    A [`Source`] from a function.
+
+    This type can be created directly, or via [`from_fn`].
+    */
     pub struct FromFn<F>(F);
 
+    /**
+    Create a [`Source`] from a function.
+    */
     pub fn from_fn<F: Fn(&mut dyn ErasedSampler)>(source: F) -> FromFn<F> {
         FromFn::new(source)
     }
 
     impl<F> FromFn<F> {
+        /**
+        Wrap the given source function.
+        */
         pub const fn new(source: F) -> Self {
             FromFn(source)
         }
@@ -591,6 +681,11 @@ pub mod source {
         }
     }
 
+    /**
+    An object-safe [`Source`].
+
+    A `dyn ErasedSource` can be treated as `impl Source`.
+    */
     pub trait ErasedSource: internal::SealedSource {}
 
     impl<T: Source> ErasedSource for T {}
@@ -642,14 +737,22 @@ mod alloc_support {
 
     /**
     A set of [`Source`]s that are all sampled together.
+
+    The reporter can be sampled like any other source through its own [`Source`] implementation.
     */
     pub struct Reporter(Vec<Box<dyn ErasedSource + Send + Sync>>);
 
     impl Reporter {
+        /**
+        Create a new empty reporter.
+        */
         pub const fn new() -> Self {
             Reporter(Vec::new())
         }
 
+        /**
+        Add a [`Source`] to the reporter.
+        */
         pub fn add_source(&mut self, source: impl Source + Send + Sync + 'static) -> &mut Self {
             self.0.push(Box::new(source));
 
@@ -678,6 +781,8 @@ pub use self::alloc_support::*;
 pub mod sampler {
     /*!
     The [`Sampler`] type.
+
+    A [`Sampler`] is a visitor for a [`Source`] that receives [`Metric`]s when the source is sampled.
     */
 
     use emit_core::empty::Empty;
@@ -688,6 +793,9 @@ pub mod sampler {
     A receiver of [`Metric`]s as produced by a [`Source`].
     */
     pub trait Sampler {
+        /**
+        Receive a metric sample.
+        */
         fn metric<P: Props>(&self, metric: Metric<P>);
     }
 
@@ -701,11 +809,28 @@ pub mod sampler {
         fn metric<P: Props>(&self, _: Metric<P>) {}
     }
 
+    /**
+    A [`Sampler`] from a function.
+
+    This type can be created directly, or via [`from_fn`].
+    */
+    pub struct FromFn<F>(F);
+
+    /**
+    Create a [`Sampler`] from a function.
+    */
     pub fn from_fn<F: Fn(&Metric<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
         FromFn(f)
     }
 
-    pub struct FromFn<F>(F);
+    impl<F> FromFn<F> {
+        /**
+        Wrap the given sampler function.
+        */
+        pub const fn new(sampler: F) -> FromFn<F> {
+            FromFn(sampler)
+        }
+    }
 
     impl<F: Fn(&Metric<&dyn ErasedProps>)> Sampler for FromFn<F> {
         fn metric<P: Props>(&self, metric: Metric<P>) {
@@ -725,6 +850,11 @@ pub mod sampler {
         }
     }
 
+    /**
+    An object-safe [`Sampler`].
+
+    A `dyn ErasedSampler` can be treated as `impl Sampler`.
+    */
     pub trait ErasedSampler: internal::SealedSampler {}
 
     impl<T: Sampler> ErasedSampler for T {}

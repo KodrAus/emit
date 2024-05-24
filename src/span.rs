@@ -1,5 +1,5 @@
 /*!
-Distributed tracing.
+The [`Span`] type.
 
 When your application executes key operations, you can emit span events that dover the time they were active. Any other operations involved in that execution, or any other events emitted during it, will be correlated through identifiers to form a hierarchical call tree. Together, these events form a trace, which in distributed systems can involve operations executed by other services. Traces are a useful way to build a picture of service dependencies in distributed applications, and to identify performance problems across them.
 
@@ -161,6 +161,8 @@ frame.call(|| {
 });
 ```
 
+# Data model
+
 The data model of spans is an extension of `emit`'s events. Span events include the following well-known properties:
 
 - `event_kind`: with a value of `"span"` to indicate that the event is a span.
@@ -169,7 +171,7 @@ The data model of spans is an extension of `emit`'s events. Span events include 
 - `parent_id`: the `span_id` of the operation that invoked this one.
 - `trace_id`: an identifier shared by all events in a distributed trace. A `trace_id` is assigned by the first operation.
 
-### Contextual properties
+# Contextual properties
 
 Properties added to the span macros are added to an ambient context and automatically included on any events emitted within that operation:
 
@@ -265,7 +267,7 @@ Event {
 
 Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_span`. That's because `inner_span` was called within the execution of `outer_span`.
 
-### Propagating span context across threads
+# Propagating span context across threads
 
 Ambient span properties are not shared across threads by default. This context needs to be fetched and sent across threads manually:
 
@@ -294,7 +296,7 @@ tokio::spawn(
 
 Async functions that simply migrate across threads in work-stealing runtimes don't need any manual work to keep their context across those threads.
 
-### Propagating span context across services
+# Propagating span context across services
 
 `emit` doesn't implement any distributed trace propagation itself. This is the responsibility of end-users through their web framework and clients to manage.
 
@@ -356,7 +358,7 @@ if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
 }
 ```
 
-### Completing spans manually
+# Completing spans manually
 
 The `arg` control parameter can be applied to span macros to bind an identifier in the body of the annotated function for the [`Span`] that's created for it. This span can be completed manually, changing properties of the span along the way:
 

@@ -1,7 +1,7 @@
 /*!
 The [`Setup`] type.
 
-All functionality in `emit` is based on a [`runtime::Runtime`]. When you call [`Setup::init`], it initializes the [`runtime::shared`] runtime for you, which is also what macros use by default.
+All functionality in `emit` is based on a [`crate::runtime::Runtime`]. When you call [`Setup::init`], it initializes the [`crate::runtime::shared`] runtime for you, which is also what macros use by default.
 
 You can implement your own runtime, providing your own implementations of the ambient clock, randomness, and global context. First, disable the default features of `emit` in your `Cargo.toml`:
 
