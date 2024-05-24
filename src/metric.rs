@@ -1,7 +1,7 @@
 /*!
 Sampling metrics.
 
-Metrics are an effective approach to monitoring applications at scale. They can be cheap to collect, making them suitable for performance sensitive operations. They can also be compact to report, making them suitable for high-volume scenarios. `emit` doesn't provide any infrastructure for collecting or sampling metrics. What it does provide is a standard way to report metric samples as events.
+Metrics are an effective approach to monitoring applications at scale. They can be cheap to collect, making them suitable for performance sensitive operations. They can also be compact to report, making them suitable for high-volume scenarios. `emit` doesn't provide much infrastructure for collecting or sampling metrics. What it does provide is a standard way to report metric samples as events.
 
 A standard kind of metric is a monotonic counter, which can be represented as an atomic integer. In this example, our counter is for the number of bytes written to a file, which we'll call `bytes_written`. We can report a sample of this counter as an event by wrapping it in a [`Metric`]:
 
@@ -71,7 +71,7 @@ The data model of metrics is an extension of `emit`'s events. Metric events are 
 - `metric_name`: the name of the underlying data stream.
 - `metric_value`: the sample itself. These values are expected to be numeric.
 
-### Cumulative metrics
+## Cumulative metrics
 
 Metric events with a point extent are cumulative. Their `metric_value` is the result of applying their `metric_agg` over the entire underlying stream up to that point.
 
@@ -112,7 +112,7 @@ Event {
 }
 ```
 
-### Delta metrics
+## Delta metrics
 
 Metric events with a span extent are deltas. Their `metric_value` is the result of applying their `metric_agg` over the underlying stream within the extent.
 
@@ -154,7 +154,7 @@ Event {
 }
 ```
 
-### Time-series metrics
+## Time-series metrics
 
 Metric events with a span extent, where the `metric_value` is an array are a complete time-series. Each element in the array is a bucket in the time-series. The width of each bucket is the length of the extent divided by the number of buckets.
 
@@ -227,6 +227,55 @@ Event {
     },
 }
 ```
+
+# Metric sources
+
+The [`Source`] trait represents some underlying data source that can be sampled to provide [`Metric`]s. You can sample sources directly, or combine them into a [`Reporter`] to sample all the sources of metrics in your application together:
+
+```
+use emit::metric::{Source as _, Sampler as _};
+
+// Create some metric sources
+let source_1 = emit::metric::source::from_fn(|sampler| {
+    sampler.metric(emit::Metric::new(
+        "source_1",
+        emit::Empty,
+        "bytes_written",
+        emit::well_known::METRIC_AGG_COUNT,
+        1,
+        emit::Empty,
+    ));
+});
+
+let source_2 = emit::metric::source::from_fn(|sampler| {
+    sampler.metric(emit::Metric::new(
+        "source_2",
+        emit::Empty,
+        "bytes_written",
+        emit::well_known::METRIC_AGG_COUNT,
+        2,
+        emit::Empty,
+    ));
+});
+
+// Collect them into a reporter
+let mut reporter = emit::metric::Reporter::new();
+
+reporter.add_source(source_1);
+reporter.add_source(source_2);
+
+// You'll probably want to run this task in your async runtime
+// so it observes cancellation etc, but works for this illustration.
+std::thread::spawn(move || {
+    loop {
+        // You could also use `sample_metrics` here and tweak the extents of metrics
+        // to ensure they're all aligned together
+        reporter.emit_metrics(emit::runtime::shared());
+
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
+});
+```
 */
 
 use core::ops::ControlFlow;
@@ -246,6 +295,8 @@ use emit_core::{
 };
 
 use crate::kind::Kind;
+
+pub use self::{sampler::Sampler, source::Source};
 
 /**
 A diagnostic event that represents a metric sample.
@@ -405,109 +456,179 @@ impl<'a, P: Props> Props for Metric<'a, P> {
     }
 }
 
-/**
-A source of [`Metric`]s.
-*/
-pub trait Source {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S);
+pub mod source {
+    use self::sampler::ErasedSampler;
 
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        struct FromEmitter<E>(E);
+    use super::*;
 
-        impl<E: Emitter> sampler::Sampler for FromEmitter<E> {
-            fn metric<P: Props>(&self, metric: &Metric<P>) {
-                self.0.emit(metric)
+    /**
+    A source of [`Metric`]s.
+    */
+    pub trait Source {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S);
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            struct FromEmitter<E>(E);
+
+            impl<E: Emitter> sampler::Sampler for FromEmitter<E> {
+                fn metric<P: Props>(&self, metric: Metric<P>) {
+                    self.0.emit(metric)
+                }
+            }
+
+            self.sample_metrics(FromEmitter(emitter))
+        }
+
+        fn and_sample<U>(self, other: U) -> And<Self, U>
+        where
+            Self: Sized,
+        {
+            And::new(self, other)
+        }
+    }
+
+    impl<'a, T: Source + ?Sized> Source for &'a T {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            (**self).sample_metrics(sampler)
+        }
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            (**self).emit_metrics(emitter)
+        }
+    }
+
+    impl<T: Source> Source for Option<T> {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            if let Some(source) = self {
+                source.sample_metrics(sampler);
             }
         }
 
-        self.sample_metrics(FromEmitter(emitter))
-    }
-
-    fn and_sample<U>(self, other: U) -> And<Self, U>
-    where
-        Self: Sized,
-    {
-        And::new(self, other)
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            if let Some(source) = self {
+                source.emit_metrics(emitter);
+            }
+        }
     }
 
     #[cfg(feature = "alloc")]
-    fn report_to(self, reporter: &mut Reporter) -> Self
-    where
-        Self: Sized + Clone + Send + Sync + 'static,
-    {
-        reporter.add_source(self.clone());
+    impl<'a, T: Source + ?Sized + 'a> Source for alloc::boxed::Box<T> {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            (**self).sample_metrics(sampler)
+        }
 
-        self
-    }
-}
-
-impl<'a, T: Source + ?Sized> Source for &'a T {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        (**self).sample_metrics(sampler)
-    }
-
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        (**self).emit_metrics(emitter)
-    }
-}
-
-impl<T: Source> Source for Option<T> {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        if let Some(source) = self {
-            source.sample_metrics(sampler);
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            (**self).emit_metrics(emitter)
         }
     }
 
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        if let Some(source) = self {
-            source.emit_metrics(emitter);
+    #[cfg(feature = "alloc")]
+    impl<'a, T: Source + ?Sized + 'a> Source for alloc::sync::Arc<T> {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            (**self).sample_metrics(sampler)
+        }
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            (**self).emit_metrics(emitter)
         }
     }
-}
 
-#[cfg(feature = "alloc")]
-impl<'a, T: Source + ?Sized + 'a> Source for alloc::boxed::Box<T> {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        (**self).sample_metrics(sampler)
+    impl<T: Source, U: Source> Source for And<T, U> {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            self.left().sample_metrics(&sampler);
+            self.right().sample_metrics(&sampler);
+        }
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            self.left().emit_metrics(&emitter);
+            self.right().emit_metrics(&emitter);
+        }
     }
 
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        (**self).emit_metrics(emitter)
-    }
-}
+    impl<T: Source, U: Source> Source for Or<T, U> {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            self.left().sample_metrics(&sampler);
+            self.right().sample_metrics(&sampler);
+        }
 
-#[cfg(feature = "alloc")]
-impl<'a, T: Source + ?Sized + 'a> Source for alloc::sync::Arc<T> {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        (**self).sample_metrics(sampler)
-    }
-
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        (**self).emit_metrics(emitter)
-    }
-}
-
-impl<T: Source, U: Source> Source for And<T, U> {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        self.left().sample_metrics(&sampler);
-        self.right().sample_metrics(&sampler);
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            self.left().emit_metrics(&emitter);
+            self.right().emit_metrics(&emitter);
+        }
     }
 
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        self.left().emit_metrics(&emitter);
-        self.right().emit_metrics(&emitter);
-    }
-}
+    pub struct FromFn<F>(F);
 
-impl<T: Source, U: Source> Source for Or<T, U> {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        self.left().sample_metrics(&sampler);
-        self.right().sample_metrics(&sampler);
+    pub fn from_fn<F: Fn(&mut dyn ErasedSampler)>(source: F) -> FromFn<F> {
+        FromFn::new(source)
     }
 
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        self.left().emit_metrics(&emitter);
-        self.right().emit_metrics(&emitter);
+    impl<F> FromFn<F> {
+        pub const fn new(source: F) -> Self {
+            FromFn(source)
+        }
+    }
+
+    impl<F: Fn(&mut dyn ErasedSampler)> Source for FromFn<F> {
+        fn sample_metrics<S: sampler::Sampler>(&self, mut sampler: S) {
+            (self.0)(&mut sampler)
+        }
+    }
+
+    mod internal {
+        use emit_core::emitter;
+
+        use super::*;
+
+        pub trait DispatchSource {
+            fn dispatch_sample_metrics(&self, sampler: &dyn sampler::ErasedSampler);
+
+            fn dispatch_emit_metrics(&self, emitter: &dyn emitter::ErasedEmitter);
+        }
+
+        pub trait SealedSource {
+            fn erase_source(&self) -> crate::internal::Erased<&dyn DispatchSource>;
+        }
+    }
+
+    pub trait ErasedSource: internal::SealedSource {}
+
+    impl<T: Source> ErasedSource for T {}
+
+    impl<T: Source> internal::SealedSource for T {
+        fn erase_source(&self) -> crate::internal::Erased<&dyn internal::DispatchSource> {
+            crate::internal::Erased(self)
+        }
+    }
+
+    impl<T: Source> internal::DispatchSource for T {
+        fn dispatch_sample_metrics(&self, sampler: &dyn sampler::ErasedSampler) {
+            self.sample_metrics(sampler)
+        }
+
+        fn dispatch_emit_metrics(&self, emitter: &dyn emit_core::emitter::ErasedEmitter) {
+            self.emit_metrics(emitter)
+        }
+    }
+
+    impl<'a> Source for dyn ErasedSource + 'a {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            self.erase_source().0.dispatch_sample_metrics(&sampler)
+        }
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            self.erase_source().0.dispatch_emit_metrics(&emitter)
+        }
+    }
+
+    impl<'a> Source for dyn ErasedSource + Send + Sync + 'a {
+        fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
+            (self as &(dyn ErasedSource + 'a)).sample_metrics(sampler)
+        }
+
+        fn emit_metrics<E: Emitter>(&self, emitter: E) {
+            (self as &(dyn ErasedSource + 'a)).emit_metrics(emitter)
+        }
     }
 }
 
@@ -516,6 +637,8 @@ mod alloc_support {
     use super::*;
 
     use alloc::{boxed::Box, vec::Vec};
+
+    use self::source::{ErasedSource, Source};
 
     /**
     A set of [`Source`]s that are all sampled together.
@@ -552,62 +675,6 @@ mod alloc_support {
 #[cfg(feature = "alloc")]
 pub use self::alloc_support::*;
 
-mod internal {
-    use emit_core::emitter;
-
-    use super::*;
-
-    pub trait DispatchSource {
-        fn dispatch_sample_metrics(&self, sampler: &dyn sampler::ErasedSampler);
-
-        fn dispatch_emit_metrics(&self, emitter: &dyn emitter::ErasedEmitter);
-    }
-
-    pub trait SealedSource {
-        fn erase_source(&self) -> crate::internal::Erased<&dyn DispatchSource>;
-    }
-}
-
-pub trait ErasedSource: internal::SealedSource {}
-
-impl<T: Source> ErasedSource for T {}
-
-impl<T: Source> internal::SealedSource for T {
-    fn erase_source(&self) -> crate::internal::Erased<&dyn internal::DispatchSource> {
-        crate::internal::Erased(self)
-    }
-}
-
-impl<T: Source> internal::DispatchSource for T {
-    fn dispatch_sample_metrics(&self, sampler: &dyn sampler::ErasedSampler) {
-        self.sample_metrics(sampler)
-    }
-
-    fn dispatch_emit_metrics(&self, emitter: &dyn emit_core::emitter::ErasedEmitter) {
-        self.emit_metrics(emitter)
-    }
-}
-
-impl<'a> Source for dyn ErasedSource + 'a {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        self.erase_source().0.dispatch_sample_metrics(&sampler)
-    }
-
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        self.erase_source().0.dispatch_emit_metrics(&emitter)
-    }
-}
-
-impl<'a> Source for dyn ErasedSource + Send + Sync + 'a {
-    fn sample_metrics<S: sampler::Sampler>(&self, sampler: S) {
-        (self as &(dyn ErasedSource + 'a)).sample_metrics(sampler)
-    }
-
-    fn emit_metrics<E: Emitter>(&self, emitter: E) {
-        (self as &(dyn ErasedSource + 'a)).emit_metrics(emitter)
-    }
-}
-
 pub mod sampler {
     /*!
     The [`Sampler`] type.
@@ -621,17 +688,17 @@ pub mod sampler {
     A receiver of [`Metric`]s as produced by a [`Source`].
     */
     pub trait Sampler {
-        fn metric<P: Props>(&self, metric: &Metric<P>);
+        fn metric<P: Props>(&self, metric: Metric<P>);
     }
 
     impl<'a, T: Sampler + ?Sized> Sampler for &'a T {
-        fn metric<P: Props>(&self, metric: &Metric<P>) {
+        fn metric<P: Props>(&self, metric: Metric<P>) {
             (**self).metric(metric)
         }
     }
 
     impl Sampler for Empty {
-        fn metric<P: Props>(&self, _: &Metric<P>) {}
+        fn metric<P: Props>(&self, _: Metric<P>) {}
     }
 
     pub fn from_fn<F: Fn(&Metric<&dyn ErasedProps>)>(f: F) -> FromFn<F> {
@@ -641,7 +708,7 @@ pub mod sampler {
     pub struct FromFn<F>(F);
 
     impl<F: Fn(&Metric<&dyn ErasedProps>)> Sampler for FromFn<F> {
-        fn metric<P: Props>(&self, metric: &Metric<P>) {
+        fn metric<P: Props>(&self, metric: Metric<P>) {
             (self.0)(&metric.erase())
         }
     }
@@ -650,7 +717,7 @@ pub mod sampler {
         use super::*;
 
         pub trait DispatchSampler {
-            fn dispatch_metric(&self, metric: &Metric<&dyn ErasedProps>);
+            fn dispatch_metric(&self, metric: Metric<&dyn ErasedProps>);
         }
 
         pub trait SealedSampler {
@@ -669,19 +736,19 @@ pub mod sampler {
     }
 
     impl<T: Sampler> internal::DispatchSampler for T {
-        fn dispatch_metric(&self, metric: &Metric<&dyn ErasedProps>) {
+        fn dispatch_metric(&self, metric: Metric<&dyn ErasedProps>) {
             self.metric(metric)
         }
     }
 
     impl<'a> Sampler for dyn ErasedSampler + 'a {
-        fn metric<P: Props>(&self, metric: &Metric<P>) {
-            self.erase_sampler().0.dispatch_metric(&metric.erase())
+        fn metric<P: Props>(&self, metric: Metric<P>) {
+            self.erase_sampler().0.dispatch_metric(metric.erase())
         }
     }
 
     impl<'a> Sampler for dyn ErasedSampler + Send + Sync + 'a {
-        fn metric<P: Props>(&self, metric: &Metric<P>) {
+        fn metric<P: Props>(&self, metric: Metric<P>) {
             (self as &(dyn ErasedSampler + 'a)).metric(metric)
         }
     }

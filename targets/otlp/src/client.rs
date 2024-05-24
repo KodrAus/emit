@@ -28,11 +28,11 @@ impl emit::metric::Source for OtlpMetrics {
     fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
         self.channel_metrics
             .sample_metrics(emit::metric::sampler::from_fn(|metric| {
-                sampler.metric(&metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
+                sampler.metric(metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
             }));
 
         for metric in self.metrics.sample() {
-            sampler.metric(&metric);
+            sampler.metric(metric);
         }
     }
 }

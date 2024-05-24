@@ -317,6 +317,18 @@ impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng>
     }
 }
 
+impl<TEmitter: Emitter, TFilter: Filter, TCtxt: Ctxt, TClock: Clock, TRng: Rng> Emitter
+    for Runtime<TEmitter, TFilter, TCtxt, TClock, TRng>
+{
+    fn emit<E: ToEvent>(&self, evt: E) {
+        self.emit(evt)
+    }
+
+    fn blocking_flush(&self, timeout: core::time::Duration) -> bool {
+        self.emitter.blocking_flush(timeout)
+    }
+}
+
 /**
 A marker trait for an [`Emitter`] that does not emit any diagnostics of its own.
 */

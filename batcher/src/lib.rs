@@ -467,7 +467,7 @@ impl<T: Channel> emit::metric::Source for ChannelMetrics<T> {
             )));
 
         for metric in metrics {
-            sampler.metric(&metric);
+            sampler.metric(metric);
         }
     }
 }
