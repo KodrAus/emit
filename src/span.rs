@@ -852,9 +852,10 @@ This type manages the lifecycle of a span, which includes:
 
 1. Call [`SpanCtxt::current`] and [`SpanCtxt::new_child`] to generate a set of identifiers for the new span.
 2. Call [`Timer::start`] to begin a timer for the new span.
-2. Call [`Span::filtered_new`] with the [`Timer`] and generated [`SpanCtxt`] to produce a [`Span`].
-3. Run some code.
-4. Call [`Span::complete_with`], or just drop the [`Span`] to complete it, emitting a [`SpanEvent`] for its execution.
+3. Call [`Span::filtered_new`] with the [`Timer`] and generated [`SpanCtxt`] to produce a [`Span`].
+4. Call [`Span::push_ctxt`] to add the trace id, span id, and span parent id to the ambient context.
+5. Run some code.
+6. Call [`Span::complete_with`], or just drop the [`Span`] to complete it, emitting a [`SpanEvent`] for its execution.
 */
 pub struct Span<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> {
     value: Option<ActiveSpanEvent<'a, C, P>>,
@@ -864,7 +865,7 @@ pub struct Span<'a, C: Clock, P: Props, F: FnOnce(SpanEvent<'a, P>)> {
 /**
 A diagnostic event that represents a span in a distributed trace.
 
-Spans are an extension of [`Event`]s that explicitly take the well-known properties that signal an event as being a span. See the [`crate::span`] module for details.
+Spans are an extension of [`Event`]s that explicitly take the well-known properties that signal an event as being a span. See the [`mod@crate::span`] module for details.
 
 A `SpanEvent` can be converted into an [`Event`] through its [`ToEvent`] implemenation, or passed directly to a [`crate::Emitter`] to emit it.
 */
