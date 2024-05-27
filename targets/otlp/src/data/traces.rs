@@ -2,12 +2,14 @@ mod export_trace_service;
 mod span;
 
 use emit::{well_known::KEY_SPAN_NAME, Filter, Props};
-use emit_batcher::BatchError;
+
+use crate::Error;
 
 pub use self::{export_trace_service::*, span::*};
 
 use super::{
-    EventEncoder, MessageFormatter, MessageRenderer, PreEncoded, RawEncoder, RequestEncoder,
+    stream_encoded_scope_items, EncodedEvent, EncodedPayload, EncodedScopeItems, EventEncoder,
+    InstrumentationScope, MessageFormatter, MessageRenderer, RawEncoder, RequestEncoder,
 };
 
 pub(crate) struct TracesEventEncoder {
@@ -36,7 +38,7 @@ impl EventEncoder for TracesEventEncoder {
     fn encode_event<E: RawEncoder>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
-    ) -> Option<PreEncoded> {
+    ) -> Option<EncodedEvent> {
         if !emit::kind::is_span_filter().matches(evt) {
             return None;
         }
@@ -51,20 +53,23 @@ impl EventEncoder for TracesEventEncoder {
                 )
             })?;
 
-        Some(E::encode(Span {
-            start_time_unix_nano,
-            end_time_unix_nano,
-            name: &sval::Display::new(MessageRenderer {
-                fmt: &self.name,
-                evt,
-            }),
-            attributes: &PropsSpanAttributes::<E::TraceId, E::SpanId, _>::new(
+        Some(EncodedEvent {
+            scope: evt.module().to_owned(),
+            payload: E::encode(Span {
+                start_time_unix_nano,
                 end_time_unix_nano,
-                evt.props(),
-            ),
-            dropped_attributes_count: 0,
-            kind: SpanKind::Unspecified,
-        }))
+                name: &sval::Display::new(MessageRenderer {
+                    fmt: &self.name,
+                    evt,
+                }),
+                attributes: &PropsSpanAttributes::<E::TraceId, E::SpanId, _>::new(
+                    end_time_unix_nano,
+                    evt.props(),
+                ),
+                dropped_attributes_count: 0,
+                kind: SpanKind::Unspecified,
+            }),
+        })
     }
 }
 
@@ -74,21 +79,30 @@ pub(crate) struct TracesRequestEncoder;
 impl RequestEncoder for TracesRequestEncoder {
     fn encode_request<E: RawEncoder>(
         &self,
-        resource: Option<&PreEncoded>,
-        scope: Option<&PreEncoded>,
-        items: &[PreEncoded],
-    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
+        resource: Option<&EncodedPayload>,
+        items: &EncodedScopeItems,
+    ) -> Result<EncodedPayload, Error> {
         Ok(E::encode(ExportTraceServiceRequest {
             resource_spans: &[ResourceSpans {
                 resource: &resource,
-                scope_spans: &[ScopeSpans {
-                    scope: &scope,
-                    spans: items,
-                    schema_url: "",
-                }],
-                schema_url: "",
+                scope_spans: &EncodedScopeSpans(items),
             }],
         }))
+    }
+}
+
+struct EncodedScopeSpans<'a>(&'a EncodedScopeItems);
+
+impl<'a> sval::Value for EncodedScopeSpans<'a> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream_encoded_scope_items(stream, &self.0, |stream, path, spans| {
+            stream.value_computed(&ScopeSpans {
+                scope: &InstrumentationScope {
+                    name: &sval::Display::new(path),
+                },
+                spans,
+            })
+        })
     }
 }
 

@@ -34,16 +34,10 @@ async fn main() {
                     #[emit::key("telemetry.sdk.version")]
                     version: emit_otlp::telemetry_sdk_version(),
                 })
-                .scope(
-                    env!("CARGO_PKG_NAME"),
-                    env!("CARGO_PKG_VERSION"),
-                    emit::props! {},
-                )
                 .logs(
-                    emit_otlp::logs_proto(
-                        emit_otlp::grpc("http://localhost:4319").headers([("X-ApiKey", "1234")]),
-                    )
-                    .body(|evt, f| write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())),
+                    emit_otlp::logs_grpc_proto("http://localhost:4319").body(|evt, f| {
+                        write!(f, "{}", evt.tpl().render(emit::empty::Empty).braced())
+                    }),
                 )
                 .traces(
                     emit_otlp::traces_grpc_proto("http://localhost:4319").name(|evt, f| {
@@ -161,7 +155,7 @@ async fn in_trace() -> Result<(), io::Error> {
 
     for i in 0..2 {
         futures.push(tokio::spawn(
-            emit::frame::Frame::current(emit::runtime::shared().ctxt()).in_future(in_ctxt(i)),
+            emit::frame::Frame::current(emit::runtime::shared().ctxt()).in_future(work::in_ctxt(i)),
         ));
     }
 
@@ -174,60 +168,64 @@ async fn in_trace() -> Result<(), io::Error> {
     Ok(())
 }
 
-#[emit::span(arg: span, "in_ctxt", a)]
-async fn in_ctxt(a: i32) -> Result<(), io::Error> {
-    increment(&COUNT);
+pub mod work {
+    use super::*;
 
-    let r = async {
-        in_ctxt2(5).await;
+    #[emit::span(arg: span, "in_ctxt", a)]
+    pub async fn in_ctxt(a: i32) -> Result<(), io::Error> {
+        increment(&COUNT);
 
-        let work = Work {
-            id: 42,
-            description: "Some very important business".to_owned(),
-        };
+        let r = async {
+            in_ctxt2(5).await;
 
-        emit::info!("working on {#[emit::as_serde] work}");
+            let work = Work {
+                id: 42,
+                description: "Some very important business".to_owned(),
+            };
 
-        tokio::time::sleep(Duration::from_millis(a as u64)).await;
+            emit::info!("working on {#[emit::as_serde] work}");
 
-        if a % 2 == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "`a` is odd"))
+            tokio::time::sleep(Duration::from_millis(a as u64)).await;
+
+            if a % 2 == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::new(io::ErrorKind::Other, "`a` is odd"))
+            }
         }
-    }
-    .await;
+        .await;
 
-    if let Err(ref err) = r {
+        if let Err(ref err) = r {
+            span.complete_with(|span| {
+                emit::warn!(
+                    module: span.module(),
+                    extent: span.extent(),
+                    props: span.props(),
+                    "in_ctxt failed with {err}",
+                );
+            });
+        }
+
+        r
+    }
+
+    #[emit::span(arg: span, "in_ctxt2", b, bx: 90)]
+    async fn in_ctxt2(b: i32) {
+        tokio::time::sleep(Duration::from_millis(17)).await;
+
         span.complete_with(|span| {
             emit::warn!(
                 module: span.module(),
                 extent: span.extent(),
                 props: span.props(),
-                "in_ctxt failed with {err}",
+                "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
+                #[emit::fmt(">08")]
+                x: 15,
+                #[emit::optional]
+                z: None::<i32>,
             );
         });
     }
-
-    r
-}
-
-#[emit::span(arg: span, "in_ctxt2", b, bx: 90)]
-async fn in_ctxt2(b: i32) {
-    tokio::time::sleep(Duration::from_millis(17)).await;
-
-    span.complete_with(|span| {
-        emit::warn!(
-            module: span.module(),
-            extent: span.extent(),
-            props: span.props(),
-            "something went wrong at {#[emit::as_debug] id: 42} with {x} and {y: true}!",
-            #[emit::fmt(">08")]
-            x: 15,
-            #[emit::optional]
-            z: None::<i32>,
-        );
-    });
 }
 
 static COUNT: AtomicUsize = AtomicUsize::new(0);

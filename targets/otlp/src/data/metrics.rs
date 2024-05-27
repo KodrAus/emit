@@ -3,6 +3,8 @@ mod metric;
 
 use std::ops::ControlFlow;
 
+use crate::Error;
+
 pub use self::{export_metrics_service::*, metric::*};
 
 use emit::{
@@ -12,11 +14,12 @@ use emit::{
     },
     Filter, Props,
 };
-use emit_batcher::BatchError;
+
 use sval::Value;
 
 use super::{
-    any_value, EventEncoder, KeyValue, MessageFormatter, MessageRenderer, PreEncoded, RawEncoder,
+    any_value, stream_encoded_scope_items, EncodedEvent, EncodedPayload, EncodedScopeItems,
+    EventEncoder, InstrumentationScope, KeyValue, MessageFormatter, MessageRenderer, RawEncoder,
     RequestEncoder,
 };
 
@@ -46,7 +49,7 @@ impl EventEncoder for MetricsEventEncoder {
     fn encode_event<E: RawEncoder>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
-    ) -> Option<PreEncoded> {
+    ) -> Option<EncodedEvent> {
         if !emit::kind::is_metric_filter().matches(evt) {
             return None;
         }
@@ -140,7 +143,10 @@ impl EventEncoder for MetricsEventEncoder {
                 }),
             };
 
-            return Some(encoded);
+            return Some(EncodedEvent {
+                scope: evt.module().to_owned(),
+                payload: encoded,
+            });
         }
 
         None
@@ -361,21 +367,30 @@ pub(crate) struct MetricsRequestEncoder;
 impl RequestEncoder for MetricsRequestEncoder {
     fn encode_request<E: RawEncoder>(
         &self,
-        resource: Option<&PreEncoded>,
-        scope: Option<&PreEncoded>,
-        items: &[PreEncoded],
-    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
+        resource: Option<&EncodedPayload>,
+        items: &EncodedScopeItems,
+    ) -> Result<EncodedPayload, Error> {
         Ok(E::encode(ExportMetricsServiceRequest {
             resource_metrics: &[ResourceMetrics {
                 resource: &resource,
-                scope_metrics: &[ScopeMetrics {
-                    scope: &scope,
-                    metrics: items,
-                    schema_url: "",
-                }],
-                schema_url: "",
+                scope_metrics: &EncodedScopeMetrics(items),
             }],
         }))
+    }
+}
+
+struct EncodedScopeMetrics<'a>(&'a EncodedScopeItems);
+
+impl<'a> sval::Value for EncodedScopeMetrics<'a> {
+    fn stream<'sval, S: sval::Stream<'sval> + ?Sized>(&'sval self, stream: &mut S) -> sval::Result {
+        stream_encoded_scope_items(stream, &self.0, |stream, path, metrics| {
+            stream.value_computed(&ScopeMetrics {
+                scope: &InstrumentationScope {
+                    name: &sval::Display::new(path),
+                },
+                metrics,
+            })
+        })
     }
 }
 

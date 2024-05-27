@@ -171,25 +171,30 @@ impl<T> Drop for Receiver<T> {
 }
 
 pub struct BatchError<T> {
-    retryable: T,
+    retryable: Option<T>,
 }
 
-impl<T: Channel> BatchError<T> {
-    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: T) -> Self {
-        BatchError { retryable }
+impl<T> BatchError<T> {
+    pub fn no_retry(_: impl std::error::Error + Send + Sync + 'static) -> Self {
+        BatchError { retryable: None }
     }
 
-    pub fn no_retry(_: impl std::error::Error + Send + Sync + 'static) -> Self {
+    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: T) -> Self {
         BatchError {
-            retryable: T::new(),
+            retryable: Some(retryable),
         }
     }
 
-    pub fn into_retryable(self) -> T {
+    pub fn into_retryable(self) -> Option<T> {
         self.retryable
     }
 
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> BatchError<U> {
+    /**
+    Map the retryable batch.
+
+    If the batch is already retryable, the input to `f` will be `Some`. The resulting batch is retryable if `f` returns `Some`.
+    */
+    pub fn map_retryable<U>(self, f: impl FnOnce(Option<T>) -> Option<U>) -> BatchError<U> {
         BatchError {
             retryable: f(self.retryable),
         }
@@ -299,37 +304,44 @@ impl<T: Channel> Receiver<T> {
                 loop {
                     match panic::catch_unwind(AssertUnwindSafe(|| on_batch(current_batch.channel)))
                     {
-                        Ok(on_batch) => match CatchUnwind(AssertUnwindSafe(on_batch)).await {
-                            Ok(Ok(())) => {
-                                self.shared.metrics.queue_batch_processed.increment();
-                            }
-                            Ok(Err(BatchError { retryable })) => {
-                                self.shared.metrics.queue_batch_failed.increment();
+                        Ok(on_batch_future) => {
+                            match CatchUnwind(AssertUnwindSafe(on_batch_future)).await {
+                                Ok(Ok(())) => {
+                                    self.shared.metrics.queue_batch_processed.increment();
+                                    break;
+                                }
+                                Ok(Err(BatchError { retryable })) => {
+                                    self.shared.metrics.queue_batch_failed.increment();
 
-                                if retryable.remaining() > 0 && self.retry.next() {
-                                    // Delay a bit before trying again; this gives the external service
-                                    // a chance to get itself together
-                                    wait(self.retry_delay.next()).await;
+                                    if let Some(retryable) = retryable {
+                                        if retryable.remaining() > 0 && self.retry.next() {
+                                            // Delay a bit before trying again; this gives the external service
+                                            // a chance to get itself together
+                                            wait(self.retry_delay.next()).await;
 
-                                    current_batch = Batch {
-                                        channel: retryable,
-                                        watchers: current_batch.watchers,
-                                    };
+                                            current_batch = Batch {
+                                                channel: retryable,
+                                                watchers: current_batch.watchers,
+                                            };
 
-                                    self.shared.metrics.queue_batch_retry.increment();
-                                    continue;
+                                            self.shared.metrics.queue_batch_retry.increment();
+                                            continue;
+                                        }
+                                    }
+
+                                    break;
+                                }
+                                Err(_) => {
+                                    self.shared.metrics.queue_batch_panicked.increment();
+                                    break;
                                 }
                             }
-                            Err(_) => {
-                                self.shared.metrics.queue_batch_panicked.increment();
-                            }
-                        },
+                        }
                         Err(_) => {
                             self.shared.metrics.queue_batch_panicked.increment();
+                            break;
                         }
                     }
-
-                    break;
                 }
 
                 // After the batch has been emitted, notify any watchers

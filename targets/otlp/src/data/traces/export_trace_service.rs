@@ -16,8 +16,6 @@ pub struct ResourceSpans<'a, R: ?Sized = Resource<'a>, SS: ?Sized = [ScopeSpans<
     pub resource: &'a R,
     #[sval(label = "scopeSpans", index = 2)]
     pub scope_spans: &'a SS,
-    #[sval(label = "schemaUrl", index = 3)]
-    pub schema_url: &'a str,
 }
 
 #[derive(Value)]
@@ -26,6 +24,4 @@ pub struct ScopeSpans<'a, IS: ?Sized = InstrumentationScope<'a>, S: ?Sized = &'a
     pub scope: &'a IS,
     #[sval(label = "spans", index = 2)]
     pub spans: &'a S,
-    #[sval(label = "schemaUrl", index = 3)]
-    pub schema_url: &'a str,
 }

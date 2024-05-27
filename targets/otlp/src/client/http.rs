@@ -17,7 +17,7 @@ use hyper::{
 
 use crate::{
     client::Encoding,
-    data::{PreEncoded, PreEncodedCursor},
+    data::{EncodedPayload, PreEncodedCursor},
     internal_metrics::InternalMetrics,
     Error,
 };
@@ -275,7 +275,7 @@ impl HttpConnection {
         &self.uri
     }
 
-    pub async fn send(&self, body: PreEncoded) -> Result<Vec<u8>, Error> {
+    pub async fn send(&self, body: EncodedPayload) -> Result<Vec<u8>, Error> {
         let mut sender = match self.poison() {
             Some(sender) => sender,
             None => connect(&self.metrics, self.version, &self.uri).await?,
@@ -380,7 +380,7 @@ pub(crate) struct HttpContent {
     content_encoding_header: Option<&'static str>,
 }
 
-fn content_type_of(payload: &PreEncoded) -> &'static str {
+fn content_type_of(payload: &EncodedPayload) -> &'static str {
     match Encoding::of(payload) {
         Encoding::Proto => "application/x-protobuf",
         Encoding::Json => "application/json",
@@ -388,7 +388,7 @@ fn content_type_of(payload: &PreEncoded) -> &'static str {
 }
 
 impl HttpContent {
-    fn raw(payload: PreEncoded) -> Self {
+    fn raw(payload: EncodedPayload) -> Self {
         HttpContent {
             content_frame: None,
             content_type_header: content_type_of(&payload),
@@ -399,7 +399,7 @@ impl HttpContent {
     }
 
     #[cfg(feature = "gzip")]
-    fn gzip(payload: PreEncoded) -> Result<Self, Error> {
+    fn gzip(payload: EncodedPayload) -> Result<Self, Error> {
         let content_type = content_type_of(&payload);
 
         let mut enc = flate2::write::GzEncoder::new(
@@ -514,7 +514,7 @@ enum HttpContentHeader {
 }
 
 enum HttpContentPayload {
-    PreEncoded(PreEncoded),
+    PreEncoded(EncodedPayload),
     #[cfg(feature = "gzip")]
     Bytes(Box<[u8]>),
 }

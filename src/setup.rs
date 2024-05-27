@@ -231,6 +231,7 @@ where
     This method initializes [`crate::runtime::shared`].
     */
     #[must_use = "call `blocking_flush` at the end of `main` to ensure events are flushed."]
+    #[cfg(feature = "implicit_rt")]
     pub fn init(self) -> Init<&'static TEmitter, &'static TCtxt> {
         self.init_slot(emit_core::runtime::shared_slot())
     }
@@ -275,6 +276,7 @@ where
     This method initializes [`crate::runtime::internal`].
     */
     #[must_use = "call `blocking_flush` at the end of `main` (after flushing the main runtime) to ensure events are flushed."]
+    #[cfg(feature = "implicit_rt")]
     pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
         let ambient = emit_core::runtime::internal_slot()
             .init(

@@ -2,7 +2,9 @@ use emit_batcher::BatchError;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use crate::{
-    data::{self, logs, metrics, traces, PreEncoded, RawEncoder},
+    data::{
+        self, logs, metrics, traces, EncodedEvent, EncodedPayload, EncodedScopeItems, RawEncoder,
+    },
     internal_metrics::InternalMetrics,
     Error,
 };
@@ -16,11 +18,11 @@ pub struct Otlp {
     otlp_traces: Option<ClientEventEncoder<traces::TracesEventEncoder>>,
     otlp_metrics: Option<ClientEventEncoder<metrics::MetricsEventEncoder>>,
     metrics: Arc<InternalMetrics>,
-    sender: emit_batcher::Sender<Channel<PreEncoded>>,
+    sender: emit_batcher::Sender<Channel>,
 }
 
 pub struct OtlpMetrics {
-    channel_metrics: emit_batcher::ChannelMetrics<Channel<PreEncoded>>,
+    channel_metrics: emit_batcher::ChannelMetrics<Channel>,
     metrics: Arc<InternalMetrics>,
 }
 
@@ -76,26 +78,27 @@ impl Otlp {
     }
 }
 
-struct Channel<T> {
-    otlp_logs: Vec<T>,
-    otlp_traces: Vec<T>,
-    otlp_metrics: Vec<T>,
+#[derive(Default)]
+struct Channel {
+    otlp_logs: EncodedScopeItems,
+    otlp_traces: EncodedScopeItems,
+    otlp_metrics: EncodedScopeItems,
 }
 
-enum ChannelItem<T> {
-    LogRecord(T),
-    Span(T),
-    Metric(T),
+enum ChannelItem {
+    LogRecord(EncodedEvent),
+    Span(EncodedEvent),
+    Metric(EncodedEvent),
 }
 
-impl<T> emit_batcher::Channel for Channel<T> {
-    type Item = ChannelItem<T>;
+impl emit_batcher::Channel for Channel {
+    type Item = ChannelItem;
 
     fn new() -> Self {
         Channel {
-            otlp_logs: Vec::new(),
-            otlp_traces: Vec::new(),
-            otlp_metrics: Vec::new(),
+            otlp_logs: EncodedScopeItems::new(),
+            otlp_traces: EncodedScopeItems::new(),
+            otlp_metrics: EncodedScopeItems::new(),
         }
     }
 
@@ -114,7 +117,7 @@ impl<T> emit_batcher::Channel for Channel<T> {
             otlp_metrics: metrics,
         } = self;
 
-        logs.len() + traces.len() + metrics.len()
+        logs.total_items() + traces.total_items() + metrics.total_items()
     }
 
     fn clear(&mut self) {
@@ -132,19 +135,12 @@ impl<T> emit_batcher::Channel for Channel<T> {
 
 pub struct OtlpBuilder {
     resource: Option<Resource>,
-    scope: Option<Scope>,
     otlp_logs: Option<OtlpLogsBuilder>,
     otlp_traces: Option<OtlpTracesBuilder>,
     otlp_metrics: Option<OtlpMetricsBuilder>,
 }
 
 struct Resource {
-    attributes: HashMap<emit::Str<'static>, emit::value::OwnedValue>,
-}
-
-struct Scope {
-    name: String,
-    version: String,
     attributes: HashMap<emit::Str<'static>, emit::value::OwnedValue>,
 }
 
@@ -160,10 +156,10 @@ pub(crate) enum Encoding {
 }
 
 impl Encoding {
-    pub fn of(buf: &PreEncoded) -> Self {
+    pub fn of(buf: &EncodedPayload) -> Self {
         match buf {
-            PreEncoded::Proto(_) => Encoding::Proto,
-            PreEncoded::Json(_) => Encoding::Json,
+            EncodedPayload::Proto(_) => Encoding::Proto,
+            EncodedPayload::Json(_) => Encoding::Json,
         }
     }
 }
@@ -378,8 +374,7 @@ impl OtlpTransportBuilder {
     fn build<R>(
         self,
         metrics: Arc<InternalMetrics>,
-        resource: Option<PreEncoded>,
-        scope: Option<PreEncoded>,
+        resource: Option<EncodedPayload>,
         request_encoder: ClientRequestEncoder<R>,
     ) -> Result<OtlpTransport<R>, Error> {
         let mut url = self.url_base;
@@ -412,7 +407,6 @@ impl OtlpTransportBuilder {
                     },
                 )?,
                 resource,
-                scope,
                 request_encoder,
             },
             Protocol::Grpc => OtlpTransport::Http {
@@ -484,7 +478,6 @@ impl OtlpTransportBuilder {
                     },
                 )?,
                 resource,
-                scope,
                 request_encoder,
             },
         })
@@ -495,7 +488,6 @@ impl OtlpBuilder {
     pub fn new() -> Self {
         OtlpBuilder {
             resource: None,
-            scope: None,
             otlp_logs: None,
             otlp_traces: None,
             otlp_metrics: None,
@@ -569,29 +561,6 @@ impl OtlpBuilder {
         self
     }
 
-    pub fn scope(
-        mut self,
-        name: impl Into<String>,
-        version: impl Into<String>,
-        attributes: impl emit::props::Props,
-    ) -> Self {
-        let mut scope = Scope {
-            name: name.into(),
-            version: version.into(),
-            attributes: HashMap::new(),
-        };
-
-        attributes.for_each(|k, v| {
-            scope.attributes.insert(k.to_owned(), v.to_owned());
-
-            std::ops::ControlFlow::Continue(())
-        });
-
-        self.scope = Some(scope);
-
-        self
-    }
-
     pub fn spawn(self) -> Result<Otlp, Error> {
         let metrics = Arc::new(InternalMetrics::default());
 
@@ -617,9 +586,6 @@ impl OtlpBuilder {
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
-                            self.scope
-                                .as_ref()
-                                .map(|scope| encode_scope(encoding, scope)),
                             ClientRequestEncoder::new(encoding, request_encoder),
                         )?,
                     ))
@@ -641,9 +607,6 @@ impl OtlpBuilder {
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
-                            self.scope
-                                .as_ref()
-                                .map(|scope| encode_scope(encoding, scope)),
                             ClientRequestEncoder::new(encoding, request_encoder),
                         )?,
                     ))
@@ -665,9 +628,6 @@ impl OtlpBuilder {
                             self.resource
                                 .as_ref()
                                 .map(|resource| encode_resource(encoding, resource)),
-                            self.scope
-                                .as_ref()
-                                .map(|scope| encode_scope(encoding, scope)),
                             ClientRequestEncoder::new(encoding, request_encoder),
                         )?,
                     ))
@@ -676,7 +636,7 @@ impl OtlpBuilder {
             },
         };
 
-        emit_batcher::tokio::spawn(receiver, move |batch: Channel<PreEncoded>| {
+        emit_batcher::tokio::spawn(receiver, move |batch: Channel| {
             let client = client.clone();
 
             /*
@@ -693,50 +653,60 @@ impl OtlpBuilder {
 
                 let mut r = Ok(());
 
-                if otlp_logs.len() > 0 {
+                if otlp_logs.total_scopes() > 0 {
                     if let Some(client) = client.logs {
                         if let Err(e) = client.send(otlp_logs).await {
-                            r = Err(e.map(|logs| Channel {
-                                otlp_logs: logs,
-                                otlp_traces: Vec::new(),
-                                otlp_metrics: Vec::new(),
+                            r = Err(e.map_retryable(|logs| {
+                                Some(Channel {
+                                    otlp_logs: logs.unwrap_or_default(),
+                                    otlp_traces: Default::default(),
+                                    otlp_metrics: Default::default(),
+                                })
                             }));
                         }
                     }
                 }
 
-                if otlp_traces.len() > 0 {
+                if otlp_traces.total_scopes() > 0 {
                     if let Some(client) = client.traces {
                         if let Err(e) = client.send(otlp_traces).await {
                             r = if let Err(re) = r {
-                                Err(re.map(|mut channel| {
-                                    channel.otlp_traces = e.into_retryable();
-                                    channel
+                                Err(re.map_retryable(|channel| {
+                                    let mut channel = channel.unwrap_or_default();
+                                    channel.otlp_traces = e.into_retryable().unwrap_or_default();
+
+                                    Some(channel)
                                 }))
                             } else {
-                                Err(e.map(|traces| Channel {
-                                    otlp_traces: traces,
-                                    otlp_logs: Vec::new(),
-                                    otlp_metrics: Vec::new(),
+                                Err(e.map_retryable(|traces| {
+                                    Some(Channel {
+                                        otlp_traces: traces.unwrap_or_default(),
+                                        otlp_logs: Default::default(),
+                                        otlp_metrics: Default::default(),
+                                    })
                                 }))
                             };
                         }
                     }
                 }
 
-                if otlp_metrics.len() > 0 {
+                if otlp_metrics.total_scopes() > 0 {
                     if let Some(client) = client.metrics {
                         if let Err(e) = client.send(otlp_metrics).await {
                             r = if let Err(re) = r {
-                                Err(re.map(|mut channel| {
-                                    channel.otlp_metrics = e.into_retryable();
-                                    channel
+                                Err(re.map_retryable(|channel| {
+                                    let mut channel = channel.unwrap_or_default();
+                                    channel.otlp_traces = e.into_retryable().unwrap_or_default();
+
+                                    Some(channel)
                                 }))
                             } else {
-                                Err(e.map(|metrics| Channel {
-                                    otlp_metrics: metrics,
-                                    otlp_logs: Vec::new(),
-                                    otlp_traces: Vec::new(),
+                                Err(e.map_retryable(|metrics| {
+                                    Some(Channel {
+                                        otlp_metrics: metrics.unwrap_or_default(),
+                                        otlp_logs: Default::default(),
+                                        otlp_traces: Default::default(),
+                                    })
                                 }))
                             };
                         }
@@ -772,7 +742,7 @@ impl<E: data::EventEncoder> ClientEventEncoder<E> {
     pub fn encode_event(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
-    ) -> Option<PreEncoded> {
+    ) -> Option<EncodedEvent> {
         match self.encoding {
             Encoding::Proto => self.encoder.encode_event::<data::Proto>(evt),
             Encoding::Json => self.encoder.encode_event::<data::Json>(evt),
@@ -794,22 +764,23 @@ impl<R> ClientRequestEncoder<R> {
 impl<R: data::RequestEncoder> ClientRequestEncoder<R> {
     pub fn encode_request(
         &self,
-        resource: Option<&PreEncoded>,
-        scope: Option<&PreEncoded>,
-        items: &[PreEncoded],
-    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>> {
+        resource: Option<&EncodedPayload>,
+        items: &EncodedScopeItems,
+    ) -> Result<EncodedPayload, BatchError<EncodedScopeItems>> {
         match self.encoding {
             Encoding::Proto => self
                 .encoder
-                .encode_request::<data::Proto>(resource, scope, items),
+                .encode_request::<data::Proto>(resource, items)
+                .map_err(BatchError::no_retry),
             Encoding::Json => self
                 .encoder
-                .encode_request::<data::Json>(resource, scope, items),
+                .encode_request::<data::Json>(resource, items)
+                .map_err(BatchError::no_retry),
         }
     }
 }
 
-fn encode_resource(encoding: Encoding, resource: &Resource) -> PreEncoded {
+fn encode_resource(encoding: Encoding, resource: &Resource) -> EncodedPayload {
     let attributes = data::PropsResourceAttributes(&resource.attributes);
 
     let resource = data::Resource {
@@ -823,22 +794,6 @@ fn encode_resource(encoding: Encoding, resource: &Resource) -> PreEncoded {
     }
 }
 
-fn encode_scope(encoding: Encoding, scope: &Scope) -> PreEncoded {
-    let attributes = data::PropsInstrumentationScopeAttributes(&scope.attributes);
-
-    let scope = data::InstrumentationScope {
-        name: &scope.name,
-        version: &scope.version,
-        attributes: &attributes,
-        dropped_attribute_count: 0,
-    };
-
-    match encoding {
-        Encoding::Proto => data::Proto::encode(&scope),
-        Encoding::Json => data::Json::encode(&scope),
-    }
-}
-
 #[derive(Clone)]
 pub struct OtlpClient {
     logs: Option<Arc<OtlpTransport<logs::LogsRequestEncoder>>>,
@@ -849,34 +804,28 @@ pub struct OtlpClient {
 enum OtlpTransport<R> {
     Http {
         http: HttpConnection,
-        resource: Option<PreEncoded>,
-        scope: Option<PreEncoded>,
+        resource: Option<EncodedPayload>,
         request_encoder: ClientRequestEncoder<R>,
     },
 }
 
 impl<R: data::RequestEncoder> OtlpTransport<R> {
-    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.len())]
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.total_scopes())]
     pub(crate) async fn send(
         &self,
-        batch: Vec<PreEncoded>,
-    ) -> Result<(), BatchError<Vec<PreEncoded>>> {
+        batch: EncodedScopeItems,
+    ) -> Result<(), BatchError<EncodedScopeItems>> {
         match self {
             OtlpTransport::Http {
                 ref http,
                 ref resource,
-                ref scope,
                 ref request_encoder,
             } => {
                 let uri = http.uri();
-                let batch_size = batch.len();
+                let batch_size = batch.total_items();
 
                 match http
-                    .send(request_encoder.encode_request(
-                        resource.as_ref(),
-                        scope.as_ref(),
-                        &batch,
-                    )?)
+                    .send(request_encoder.encode_request(resource.as_ref(), &batch)?)
                     .await
                 {
                     Ok(res) => {

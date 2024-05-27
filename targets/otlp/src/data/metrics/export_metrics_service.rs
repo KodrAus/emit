@@ -16,8 +16,6 @@ pub struct ResourceMetrics<'a, R: ?Sized = Resource<'a>, SM: ?Sized = [ScopeMetr
     pub resource: &'a R,
     #[sval(label = "scopeMetrics", index = 2)]
     pub scope_metrics: &'a SM,
-    #[sval(label = "schemaUrl", index = 3)]
-    pub schema_url: &'a str,
 }
 
 #[derive(Value)]
@@ -26,6 +24,4 @@ pub struct ScopeMetrics<'a, IS: ?Sized = InstrumentationScope<'a>, M: ?Sized = &
     pub scope: &'a IS,
     #[sval(label = "metrics", index = 2)]
     pub metrics: &'a M,
-    #[sval(label = "schemaUrl", index = 3)]
-    pub schema_url: &'a str,
 }

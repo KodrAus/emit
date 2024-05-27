@@ -502,7 +502,15 @@ fn main() {
 extern crate alloc;
 extern crate core;
 
-pub use core::module_path as module;
+/**
+Get a [`Path`] of the executing module for use in [`Event::module`].
+*/
+#[macro_export]
+macro_rules! module {
+    () => {
+        $crate::Path::new($crate::__private::core::module_path!())
+    };
+}
 
 #[doc(inline)]
 pub use emit_macros::*;

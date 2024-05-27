@@ -21,14 +21,15 @@ impl Trigger {
     pub fn wait_timeout(&self, mut timeout: Duration) -> bool {
         let mut flushed_slot = (self.0).0.lock().unwrap();
         loop {
+            // If we flushed then return
+            // This condition may already be set before we start waiting
+            if *flushed_slot {
+                return true;
+            }
+
             let now = Instant::now();
             match (self.0).1.wait_timeout(flushed_slot, timeout).unwrap() {
                 (flushed, r) if !r.timed_out() => {
-                    // If we flushed then return
-                    if *flushed {
-                        return true;
-                    }
-
                     flushed_slot = flushed;
 
                     // Reduce the remaining timeout just in case we didn't time out,
@@ -36,13 +37,17 @@ impl Trigger {
                     timeout = match timeout.checked_sub(now.elapsed()) {
                         Some(timeout) => timeout,
                         // We didn't time out, but got close enough that we should now anyways
-                        None => return false,
+                        None => {
+                            return *flushed_slot;
+                        }
                     };
 
                     continue;
                 }
                 // Timed out
-                _ => return false,
+                (flushed, _) => {
+                    return *flushed;
+                }
             }
         }
     }

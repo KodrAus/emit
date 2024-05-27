@@ -1,7 +1,6 @@
-use std::{fmt, ops::ControlFlow};
+use std::{collections::HashMap, fmt, ops::ControlFlow};
 
 use bytes::Buf;
-use emit_batcher::BatchError;
 use sval_derive::Value;
 use sval_json::JsonStr;
 use sval_protobuf::buf::{ProtoBuf, ProtoBufCursor};
@@ -19,29 +18,85 @@ mod resource;
 #[cfg(any(feature = "grpc", feature = "decode_responses"))]
 pub(crate) mod generated;
 
+use crate::Error;
+
 pub use self::{any_value::*, instrumentation_scope::*, resource::*};
+
+pub(crate) struct EncodedEvent {
+    pub scope: emit::Path<'static>,
+    pub payload: EncodedPayload,
+}
 
 pub(crate) trait EventEncoder {
     fn encode_event<E: RawEncoder>(
         &self,
         evt: &emit::event::Event<impl emit::props::Props>,
-    ) -> Option<PreEncoded>;
+    ) -> Option<EncodedEvent>;
 }
 
 pub(crate) trait RequestEncoder {
     fn encode_request<E: RawEncoder>(
         &self,
-        resource: Option<&PreEncoded>,
-        scope: Option<&PreEncoded>,
-        items: &[PreEncoded],
-    ) -> Result<PreEncoded, BatchError<Vec<PreEncoded>>>;
+        resource: Option<&EncodedPayload>,
+        items: &EncodedScopeItems,
+    ) -> Result<EncodedPayload, Error>;
 }
 
 pub(crate) trait RawEncoder {
     type TraceId: From<emit::span::TraceId> + sval::Value;
     type SpanId: From<emit::span::SpanId> + sval::Value;
 
-    fn encode<V: sval::Value>(value: V) -> PreEncoded;
+    fn encode<V: sval::Value>(value: V) -> EncodedPayload;
+}
+
+#[derive(Default)]
+pub(crate) struct EncodedScopeItems {
+    items: HashMap<emit::Path<'static>, Vec<EncodedPayload>>,
+}
+
+impl EncodedScopeItems {
+    pub fn new() -> Self {
+        EncodedScopeItems {
+            items: HashMap::new(),
+        }
+    }
+
+    pub fn push(&mut self, evt: EncodedEvent) {
+        let entry = self.items.entry(evt.scope).or_default();
+        entry.push(evt.payload);
+    }
+
+    pub fn total_scopes(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn total_items(&self) -> usize {
+        self.items.values().map(|v| v.len()).sum()
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = (emit::Path, &[EncodedPayload])> {
+        self.items.iter().map(|(k, v)| (k.by_ref(), &**v))
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear()
+    }
+}
+
+fn stream_encoded_scope_items<'sval, S: sval::Stream<'sval> + ?Sized>(
+    stream: &mut S,
+    batch: &EncodedScopeItems,
+    stream_item: impl Fn(&mut S, emit::Path, &[EncodedPayload]) -> sval::Result,
+) -> sval::Result {
+    stream.seq_begin(Some(batch.total_scopes()))?;
+
+    for (path, items) in batch.items() {
+        stream.seq_value_begin()?;
+        stream_item(&mut *stream, path, items)?;
+        stream.seq_value_end()?;
+    }
+
+    stream.seq_end()
 }
 
 pub(crate) struct Proto;
@@ -78,8 +133,8 @@ impl RawEncoder for Proto {
     type TraceId = BinaryTraceId;
     type SpanId = BinarySpanId;
 
-    fn encode<V: sval::Value>(value: V) -> PreEncoded {
-        PreEncoded::Proto(sval_protobuf::stream_to_protobuf(value))
+    fn encode<V: sval::Value>(value: V) -> EncodedPayload {
+        EncodedPayload::Proto(sval_protobuf::stream_to_protobuf(value))
     }
 }
 
@@ -117,8 +172,8 @@ impl RawEncoder for Json {
     type TraceId = TextTraceId;
     type SpanId = TextSpanId;
 
-    fn encode<V: sval::Value>(value: V) -> PreEncoded {
-        PreEncoded::Json(JsonStr::boxed(
+    fn encode<V: sval::Value>(value: V) -> EncodedPayload {
+        EncodedPayload::Json(JsonStr::boxed(
             sval_json::stream_to_string(value).expect("failed to stream"),
         ))
     }
@@ -126,23 +181,23 @@ impl RawEncoder for Json {
 
 #[derive(Value)]
 #[sval(dynamic)]
-pub(crate) enum PreEncoded {
+pub(crate) enum EncodedPayload {
     Proto(ProtoBuf),
     Json(Box<JsonStr>),
 }
 
-impl PreEncoded {
+impl EncodedPayload {
     pub fn into_cursor(self) -> PreEncodedCursor {
         match self {
-            PreEncoded::Proto(buf) => PreEncodedCursor::Proto(buf.into_cursor()),
-            PreEncoded::Json(buf) => PreEncodedCursor::Json(JsonCursor { buf, idx: 0 }),
+            EncodedPayload::Proto(buf) => PreEncodedCursor::Proto(buf.into_cursor()),
+            EncodedPayload::Json(buf) => PreEncodedCursor::Json(JsonCursor { buf, idx: 0 }),
         }
     }
 
     pub fn len(&self) -> usize {
         match self {
-            PreEncoded::Proto(buf) => buf.len(),
-            PreEncoded::Json(buf) => buf.as_str().len(),
+            EncodedPayload::Proto(buf) => buf.len(),
+            EncodedPayload::Json(buf) => buf.as_str().len(),
         }
     }
 }
