@@ -1,9 +1,13 @@
 use emit_batcher::BatchError;
-use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
+use std::{collections::HashMap, mem, sync::Arc, time::Duration};
 
 use crate::{
     data::{
-        self, logs, metrics, traces, EncodedEvent, EncodedPayload, EncodedScopeItems, RawEncoder,
+        self,
+        logs::{LogsEventEncoder, LogsRequestEncoder},
+        metrics::{MetricsEventEncoder, MetricsRequestEncoder},
+        traces::{TracesEventEncoder, TracesRequestEncoder},
+        EncodedEvent, EncodedPayload, EncodedScopeItems, RawEncoder, RequestEncoder,
     },
     internal_metrics::InternalMetrics,
     Error,
@@ -12,11 +16,16 @@ use crate::{
 use self::http::HttpConnection;
 
 mod http;
+mod logs;
+mod metrics;
+mod traces;
+
+pub use self::{logs::*, metrics::*, traces::*};
 
 pub struct Otlp {
-    otlp_logs: Option<ClientEventEncoder<logs::LogsEventEncoder>>,
-    otlp_traces: Option<ClientEventEncoder<traces::TracesEventEncoder>>,
-    otlp_metrics: Option<ClientEventEncoder<metrics::MetricsEventEncoder>>,
+    otlp_logs: Option<ClientEventEncoder<LogsEventEncoder>>,
+    otlp_traces: Option<ClientEventEncoder<TracesEventEncoder>>,
+    otlp_metrics: Option<ClientEventEncoder<MetricsEventEncoder>>,
     metrics: Arc<InternalMetrics>,
     sender: emit_batcher::Sender<Channel>,
 }
@@ -161,175 +170,6 @@ impl Encoding {
             EncodedPayload::Proto(_) => Encoding::Proto,
             EncodedPayload::Json(_) => Encoding::Json,
         }
-    }
-}
-
-pub struct OtlpLogsBuilder {
-    event_encoder: logs::LogsEventEncoder,
-    request_encoder: logs::LogsRequestEncoder,
-    encoding: Encoding,
-    transport: OtlpTransportBuilder,
-}
-
-impl OtlpLogsBuilder {
-    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
-        OtlpLogsBuilder {
-            event_encoder: logs::LogsEventEncoder::default(),
-            request_encoder: logs::LogsRequestEncoder::default(),
-            encoding,
-            transport,
-        }
-    }
-
-    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
-        if let Protocol::Grpc = transport.protocol {
-            transport.url_path = Some("opentelemetry.proto.collector.logs.v1.LogsService/Export");
-        }
-
-        Self::new(Encoding::Proto, transport)
-    }
-
-    pub fn http_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn grpc_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::grpc(dst))
-    }
-
-    pub fn json(transport: OtlpTransportBuilder) -> Self {
-        Self::new(Encoding::Json, transport)
-    }
-
-    pub fn http_json(dst: impl Into<String>) -> Self {
-        Self::json(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn body(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.event_encoder.body = Box::new(writer);
-        self
-    }
-}
-
-pub struct OtlpTracesBuilder {
-    event_encoder: traces::TracesEventEncoder,
-    request_encoder: traces::TracesRequestEncoder,
-    encoding: Encoding,
-    transport: OtlpTransportBuilder,
-}
-
-impl OtlpTracesBuilder {
-    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
-        OtlpTracesBuilder {
-            event_encoder: traces::TracesEventEncoder::default(),
-            request_encoder: traces::TracesRequestEncoder::default(),
-            encoding,
-            transport,
-        }
-    }
-
-    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
-        if let Protocol::Grpc = transport.protocol {
-            transport.url_path = Some("opentelemetry.proto.collector.trace.v1.TraceService/Export");
-        }
-
-        Self::new(Encoding::Proto, transport)
-    }
-
-    pub fn http_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn grpc_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::grpc(dst))
-    }
-
-    pub fn json(transport: OtlpTransportBuilder) -> Self {
-        Self::new(Encoding::Json, transport)
-    }
-
-    pub fn http_json(dst: impl Into<String>) -> Self {
-        Self::json(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn name(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.event_encoder.name = Box::new(writer);
-        self
-    }
-}
-
-pub struct OtlpMetricsBuilder {
-    event_encoder: metrics::MetricsEventEncoder,
-    request_encoder: metrics::MetricsRequestEncoder,
-    encoding: Encoding,
-    transport: OtlpTransportBuilder,
-}
-
-impl OtlpMetricsBuilder {
-    fn new(encoding: Encoding, transport: OtlpTransportBuilder) -> Self {
-        OtlpMetricsBuilder {
-            event_encoder: metrics::MetricsEventEncoder::default(),
-            request_encoder: metrics::MetricsRequestEncoder::default(),
-            encoding,
-            transport,
-        }
-    }
-
-    pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
-        if let Protocol::Grpc = transport.protocol {
-            transport.url_path =
-                Some("opentelemetry.proto.collector.metrics.v1.MetricsService/Export");
-        }
-
-        Self::new(Encoding::Proto, transport)
-    }
-
-    pub fn http_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn grpc_proto(dst: impl Into<String>) -> Self {
-        Self::proto(OtlpTransportBuilder::grpc(dst))
-    }
-
-    pub fn json(transport: OtlpTransportBuilder) -> Self {
-        Self::new(Encoding::Json, transport)
-    }
-
-    pub fn http_json(dst: impl Into<String>) -> Self {
-        Self::json(OtlpTransportBuilder::http(dst))
-    }
-
-    pub fn name(
-        mut self,
-        writer: impl Fn(
-                &emit::event::Event<&dyn emit::props::ErasedProps>,
-                &mut fmt::Formatter,
-            ) -> fmt::Result
-            + Send
-            + Sync
-            + 'static,
-    ) -> Self {
-        self.event_encoder.name = Box::new(writer);
-        self
     }
 }
 
@@ -536,65 +376,32 @@ impl OtlpBuilder {
 
         let client = OtlpClient {
             logs: match self.otlp_logs {
-                Some(OtlpLogsBuilder {
-                    event_encoder,
-                    request_encoder,
-                    encoding,
-                    transport,
-                }) => {
-                    logs_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
+                Some(otlp_logs) => {
+                    let (encoder, transport) =
+                        otlp_logs.build(metrics.clone(), self.resource.as_ref())?;
 
-                    Some(Arc::new(
-                        transport.build(
-                            metrics.clone(),
-                            self.resource
-                                .as_ref()
-                                .map(|resource| encode_resource(encoding, resource)),
-                            ClientRequestEncoder::new(encoding, request_encoder),
-                        )?,
-                    ))
+                    logs_event_encoder = Some(encoder);
+                    Some(Arc::new(transport))
                 }
                 None => None,
             },
             traces: match self.otlp_traces {
-                Some(OtlpTracesBuilder {
-                    event_encoder,
-                    request_encoder,
-                    encoding,
-                    transport,
-                }) => {
-                    traces_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
+                Some(otlp_traces) => {
+                    let (encoder, transport) =
+                        otlp_traces.build(metrics.clone(), self.resource.as_ref())?;
 
-                    Some(Arc::new(
-                        transport.build(
-                            metrics.clone(),
-                            self.resource
-                                .as_ref()
-                                .map(|resource| encode_resource(encoding, resource)),
-                            ClientRequestEncoder::new(encoding, request_encoder),
-                        )?,
-                    ))
+                    traces_event_encoder = Some(encoder);
+                    Some(Arc::new(transport))
                 }
                 None => None,
             },
             metrics: match self.otlp_metrics {
-                Some(OtlpMetricsBuilder {
-                    event_encoder,
-                    request_encoder,
-                    encoding,
-                    transport,
-                }) => {
-                    metrics_event_encoder = Some(ClientEventEncoder::new(encoding, event_encoder));
+                Some(otlp_metrics) => {
+                    let (encoder, transport) =
+                        otlp_metrics.build(metrics.clone(), self.resource.as_ref())?;
 
-                    Some(Arc::new(
-                        transport.build(
-                            metrics.clone(),
-                            self.resource
-                                .as_ref()
-                                .map(|resource| encode_resource(encoding, resource)),
-                            ClientRequestEncoder::new(encoding, request_encoder),
-                        )?,
-                    ))
+                    metrics_event_encoder = Some(encoder);
+                    Some(Arc::new(transport))
                 }
                 None => None,
             },
@@ -615,65 +422,37 @@ impl OtlpBuilder {
                     otlp_metrics,
                 } = batch;
 
-                let mut r = Ok(());
+                let mut r = Ok::<(), BatchError<Channel>>(());
 
                 if otlp_logs.total_scopes() > 0 {
                     if let Some(client) = client.logs {
-                        if let Err(e) = client.send(otlp_logs).await {
-                            r = Err(e.map_retryable(|logs| {
-                                Some(Channel {
-                                    otlp_logs: logs.unwrap_or_default(),
-                                    otlp_traces: Default::default(),
-                                    otlp_metrics: Default::default(),
-                                })
-                            }));
-                        }
+                        send_channel_batch(&mut r, &client, otlp_logs, |channel, otlp_logs| {
+                            channel.otlp_logs = otlp_logs;
+                        })
+                        .await;
                     }
                 }
 
                 if otlp_traces.total_scopes() > 0 {
                     if let Some(client) = client.traces {
-                        if let Err(e) = client.send(otlp_traces).await {
-                            r = if let Err(re) = r {
-                                Err(re.map_retryable(|channel| {
-                                    let mut channel = channel.unwrap_or_default();
-                                    channel.otlp_traces = e.into_retryable().unwrap_or_default();
-
-                                    Some(channel)
-                                }))
-                            } else {
-                                Err(e.map_retryable(|traces| {
-                                    Some(Channel {
-                                        otlp_traces: traces.unwrap_or_default(),
-                                        otlp_logs: Default::default(),
-                                        otlp_metrics: Default::default(),
-                                    })
-                                }))
-                            };
-                        }
+                        send_channel_batch(&mut r, &client, otlp_traces, |channel, otlp_traces| {
+                            channel.otlp_traces = otlp_traces;
+                        })
+                        .await;
                     }
                 }
 
                 if otlp_metrics.total_scopes() > 0 {
                     if let Some(client) = client.metrics {
-                        if let Err(e) = client.send(otlp_metrics).await {
-                            r = if let Err(re) = r {
-                                Err(re.map_retryable(|channel| {
-                                    let mut channel = channel.unwrap_or_default();
-                                    channel.otlp_metrics = e.into_retryable().unwrap_or_default();
-
-                                    Some(channel)
-                                }))
-                            } else {
-                                Err(e.map_retryable(|metrics| {
-                                    Some(Channel {
-                                        otlp_metrics: metrics.unwrap_or_default(),
-                                        otlp_logs: Default::default(),
-                                        otlp_traces: Default::default(),
-                                    })
-                                }))
-                            };
-                        }
+                        send_channel_batch(
+                            &mut r,
+                            &client,
+                            otlp_metrics,
+                            |channel, otlp_metrics| {
+                                channel.otlp_metrics = otlp_metrics;
+                            },
+                        )
+                        .await;
                     }
                 }
 
@@ -760,9 +539,9 @@ fn encode_resource(encoding: Encoding, resource: &Resource) -> EncodedPayload {
 
 #[derive(Clone)]
 pub struct OtlpClient {
-    logs: Option<Arc<OtlpTransport<logs::LogsRequestEncoder>>>,
-    traces: Option<Arc<OtlpTransport<traces::TracesRequestEncoder>>>,
-    metrics: Option<Arc<OtlpTransport<metrics::MetricsRequestEncoder>>>,
+    logs: Option<Arc<OtlpTransport<LogsRequestEncoder>>>,
+    traces: Option<Arc<OtlpTransport<TracesRequestEncoder>>>,
+    metrics: Option<Arc<OtlpTransport<MetricsRequestEncoder>>>,
 }
 
 enum OtlpTransport<R> {
@@ -824,5 +603,31 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
         }
 
         Ok(())
+    }
+}
+
+async fn send_channel_batch<R: RequestEncoder>(
+    r: &mut Result<(), BatchError<Channel>>,
+    client: &OtlpTransport<R>,
+    batch: EncodedScopeItems,
+    set: impl Fn(&mut Channel, EncodedScopeItems),
+) {
+    // Attempt to send the batch, restoring it on the channel if it fails
+    if let Err(e) = client.send(batch).await {
+        *r = if let Err(re) = mem::replace(r, Ok(())) {
+            Err(re.map_retryable(|channel| {
+                let mut channel = channel.unwrap_or_default();
+                set(&mut channel, e.into_retryable().unwrap_or_default());
+
+                Some(channel)
+            }))
+        } else {
+            Err(e.map_retryable(|batch| {
+                let mut channel = Channel::default();
+                set(&mut channel, batch.unwrap_or_default());
+
+                Some(channel)
+            }))
+        };
     }
 }
