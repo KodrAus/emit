@@ -494,50 +494,14 @@ impl OtlpBuilder {
         }
     }
 
-    pub fn logs_http_proto(self, dst: impl Into<String>) -> Self {
-        self.logs(OtlpLogsBuilder::http_proto(dst))
-    }
-
-    pub fn logs_grpc_proto(self, dst: impl Into<String>) -> Self {
-        self.logs(OtlpLogsBuilder::grpc_proto(dst))
-    }
-
-    pub fn logs_http_json(self, dst: impl Into<String>) -> Self {
-        self.logs(OtlpLogsBuilder::http_json(dst))
-    }
-
     pub fn logs(mut self, builder: OtlpLogsBuilder) -> Self {
         self.otlp_logs = Some(builder);
         self
     }
 
-    pub fn traces_http_proto(self, dst: impl Into<String>) -> Self {
-        self.traces(OtlpTracesBuilder::http_proto(dst))
-    }
-
-    pub fn traces_grpc_proto(self, dst: impl Into<String>) -> Self {
-        self.traces(OtlpTracesBuilder::grpc_proto(dst))
-    }
-
-    pub fn traces_http_json(self, dst: impl Into<String>) -> Self {
-        self.traces(OtlpTracesBuilder::http_json(dst))
-    }
-
     pub fn traces(mut self, builder: OtlpTracesBuilder) -> Self {
         self.otlp_traces = Some(builder);
         self
-    }
-
-    pub fn metrics_http_proto(self, dst: impl Into<String>) -> Self {
-        self.metrics(OtlpMetricsBuilder::http_proto(dst))
-    }
-
-    pub fn metrics_grpc_proto(self, dst: impl Into<String>) -> Self {
-        self.metrics(OtlpMetricsBuilder::grpc_proto(dst))
-    }
-
-    pub fn metrics_http_json(self, dst: impl Into<String>) -> Self {
-        self.metrics(OtlpMetricsBuilder::http_json(dst))
     }
 
     pub fn metrics(mut self, builder: OtlpMetricsBuilder) -> Self {
@@ -696,7 +660,7 @@ impl OtlpBuilder {
                             r = if let Err(re) = r {
                                 Err(re.map_retryable(|channel| {
                                     let mut channel = channel.unwrap_or_default();
-                                    channel.otlp_traces = e.into_retryable().unwrap_or_default();
+                                    channel.otlp_metrics = e.into_retryable().unwrap_or_default();
 
                                     Some(channel)
                                 }))

@@ -15,7 +15,7 @@ mod any_value;
 mod instrumentation_scope;
 mod resource;
 
-#[cfg(any(feature = "grpc", feature = "decode_responses"))]
+#[cfg(feature = "decode_responses")]
 pub(crate) mod generated;
 
 use crate::Error;
