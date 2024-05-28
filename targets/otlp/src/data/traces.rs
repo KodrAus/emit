@@ -66,7 +66,6 @@ impl EventEncoder for TracesEventEncoder {
                     end_time_unix_nano,
                     evt.props(),
                 ),
-                dropped_attributes_count: 0,
                 kind: SpanKind::Unspecified,
             }),
         })

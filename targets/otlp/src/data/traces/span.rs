@@ -43,8 +43,6 @@ pub struct Span<'a, N: ?Sized = str, A: ?Sized = InlineSpanAttributes<'a>> {
         data_tag = "sval_protobuf::tags::PROTOBUF_I64"
     )]
     pub end_time_unix_nano: u64,
-    #[sval(label = "droppedAttributesCount", index = 10)]
-    pub dropped_attributes_count: u32,
     #[sval(flatten)]
     pub attributes: &'a A,
 }
@@ -128,6 +126,8 @@ impl<
             &SPAN_ATTRIBUTES_INDEX,
             |stream| {
                 stream_attributes(stream, &self.props, |k, v| match k.get() {
+                    emit::well_known::KEY_EVENT_KIND => true,
+                    emit::well_known::KEY_SPAN_NAME => true,
                     emit::well_known::KEY_LVL => {
                         level = v.by_ref().cast().unwrap_or_default();
                         true
@@ -200,7 +200,6 @@ impl<
                     stream.value_computed(&[Event {
                         name: "exception",
                         time_unix_nano: self.time_unix_nano,
-                        dropped_attributes_count: 0,
                         attributes: &InlineEventAttributes {
                             attributes: &[KeyValue {
                                 key: "exception.message",
@@ -248,8 +247,6 @@ pub struct Event<'a, N: ?Sized = str, A: ?Sized = InlineEventAttributes<'a>> {
         data_tag = "sval_protobuf::tags::PROTOBUF_I64"
     )]
     pub time_unix_nano: u64,
-    #[sval(label = "droppedAttributesCount", index = 4)]
-    pub dropped_attributes_count: u32,
     #[sval(flatten)]
     pub attributes: &'a A,
 }

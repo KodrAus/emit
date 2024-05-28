@@ -186,6 +186,15 @@ pub(crate) enum EncodedPayload {
     Json(Box<JsonStr>),
 }
 
+impl Clone for EncodedPayload {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Proto(buf) => Self::Proto(buf.clone()),
+            Self::Json(buf) => Self::Json(JsonStr::boxed(buf.as_str())),
+        }
+    }
+}
+
 impl EncodedPayload {
     pub fn into_cursor(self) -> PreEncodedCursor {
         match self {

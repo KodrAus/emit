@@ -28,14 +28,6 @@ pub struct LogRecord<'a, B: ?Sized = AnyValue<'a>, A: ?Sized = InlineLogRecordAt
         data_tag = "sval_protobuf::tags::PROTOBUF_I64"
     )]
     pub observed_time_unix_nano: u64,
-    #[sval(label = "droppedAttributesCount", index = 7)]
-    pub dropped_attributes_count: u32,
-    #[sval(
-        label = "flags",
-        index = 8,
-        data_tag = "sval_protobuf::tags::PROTOBUF_I32"
-    )]
-    pub flags: u32,
     #[sval(label = "body", index = 5)]
     pub body: &'a B,
     #[sval(flatten)]

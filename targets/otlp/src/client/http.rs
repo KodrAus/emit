@@ -1,7 +1,7 @@
 use std::{
     fmt,
     future::Future,
-    io::{Cursor, Write},
+    io::Cursor,
     pin::Pin,
     sync::{Arc, Mutex},
     task::{self, Context, Poll},
@@ -46,13 +46,14 @@ async fn connect(
         }
         #[cfg(not(feature = "tls"))]
         {
-            return Err(Error::new("https support requires the `tls` Cargo feature"));
+            return Err(Error::msg("https support requires the `tls` Cargo feature"));
         }
     } else {
         http_handshake(metrics, version, io).await
     }
 }
 
+#[cfg(feature = "tls")]
 async fn tls_handshake(
     metrics: &InternalMetrics,
     io: tokio::net::TcpStream,
@@ -372,6 +373,7 @@ impl HttpUri {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct HttpContent {
     custom_headers: &'static [(&'static str, &'static str)],
     content_frame: Option<HttpContentHeader>,
@@ -400,6 +402,8 @@ impl HttpContent {
 
     #[cfg(feature = "gzip")]
     fn gzip(payload: EncodedPayload) -> Result<Self, Error> {
+        use std::io::Write as _;
+
         let content_type = content_type_of(&payload);
 
         let mut enc = flate2::write::GzEncoder::new(
@@ -508,14 +512,16 @@ impl Body for HttpContent {
     }
 }
 
+#[derive(Clone)]
 enum HttpContentHeader {
     // NOTE: Basically hardcodes gRPC header, but could be generalized if it was worth it
     SmallBytes([u8; 5]),
 }
 
+#[derive(Clone)]
 enum HttpContentPayload {
     PreEncoded(EncodedPayload),
-    #[cfg(feature = "gzip")]
+    #[allow(dead_code)]
     Bytes(Box<[u8]>),
 }
 
@@ -555,7 +561,6 @@ impl HttpContentPayload {
 
 pub(crate) enum HttpContentCursor {
     PreEncoded(PreEncodedCursor),
-    #[cfg(feature = "gzip")]
     Bytes(Cursor<Box<[u8]>>),
     SmallBytes(Cursor<[u8; 5]>),
 }
@@ -564,7 +569,6 @@ impl Buf for HttpContentCursor {
     fn remaining(&self) -> usize {
         match self {
             HttpContentCursor::PreEncoded(buf) => buf.remaining(),
-            #[cfg(feature = "gzip")]
             HttpContentCursor::Bytes(buf) => buf.remaining(),
             HttpContentCursor::SmallBytes(buf) => buf.remaining(),
         }
@@ -573,7 +577,6 @@ impl Buf for HttpContentCursor {
     fn chunk(&self) -> &[u8] {
         match self {
             HttpContentCursor::PreEncoded(buf) => buf.chunk(),
-            #[cfg(feature = "gzip")]
             HttpContentCursor::Bytes(buf) => buf.chunk(),
             HttpContentCursor::SmallBytes(buf) => buf.chunk(),
         }
@@ -582,7 +585,6 @@ impl Buf for HttpContentCursor {
     fn advance(&mut self, cnt: usize) {
         match self {
             HttpContentCursor::PreEncoded(buf) => buf.advance(cnt),
-            #[cfg(feature = "gzip")]
             HttpContentCursor::Bytes(buf) => buf.advance(cnt),
             HttpContentCursor::SmallBytes(buf) => buf.advance(cnt),
         }

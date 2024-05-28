@@ -51,8 +51,6 @@ impl EventEncoder for LogsEventEncoder {
                     },
                 ))),
                 attributes: &PropsLogRecordAttributes::<E::TraceId, E::SpanId, _>::new(evt.props()),
-                dropped_attributes_count: 0,
-                flags: Default::default(),
             }),
         })
     }

@@ -142,6 +142,7 @@ impl emit_batcher::Channel for Channel {
     }
 }
 
+#[must_use = "call `.spawn()` to complete the builder"]
 pub struct OtlpBuilder {
     resource: Option<Resource>,
     otlp_logs: Option<OtlpLogsBuilder>,
@@ -528,7 +529,6 @@ fn encode_resource(encoding: Encoding, resource: &Resource) -> EncodedPayload {
 
     let resource = data::Resource {
         attributes: &attributes,
-        dropped_attribute_count: 0,
     };
 
     match encoding {

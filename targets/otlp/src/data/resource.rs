@@ -6,8 +6,6 @@ use super::{stream_attributes, stream_field, AnyValue, KeyValue};
 pub struct Resource<'a, A: ?Sized = InlineResourceAttributes<'a>> {
     #[sval(flatten)]
     pub attributes: &'a A,
-    #[sval(index = 2)]
-    pub dropped_attribute_count: u32,
 }
 
 const RESOURCE_ATTRIBUTES_LABEL: sval::Label =

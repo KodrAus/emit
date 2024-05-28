@@ -14,9 +14,9 @@ pub struct Metric<'a, N: ?Sized = str, U: ?Sized = str, D: ?Sized = MetricData<'
 
 #[derive(Value)]
 pub enum MetricData<'a, DP: ?Sized = [NumberDataPoint<'a>]> {
-    #[sval(label = "data", index = 5)]
+    #[sval(label = "gauge", index = 5)]
     Gauge(Gauge<'a, DP>),
-    #[sval(label = "data", index = 7)]
+    #[sval(label = "sum", index = 7)]
     Sum(Sum<'a, DP>),
 }
 
