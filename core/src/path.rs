@@ -271,6 +271,15 @@ mod alloc_support {
         pub fn to_owned(&self) -> Path<'static> {
             Path(self.0.to_owned())
         }
+
+        /**
+        Get the underlying value as a potentially owned string.
+
+        If the string contains a contiguous `'static` value then this method will return `Cow::Borrowed`. Otherwise it will return `Cow::Owned`.
+        */
+        pub fn to_cow(&self) -> Cow<'static, str> {
+            self.0.to_cow()
+        }
     }
 }
 

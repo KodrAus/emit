@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies.emit]
 path = "../../"
-features = ["std", "serde"]
+features = ["std", "serde", "implicit_internal_rt"]
+default-features = false
 
 [dependencies.opentelemetry_sdk]
 version = "0.22"

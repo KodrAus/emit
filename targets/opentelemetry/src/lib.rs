@@ -1,3 +1,44 @@
+/*!
+Integrate `emit` with the OpenTelemetry SDK.
+
+This library forwards logs and traces from emit through the global OpenTelemetry provider. If your application is already using the OpenTelemetry SDK then this library lets you use `emit`'s APIs to instrument through it. It's also intended for applications that need to unify multiple instrumentation libraries, like `emit`, `log`, and `tracing`, into a shared pipeline.
+
+If you'd just like to send `emit` diagnostics via OTLP, then consider `emit_otlp`.
+
+# Getting started
+
+Configure OpenTelemetry as per its documentation, then add `emit` and `emit_opentelemetry` to your Cargo.toml:
+
+```toml
+[dependencies.emit]
+version = "0.0.0"
+
+[dependencies.emit_opentelemetry]
+version = "0.0.0"
+```
+
+Initialize `emit` using [`new`]:
+
+```
+fn main() {
+    // Configure the OpenTelemetry SDK
+
+    let mut builder = emit_opentelemetry::new("my_app");
+
+    let rt = emit::setup()
+        .emit_to(builder.emitter())
+        .map_ctxt(|ctxt| builder.ctxt(ctxt))
+        .init();
+
+    // Your app code goes here
+
+    rt.blocking_flush(std::time::Duration::from_secs(30));
+}
+```
+
+Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate properly.
+*/
+
 use std::{cell::RefCell, fmt, ops::ControlFlow};
 
 use emit::{
@@ -9,74 +50,91 @@ use emit::{
     },
     Filter, Props,
 };
+
 use opentelemetry::{
     global::{self, BoxedTracer, GlobalLoggerProvider},
     logs::{AnyValue, LogRecord, Logger, LoggerProvider, Severity},
-    trace::{SpanContext, SpanId, Status, TraceContextExt, TraceId, Tracer},
+    trace::{
+        SpanContext, SpanId, Status, TraceContextExt, TraceFlags, TraceId, TraceState, Tracer,
+    },
     Context, ContextGuard, Key, KeyValue, Value,
 };
 
-pub fn emitter(name: &'static str) -> OpenTelemetryEmitter {
-    OpenTelemetryEmitter::new(name)
+pub fn new(name: &'static str) -> OpenTelemetry {
+    OpenTelemetry::new(name)
 }
 
-pub fn ctxt<C: emit::Ctxt>(name: &'static str, ctxt: C) -> OpenTelemetryContext<C> {
-    OpenTelemetryContext::new(name, ctxt)
+pub struct OpenTelemetry {
+    name: &'static str,
+}
+
+impl OpenTelemetry {
+    pub fn new(name: &'static str) -> Self {
+        OpenTelemetry { name }
+    }
+
+    pub fn emitter(&mut self) -> OpenTelemetryEmitter {
+        OpenTelemetryEmitter::new(self.name)
+    }
+
+    pub fn ctxt<C>(&mut self, ctxt: C) -> OpenTelemetryCtxt<C> {
+        OpenTelemetryCtxt::new(self.name, ctxt)
+    }
 }
 
 thread_local! {
-    static CTXT_STACK: RefCell<Vec<CtxtFrame>> = RefCell::new(Vec::new());
+    static ACTIVE_FRAME_STACK: RefCell<Vec<ActiveFrame>> = RefCell::new(Vec::new());
 }
 
-struct CtxtFrame {
+struct ActiveFrame {
     _guard: ContextGuard,
-    open: bool,
+    end_on_close: bool,
 }
 
-fn push(guard: CtxtFrame) {
-    CTXT_STACK.with(|stack| stack.borrow_mut().push(guard));
+fn push(guard: ActiveFrame) {
+    ACTIVE_FRAME_STACK.with(|stack| stack.borrow_mut().push(guard));
 }
 
-fn pop() -> Option<CtxtFrame> {
-    CTXT_STACK.with(|stack| stack.borrow_mut().pop())
+fn pop() -> Option<ActiveFrame> {
+    ACTIVE_FRAME_STACK.with(|stack| stack.borrow_mut().pop())
 }
 
-fn with_current(f: impl FnOnce(&mut CtxtFrame)) {
-    CTXT_STACK.with(|stack| {
+fn with_current(f: impl FnOnce(&mut ActiveFrame)) {
+    ACTIVE_FRAME_STACK.with(|stack| {
         if let Some(frame) = stack.borrow_mut().last_mut() {
             f(frame);
         }
     })
 }
 
-pub struct OpenTelemetryContext<C> {
+pub struct OpenTelemetryCtxt<C> {
     tracer: BoxedTracer,
-    ctxt: C,
+    inner: C,
 }
 
-pub struct OpenTelemetryContextFrame<F> {
-    ctxt: Option<Context>,
-    attached: bool,
-    open: bool,
-    frame: F,
+pub struct OpenTelemetryFrame<F> {
+    slot: Option<Context>,
+    active: bool,
+    end_on_close: bool,
+    inner: F,
 }
 
-pub struct OpenTelemetryContextProps<P: ?Sized> {
+pub struct OpenTelemetryProps<P: ?Sized> {
     trace_id: Option<emit::span::TraceId>,
     span_id: Option<emit::span::SpanId>,
     props: *const P,
 }
 
-impl<C> OpenTelemetryContext<C> {
-    pub fn new(name: &'static str, ctxt: C) -> Self {
-        OpenTelemetryContext {
+impl<C> OpenTelemetryCtxt<C> {
+    fn new(name: &'static str, ctxt: C) -> Self {
+        OpenTelemetryCtxt {
             tracer: global::tracer(name),
-            ctxt,
+            inner: ctxt,
         }
     }
 }
 
-impl<P: emit::Props + ?Sized> emit::Props for OpenTelemetryContextProps<P> {
+impl<P: emit::Props + ?Sized> emit::Props for OpenTelemetryProps<P> {
     fn for_each<'kv, F: FnMut(emit::Str<'kv>, emit::Value<'kv>) -> ControlFlow<()>>(
         &'kv self,
         mut for_each: F,
@@ -99,10 +157,10 @@ impl<P: emit::Props + ?Sized> emit::Props for OpenTelemetryContextProps<P> {
     }
 }
 
-impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
-    type Current = OpenTelemetryContextProps<C::Current>;
+impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
+    type Current = OpenTelemetryProps<C::Current>;
 
-    type Frame = OpenTelemetryContextFrame<C::Frame>;
+    type Frame = OpenTelemetryFrame<C::Frame>;
 
     fn open_root<P: emit::Props>(&self, props: P) -> Self::Frame {
         let trace_id = props.pull::<emit::span::TraceId, _>(emit::well_known::KEY_TRACE_ID);
@@ -126,34 +184,34 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
 
                 let ctxt = ctxt.with_span(span.start(&self.tracer));
 
-                return OpenTelemetryContextFrame {
-                    attached: false,
-                    open: true,
-                    ctxt: Some(ctxt),
-                    frame: self.ctxt.open_root(props),
+                return OpenTelemetryFrame {
+                    active: false,
+                    end_on_close: true,
+                    slot: Some(ctxt),
+                    inner: self.inner.open_root(props),
                 };
             }
         }
 
-        OpenTelemetryContextFrame {
-            attached: false,
-            open: false,
-            ctxt: None,
-            frame: self.ctxt.open_root(props),
+        OpenTelemetryFrame {
+            active: false,
+            end_on_close: false,
+            slot: None,
+            inner: self.inner.open_root(props),
         }
     }
 
     fn enter(&self, local: &mut Self::Frame) {
-        self.ctxt.enter(&mut local.frame);
+        self.inner.enter(&mut local.inner);
 
-        if let Some(ctxt) = local.ctxt.take() {
+        if let Some(ctxt) = local.slot.take() {
             let guard = ctxt.attach();
 
-            push(CtxtFrame {
+            push(ActiveFrame {
                 _guard: guard,
-                open: local.open,
+                end_on_close: local.end_on_close,
             });
-            local.attached = true;
+            local.active = true;
         }
     }
 
@@ -164,8 +222,8 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
         let trace_id = span.span_context().trace_id().to_bytes();
         let span_id = span.span_context().span_id().to_bytes();
 
-        self.ctxt.with_current(|props| {
-            let props = OpenTelemetryContextProps {
+        self.inner.with_current(|props| {
+            let props = OpenTelemetryProps {
                 trace_id: emit::span::TraceId::from_bytes(trace_id),
                 span_id: emit::span::SpanId::from_bytes(span_id),
                 props: props as *const C::Current,
@@ -175,23 +233,23 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
         })
     }
 
-    fn exit(&self, local: &mut Self::Frame) {
-        self.ctxt.exit(&mut local.frame);
+    fn exit(&self, frame: &mut Self::Frame) {
+        self.inner.exit(&mut frame.inner);
 
-        if local.attached {
-            local.ctxt = Some(Context::current());
+        if frame.active {
+            frame.slot = Some(Context::current());
 
-            if let Some(frame) = pop() {
-                local.open = frame.open;
+            if let Some(active) = pop() {
+                frame.end_on_close = active.end_on_close;
             }
-            local.attached = false;
+            frame.active = false;
         }
     }
 
-    fn close(&self, mut local: Self::Frame) {
+    fn close(&self, mut frame: Self::Frame) {
         // If the span hasn't been closed through an event, then close it now
-        if local.open {
-            if let Some(ctxt) = local.ctxt.take() {
+        if frame.end_on_close {
+            if let Some(ctxt) = frame.slot.take() {
                 let span = ctxt.span();
                 span.end();
             }
@@ -200,7 +258,7 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryContext<C> {
 }
 
 pub struct OpenTelemetryEmitter {
-    logger: <GlobalLoggerProvider as LoggerProvider>::Logger,
+    inner: <GlobalLoggerProvider as LoggerProvider>::Logger,
     span_name: Box<MessageFormatter>,
     log_body: Box<MessageFormatter>,
 }
@@ -235,9 +293,9 @@ impl<'a, P: emit::props::Props> fmt::Display for MessageRenderer<'a, P> {
 }
 
 impl OpenTelemetryEmitter {
-    pub fn new(name: &'static str) -> Self {
+    fn new(name: &'static str) -> Self {
         OpenTelemetryEmitter {
-            logger: global::logger_provider().logger(name),
+            inner: global::logger_provider().logger(name),
             span_name: default_span_name(),
             log_body: default_log_body(),
         }
@@ -276,10 +334,14 @@ impl emit::Emitter for OpenTelemetryEmitter {
     fn emit<E: emit::event::ToEvent>(&self, evt: E) {
         let evt = evt.to_event();
 
+        // If the event is for a span then attempt to end it
+        // The typical case is the span was created through `#[emit::span]`
+        // and so is the currently active frame. If it isn't the active frame
+        // then it's been created manually or spans are being completed out of order
         if emit::kind::is_span_filter().matches(&evt) {
             let mut emitted = false;
             with_current(|frame| {
-                if frame.open {
+                if frame.end_on_close {
                     let ctxt = Context::current();
                     let span = ctxt.span();
 
@@ -342,7 +404,7 @@ impl emit::Emitter for OpenTelemetryEmitter {
                             span.end();
                         }
 
-                        frame.open = false;
+                        frame.end_on_close = false;
                         emitted = true;
                     }
                 }
@@ -353,6 +415,7 @@ impl emit::Emitter for OpenTelemetryEmitter {
             }
         }
 
+        // If the event wasn't emitted as a span then emit it as a log record
         let mut record = LogRecord::builder();
 
         let body = format!(
@@ -447,17 +510,12 @@ impl emit::Emitter for OpenTelemetryEmitter {
         record = record.with_attributes(attributes);
 
         if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
-            let ctxt = Context::current();
-            let span = ctxt.span();
-
-            let ctxt = span.span_context();
-
             record = record.with_span_context(&SpanContext::new(
                 trace_id,
                 span_id,
-                ctxt.trace_flags(),
-                ctxt.is_remote(),
-                ctxt.trace_state().clone(),
+                TraceFlags::SAMPLED,
+                false,
+                TraceState::NONE,
             ))
         }
 
@@ -465,7 +523,7 @@ impl emit::Emitter for OpenTelemetryEmitter {
             record = record.with_timestamp(extent.as_point().to_system_time());
         }
 
-        self.logger.emit(record.build());
+        self.inner.emit(record.build());
     }
 
     fn blocking_flush(&self, _: std::time::Duration) -> bool {
