@@ -10,6 +10,11 @@ use super::{
     encode_resource, ClientEventEncoder, ClientRequestEncoder, OtlpTransport, Protocol, Resource,
 };
 
+/**
+A builder for the metrics signal.
+
+Pass the resulting builder to [`crate::OtlpBuilder::metrics`] to configure the metrics signal for an OTLP pipeline.
+*/
 pub struct OtlpMetricsBuilder {
     event_encoder: metrics::MetricsEventEncoder,
     request_encoder: metrics::MetricsRequestEncoder,
@@ -27,6 +32,9 @@ impl OtlpMetricsBuilder {
         }
     }
 
+    /**
+    Create a new builder for the metrics signal with the given transport with protobuf encoding.
+    */
     pub fn proto(mut transport: OtlpTransportBuilder) -> Self {
         if let Protocol::Grpc = transport.protocol {
             transport.url_path =
@@ -36,22 +44,43 @@ impl OtlpMetricsBuilder {
         Self::new(Encoding::Proto, transport)
     }
 
+    /**
+    Get a metrics signal builder for HTTP+protobuf.
+
+    The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/metrics`.
+    */
     pub fn http_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::http(dst))
     }
 
+    /**
+    Get a metrics signal builder for gRPC+protobuf.
+
+    The `dst` argument should include just the root of the target gRPC service, like `http://localhost:4319`.
+    */
     pub fn grpc_proto(dst: impl Into<String>) -> Self {
         Self::proto(OtlpTransportBuilder::grpc(dst))
     }
 
+    /**
+    Get a metrics signal builder with the given transport with JSON encoding.
+    */
     pub fn json(transport: OtlpTransportBuilder) -> Self {
         Self::new(Encoding::Json, transport)
     }
 
+    /**
+    Get a metrics signal builder for HTTP+JSON.
+
+    The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/metrics`.
+    */
     pub fn http_json(dst: impl Into<String>) -> Self {
         Self::json(OtlpTransportBuilder::http(dst))
     }
 
+    /**
+    Use the given `writer` function to format the name of the OTLP metric for a given [`emit::Event`].
+    */
     pub fn name(
         mut self,
         writer: impl Fn(

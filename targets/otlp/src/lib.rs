@@ -187,6 +187,23 @@ If the `tls` Cargo feature is enabled, and the scheme of your endpoint uses the 
 
 If the `gzip` Cargo feature is enabled then gzip compression will be applied automatically to all export requests.
 
+# Customizing HTTP headers
+
+You can use the [`http`] or [`grpc`] functions to begin an [`OtlpTransportBuilder`] that can configure custom HTTP headers to send with requests.
+
+If you omit the `http` or `grpc` part of your signal builder, like [`logs_proto`] instead of [`logs_grpc_proto`], then you can configure and specify the transport directly:
+
+```
+# fn build() -> emit_otlp::OtlpBuilder {
+emit_otlp::new()
+   .logs(emit_otlp::logs_proto(emit_otlp::http("http://localhost:4318/v1/logs")
+      .headers([
+         ("X-ApiKey", "abcd"),
+      ]))
+   )
+# }
+```
+
 # Configuring a resource
 
 The [`OtlpBuilder::resource`] method configures the OTLP resource to send with each export request. Some OTLP receivers accept data without a resource but the OpenTelemetry specification itself mandates it.
@@ -1135,6 +1152,8 @@ fn main() {
 Diagnostics include when batches are emitted, and any failures observed along the way.
 */
 
+#![deny(missing_docs)]
+
 #[macro_use]
 mod internal_metrics;
 mod client;
@@ -1190,6 +1209,12 @@ pub fn grpc(dst: impl Into<String>) -> OtlpTransportBuilder {
 Get a transport builder for HTTP.
 
 The builder can be used by [`OtlpLogsBuilder`], [`OtlpTracesBuilder`], and [`OtlpMetricsBuilder`] to configure a signal to send OTLP via HTTP.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like:
+
+- `http://localhost:4318/v1/logs` for the logs signal.
+- `http://localhost:4318/v1/traces` for the traces signal.
+- `http://localhost:4318/v1/metrics` for the metrics signal.
 */
 pub fn http(dst: impl Into<String>) -> OtlpTransportBuilder {
     OtlpTransportBuilder::http(dst)
@@ -1197,6 +1222,8 @@ pub fn http(dst: impl Into<String>) -> OtlpTransportBuilder {
 
 /**
 Get a logs signal builder for gRPC+protobuf.
+
+The `dst` argument should include just the root of the target gRPC service, like `http://localhost:4319`.
 */
 pub fn logs_grpc_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::grpc_proto(dst)
@@ -1204,6 +1231,8 @@ pub fn logs_grpc_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
 
 /**
 Get a logs signal builder for HTTP+protobuf.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/logs`.
 */
 pub fn logs_http_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::http_proto(dst)
@@ -1211,6 +1240,8 @@ pub fn logs_http_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
 
 /**
 Get a logs signal builder for HTTP+JSON.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/logs`.
 */
 pub fn logs_http_json(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::http_json(dst)
@@ -1232,6 +1263,8 @@ pub fn logs_json(transport: OtlpTransportBuilder) -> OtlpLogsBuilder {
 
 /**
 Get a traces signal builder for gRPC+protobuf.
+
+The `dst` argument should include just the root of the target gRPC service, like `http://localhost:4319`.
 */
 pub fn traces_grpc_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::grpc_proto(dst)
@@ -1239,6 +1272,8 @@ pub fn traces_grpc_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
 
 /**
 Get a traces signal builder for HTTP+protobuf.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/traces`.
 */
 pub fn traces_http_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http_proto(dst)
@@ -1246,6 +1281,8 @@ pub fn traces_http_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
 
 /**
 Get a traces signal builder for HTTP+JSON.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/traces`.
 */
 pub fn traces_http_json(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http_json(dst)
@@ -1267,6 +1304,8 @@ pub fn traces_json(transport: OtlpTransportBuilder) -> OtlpTracesBuilder {
 
 /**
 Get a metrics signal builder for gRPC+protobuf.
+
+The `dst` argument should include just the root of the target gRPC service, like `http://localhost:4319`.
 */
 pub fn metrics_grpc_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::grpc_proto(dst)
@@ -1274,6 +1313,8 @@ pub fn metrics_grpc_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
 
 /**
 Get a metrics signal builder for HTTP+protobuf.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/metrics`.
 */
 pub fn metrics_http_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::http_proto(dst)
@@ -1281,6 +1322,8 @@ pub fn metrics_http_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
 
 /**
 Get a metrics signal builder for HTTP+JSON.
+
+The `dst` argument should include the complete path to the OTLP endpoint for the given signal, like `http://localhost:4318/v1/metrics`.
 */
 pub fn metrics_http_json(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::http_json(dst)

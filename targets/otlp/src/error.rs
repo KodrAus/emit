@@ -1,5 +1,8 @@
 use std::{error, fmt};
 
+/**
+An error attempting to configure a [`crate::Otlp`] instance.
+*/
 pub struct Error {
     msg: String,
     cause: Option<Box<dyn error::Error + Send + Sync>>,
