@@ -30,12 +30,12 @@ async fn connect(
     let io = tokio::net::TcpStream::connect((uri.host(), uri.port()))
         .await
         .map_err(|e| {
-            metrics.otlp_http_conn_failed.increment();
+            metrics.otlp_transport_conn_failed.increment();
 
             Error::new("failed to connect TCP stream", e)
         })?;
 
-    metrics.otlp_http_conn_established.increment();
+    metrics.otlp_transport_conn_established.increment();
 
     if uri.is_https() {
         #[cfg(feature = "tls")]
@@ -62,7 +62,7 @@ async fn tls_handshake(
     use tokio_rustls::{rustls, TlsConnector};
 
     let domain = uri.host().to_owned().try_into().map_err(|e| {
-        metrics.otlp_http_conn_tls_failed.increment();
+        metrics.otlp_transport_conn_tls_failed.increment();
 
         Error::new(format_args!("could not extract a DNS name from {uri}"), e)
     })?;
@@ -71,7 +71,7 @@ async fn tls_handshake(
         let mut root_store = rustls::RootCertStore::empty();
 
         for cert in rustls_native_certs::load_native_certs().map_err(|e| {
-            metrics.otlp_http_conn_tls_failed.increment();
+            metrics.otlp_transport_conn_tls_failed.increment();
             Error::new("failed to load native certificates", e)
         })? {
             let _ = root_store.add(cert);
@@ -87,12 +87,12 @@ async fn tls_handshake(
     let conn = TlsConnector::from(tls);
 
     let io = conn.connect(domain, io).await.map_err(|e| {
-        metrics.otlp_http_conn_tls_failed.increment();
+        metrics.otlp_transport_conn_tls_failed.increment();
 
         Error::new("failed to connect TLS stream", e)
     })?;
 
-    metrics.otlp_http_conn_tls_handshake.increment();
+    metrics.otlp_transport_conn_tls_handshake.increment();
 
     Ok(io)
 }
@@ -113,7 +113,7 @@ async fn http1_handshake(
     io: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + Unpin + 'static,
 ) -> Result<HttpSender, Error> {
     let (sender, conn) = http1::handshake(HttpIo(io)).await.map_err(|e| {
-        metrics.otlp_http_conn_failed.increment();
+        metrics.otlp_transport_conn_failed.increment();
 
         Error::new("failed to perform HTTP1 handshake", e)
     })?;
@@ -132,7 +132,7 @@ async fn http2_handshake(
     let (sender, conn) = http2::handshake(TokioAmbientExecutor, HttpIo(io))
         .await
         .map_err(|e| {
-            metrics.otlp_http_conn_failed.increment();
+            metrics.otlp_transport_conn_failed.increment();
 
             Error::new("failed to perform HTTP2 handshake", e)
         })?;
@@ -191,7 +191,7 @@ async fn send_request(
             };
 
             req.body(content).map_err(|e| {
-                metrics.otlp_http_request_failed.increment();
+                metrics.otlp_transport_request_failed.increment();
 
                 Error::new("failed to stream HTTP body", e)
             })?
@@ -204,6 +204,7 @@ async fn send_request(
 pub(crate) struct HttpConnection {
     metrics: Arc<InternalMetrics>,
     version: HttpVersion,
+    allow_compression: bool,
     uri: HttpUri,
     headers: Vec<(String, String)>,
     request: Box<dyn Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync>,
@@ -223,27 +224,46 @@ impl HttpConnection {
     pub fn http1<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
+        allow_compression: bool,
         headers: impl Into<Vec<(String, String)>>,
         request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
-        Self::new(HttpVersion::Http1, metrics, url, headers, request, response)
+        Self::new(
+            HttpVersion::Http1,
+            metrics,
+            url,
+            allow_compression,
+            headers,
+            request,
+            response,
+        )
     }
 
     pub fn http2<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
+        allow_compression: bool,
         headers: impl Into<Vec<(String, String)>>,
         request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
     ) -> Result<Self, Error> {
-        Self::new(HttpVersion::Http2, metrics, url, headers, request, response)
+        Self::new(
+            HttpVersion::Http2,
+            metrics,
+            url,
+            allow_compression,
+            headers,
+            request,
+            response,
+        )
     }
 
     fn new<F: Future<Output = Result<Vec<u8>, Error>> + Send + 'static>(
         version: HttpVersion,
         metrics: Arc<InternalMetrics>,
         url: impl AsRef<str>,
+        allow_compression: bool,
         headers: impl Into<Vec<(String, String)>>,
         request: impl Fn(HttpContent) -> Result<HttpContent, Error> + Send + Sync + 'static,
         response: impl Fn(HttpResponse) -> F + Send + Sync + 'static,
@@ -256,6 +276,7 @@ impl HttpConnection {
                     .map_err(|e| Error::new(format_args!("failed to parse {url}"), e))?,
             ),
             version,
+            allow_compression,
             request: Box::new(request),
             response: Box::new(move |res| Box::pin(response(res))),
             headers: headers.into(),
@@ -285,8 +306,10 @@ impl HttpConnection {
         let body = {
             #[cfg(feature = "gzip")]
             {
-                if !self.uri.is_https() {
-                    self.metrics.otlp_http_compress_gzip.increment();
+                if self.allow_compression && !self.uri.is_https() {
+                    self.metrics
+                        .otlp_transport_request_compress_gzip
+                        .increment();
 
                     HttpContent::gzip(body)?
                 } else {
@@ -295,6 +318,8 @@ impl HttpConnection {
             }
             #[cfg(not(feature = "gzip"))]
             {
+                let _ = self.allow_compression;
+
                 HttpContent::raw(body)
             }
         };
@@ -336,12 +361,12 @@ impl HttpSender {
             HttpSender::Http2(sender) => sender.send_request(req).await,
         }
         .map_err(|e| {
-            metrics.otlp_http_request_failed.increment();
+            metrics.otlp_transport_request_failed.increment();
 
             Error::new("failed to send HTTP request", e)
         })?;
 
-        metrics.otlp_http_request_sent.increment();
+        metrics.otlp_transport_request_sent.increment();
 
         Ok(HttpResponse { res })
     }

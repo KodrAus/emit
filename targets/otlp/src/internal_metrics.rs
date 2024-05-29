@@ -48,11 +48,15 @@ impl Counter {
 
 metrics!(InternalMetrics {
     otlp_event_discarded: Counter,
-    otlp_http_conn_established: Counter,
-    otlp_http_conn_failed: Counter,
-    otlp_http_conn_tls_handshake: Counter,
-    otlp_http_conn_tls_failed: Counter,
-    otlp_http_request_sent: Counter,
-    otlp_http_request_failed: Counter,
-    otlp_http_compress_gzip: Counter,
+    otlp_transport_conn_established: Counter,
+    otlp_transport_conn_failed: Counter,
+    otlp_transport_conn_tls_handshake: Counter,
+    otlp_transport_conn_tls_failed: Counter,
+    otlp_transport_request_sent: Counter,
+    otlp_transport_request_failed: Counter,
+    otlp_transport_request_compress_gzip: Counter,
+    otlp_http_batch_sent: Counter,
+    otlp_http_batch_failed: Counter,
+    otlp_grpc_batch_sent: Counter,
+    otlp_grpc_batch_failed: Counter,
 });

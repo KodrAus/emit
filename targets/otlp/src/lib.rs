@@ -187,11 +187,20 @@ If the `tls` Cargo feature is enabled, and the scheme of your endpoint uses the 
 
 If the `gzip` Cargo feature is enabled then gzip compression will be applied automatically to all export requests.
 
+You can disable any compression through an [`OtlpTransportBuilder`]:
+
+```
+# fn build() -> emit_otlp::OtlpBuilder {
+emit_otlp::new()
+   .logs(emit_otlp::logs_proto(emit_otlp::http("http://localhost:4318/v1/logs")
+      .allow_compression(false))
+   )
+# }
+```
+
 # Customizing HTTP headers
 
-You can use the [`http`] or [`grpc`] functions to begin an [`OtlpTransportBuilder`] that can configure custom HTTP headers to send with requests.
-
-If you omit the `http` or `grpc` part of your signal builder, like [`logs_proto`] instead of [`logs_grpc_proto`], then you can configure and specify the transport directly:
+You can specify custom headers to be used for HTTP or gRPC requests through an [`OtlpTransportBuilder`]:
 
 ```
 # fn build() -> emit_otlp::OtlpBuilder {

@@ -264,6 +264,7 @@ Use [`crate::http`] or [`crate::grpc`] to start a new builder.
 pub struct OtlpTransportBuilder {
     protocol: Protocol,
     url_base: String,
+    allow_compression: bool,
     url_path: Option<&'static str>,
     headers: Vec<(String, String)>,
 }
@@ -281,6 +282,7 @@ impl OtlpTransportBuilder {
     pub fn http(dst: impl Into<String>) -> Self {
         OtlpTransportBuilder {
             protocol: Protocol::Http,
+            allow_compression: true,
             url_base: dst.into(),
             url_path: None,
             headers: Vec::new(),
@@ -295,6 +297,7 @@ impl OtlpTransportBuilder {
     pub fn grpc(dst: impl Into<String>) -> Self {
         OtlpTransportBuilder {
             protocol: Protocol::Grpc,
+            allow_compression: true,
             url_base: dst.into(),
             url_path: None,
             headers: Vec::new(),
@@ -318,6 +321,18 @@ impl OtlpTransportBuilder {
         self
     }
 
+    /**
+    Whether to compress request payloads.
+
+    Passing `false` to this method will disable compression on all requests. If the URI scheme is HTTPS then no compression will be applied either way.
+    */
+    #[cfg(feature = "gzip")]
+    pub fn allow_compression(mut self, allow: bool) -> Self {
+        self.allow_compression = allow;
+
+        self
+    }
+
     fn build<R>(
         self,
         metrics: Arc<InternalMetrics>,
@@ -337,20 +352,29 @@ impl OtlpTransportBuilder {
         Ok(match self.protocol {
             Protocol::Http => OtlpTransport::Http {
                 http: HttpConnection::http1(
-                    metrics,
+                    metrics.clone(),
                     url,
+                    self.allow_compression,
                     self.headers,
                     |req| Ok(req),
-                    |res| async move {
-                        let status = res.http_status();
+                    move |res| {
+                        let metrics = metrics.clone();
 
-                        // A request is considered success if it returns 2xx status code
-                        if status >= 200 && status < 300 {
-                            Ok(vec![])
-                        } else {
-                            Err(Error::msg(format_args!(
-                                "OTLP HTTP server responded {status}"
-                            )))
+                        async move {
+                            let status = res.http_status();
+
+                            // A request is considered success if it returns 2xx status code
+                            if status >= 200 && status < 300 {
+                                metrics.otlp_http_batch_sent.increment();
+
+                                Ok(vec![])
+                            } else {
+                                metrics.otlp_http_batch_failed.increment();
+
+                                Err(Error::msg(format_args!(
+                                    "OTLP HTTP server responded {status}"
+                                )))
+                            }
                         }
                     },
                 )?,
@@ -359,8 +383,9 @@ impl OtlpTransportBuilder {
             },
             Protocol::Grpc => OtlpTransport::Http {
                 http: HttpConnection::http2(
-                    metrics,
+                    metrics.clone(),
                     url,
+                    self.allow_compression,
                     self.headers,
                     |mut req| {
                         let content_type_header = match req.content_type_header() {
@@ -398,35 +423,43 @@ impl OtlpTransportBuilder {
                             },
                         )
                     },
-                    |res| async move {
-                        let mut status = 0;
-                        let mut msg = String::new();
+                    move |res| {
+                        let metrics = metrics.clone();
 
-                        res.stream_payload(
-                            |_| {},
-                            |k, v| match k {
-                                "grpc-status" => {
-                                    status = v.parse().unwrap_or(0);
-                                }
-                                "grpc-message" => {
-                                    msg = v.into();
-                                }
-                                _ => {}
-                            },
-                        )
-                        .await?;
+                        async move {
+                            let mut status = 0;
+                            let mut msg = String::new();
 
-                        if status == 0 {
-                            Ok(vec![])
-                        } else {
-                            if msg.len() > 0 {
-                                Err(Error::msg(format_args!(
-                                    "OTLP gRPC server responded {status} {msg}"
-                                )))
+                            res.stream_payload(
+                                |_| {},
+                                |k, v| match k {
+                                    "grpc-status" => {
+                                        status = v.parse().unwrap_or(0);
+                                    }
+                                    "grpc-message" => {
+                                        msg = v.into();
+                                    }
+                                    _ => {}
+                                },
+                            )
+                            .await?;
+
+                            if status == 0 {
+                                metrics.otlp_grpc_batch_sent.increment();
+
+                                Ok(vec![])
                             } else {
-                                Err(Error::msg(format_args!(
-                                    "OTLP gRPC server responded {status}"
-                                )))
+                                metrics.otlp_grpc_batch_failed.increment();
+
+                                if msg.len() > 0 {
+                                    Err(Error::msg(format_args!(
+                                        "OTLP gRPC server responded {status} {msg}"
+                                    )))
+                                } else {
+                                    Err(Error::msg(format_args!(
+                                        "OTLP gRPC server responded {status}"
+                                    )))
+                                }
                             }
                         }
                     },
@@ -442,10 +475,116 @@ impl OtlpTransportBuilder {
 Metrics produced by an [`Otlp`] itself.
 
 This type doesn't collect any OTLP metrics you emit, it includes metrics about the [`Otlp`]'s own activity.
+
+You can enumerate the metrics using the [`emit::metric::Source`] implementation. See [`emit::metric`] for details.
 */
 pub struct OtlpMetrics {
     channel_metrics: emit_batcher::ChannelMetrics<Channel>,
     metrics: Arc<InternalMetrics>,
+}
+
+impl OtlpMetrics {
+    fn _ensure_present(self) {
+        // If anything is missing here it means a method is missing on `OtlpMetrics` to sample it
+        let InternalMetrics {
+            otlp_event_discarded: _,
+            otlp_transport_conn_established: _,
+            otlp_transport_conn_failed: _,
+            otlp_transport_conn_tls_handshake: _,
+            otlp_transport_conn_tls_failed: _,
+            otlp_transport_request_sent: _,
+            otlp_transport_request_failed: _,
+            otlp_transport_request_compress_gzip: _,
+            otlp_grpc_batch_sent: _,
+            otlp_grpc_batch_failed: _,
+            otlp_http_batch_sent: _,
+            otlp_http_batch_failed: _,
+        } = &*self.metrics;
+    }
+
+    /**
+    An event didn't match a configured OTLP signal and the logs signal is not configured, so it was discarded.
+    */
+    pub fn event_discarded(&self) -> usize {
+        self.metrics.otlp_event_discarded.sample()
+    }
+
+    /**
+    A connection to a remote OTLP receiver was established successfully.
+    */
+    pub fn transport_conn_established(&self) -> usize {
+        self.metrics.otlp_transport_conn_established.sample()
+    }
+
+    /**
+    A connection to a remote OTLP receiver could not be established.
+    */
+    pub fn transport_conn_failed(&self) -> usize {
+        self.metrics.otlp_transport_conn_failed.sample()
+    }
+
+    /**
+    A TLS handshake with a remote OTLP receiver was made successfully.
+    */
+    pub fn transport_conn_tls_handshake(&self) -> usize {
+        self.metrics.otlp_transport_conn_tls_handshake.sample()
+    }
+
+    /**
+    A TLS handshake with a remote OTLP receiver could not be made.
+    */
+    pub fn transport_conn_tls_failed(&self) -> usize {
+        self.metrics.otlp_transport_conn_tls_failed.sample()
+    }
+
+    /**
+    A request was sent successfully.
+    */
+    pub fn transport_request_sent(&self) -> usize {
+        self.metrics.otlp_transport_request_sent.sample()
+    }
+
+    /**
+    A request could not be sent.
+    */
+    pub fn transport_request_failed(&self) -> usize {
+        self.metrics.otlp_transport_request_failed.sample()
+    }
+
+    /**
+    The body of a request was compressed using gzip.
+    */
+    pub fn transport_request_compress_gzip(&self) -> usize {
+        self.metrics.otlp_transport_request_compress_gzip.sample()
+    }
+
+    /**
+    A gRPC export request was sent and responded with a successful status code.
+    */
+    pub fn grpc_batch_sent(&self) -> usize {
+        self.metrics.otlp_grpc_batch_sent.sample()
+    }
+
+    /**
+    A gRPC export request was sent but responded with a failed status code.
+    */
+    pub fn grpc_batch_failed(&self) -> usize {
+        self.metrics.otlp_grpc_batch_failed.sample()
+    }
+
+    /**
+    A HTTP export request was sent and responded with a successful status code.
+    */
+    pub fn http_batch_sent(&self) -> usize {
+        self.metrics.otlp_http_batch_sent.sample()
+    }
+
+    /**
+    A HTTP export request was sent but responded with a failed status code.
+    */
+    pub fn http_batch_failed(&self) -> usize {
+        self.metrics.otlp_http_batch_failed.sample()
+    }
 }
 
 impl emit::metric::Source for OtlpMetrics {
