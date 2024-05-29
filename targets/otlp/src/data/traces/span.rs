@@ -8,7 +8,6 @@ use crate::data::{stream_attributes, stream_field, AnyValue, KeyValue};
 #[repr(i32)]
 #[sval(unlabeled_variants)]
 pub enum StatusCode {
-    Unset = 0,
     Ok = 1,
     Error = 2,
 }
@@ -18,11 +17,6 @@ pub enum StatusCode {
 #[sval(unlabeled_variants)]
 pub enum SpanKind {
     Unspecified = 0,
-    Internal = 1,
-    Server = 2,
-    Client = 3,
-    Producer = 4,
-    Consumer = 5,
 }
 
 #[derive(Value)]
@@ -155,7 +149,7 @@ impl<
                     }
                     emit::well_known::KEY_ERR => {
                         has_err = true;
-                        false
+                        true
                     }
                     _ => false,
                 })
@@ -189,6 +183,8 @@ impl<
             )?;
         }
 
+        // If the span has an error on it then set the conventional error event
+        // along with the span status
         if has_err {
             let err = self.props.get(emit::well_known::KEY_ERR).unwrap();
 
@@ -203,9 +199,7 @@ impl<
                         attributes: &InlineEventAttributes {
                             attributes: &[KeyValue {
                                 key: "exception.message",
-                                value: AnyValue::<_, (), (), ()>::String(
-                                    sval::Display::new_borrowed(&err),
-                                ),
+                                value: AnyValue::<_>::String(sval::Display::new_borrowed(&err)),
                             }],
                         },
                     }])
@@ -215,6 +209,26 @@ impl<
             let status = Status {
                 code: StatusCode::Error,
                 message: sval::Display::new_borrowed(&err),
+            };
+
+            stream_field(
+                &mut *stream,
+                &SPAN_STATUS_LABEL,
+                &SPAN_STATUS_INDEX,
+                |stream| stream.value_computed(&status),
+            )?;
+        }
+        // If the span doesn't have an error then use the level to determine
+        // the span status
+        else {
+            let code = match level {
+                emit::Level::Debug | emit::Level::Info => StatusCode::Ok,
+                emit::Level::Warn | emit::Level::Error => StatusCode::Error,
+            };
+
+            let status = Status {
+                code,
+                message: sval::Display::new_borrowed(&level),
             };
 
             stream_field(

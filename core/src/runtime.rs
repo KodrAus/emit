@@ -23,7 +23,7 @@ use crate::{
 
 #[cfg(feature = "implicit_rt")]
 static SHARED: AmbientSlot = AmbientSlot::new();
-#[cfg(feature = "implicit_rt")]
+#[cfg(feature = "implicit_internal_rt")]
 static INTERNAL: AmbientInternalSlot = AmbientInternalSlot::new();
 
 /**
@@ -51,7 +51,7 @@ Applications should use the [`shared()`] runtime instead of this one.
 
 This runtime can be initialized through its [`internal_slot()`] to enable diagnostics on the regular diagnostics runtime itself.
 */
-#[cfg(feature = "implicit_rt")]
+#[cfg(feature = "implicit_internal_rt")]
 pub fn internal() -> &'static AmbientRuntime<'static> {
     INTERNAL.get()
 }
@@ -61,7 +61,7 @@ The initialization slot for the [`internal()`] runtime.
 
 This slot should be initialized _before_ the [`shared_slot()`] if it's in use.
 */
-#[cfg(feature = "implicit_rt")]
+#[cfg(feature = "implicit_internal_rt")]
 pub fn internal_slot() -> &'static AmbientInternalSlot {
     &INTERNAL
 }
@@ -607,7 +607,7 @@ mod std_support {
     /**
     A type-erased slot for the [`internal()`] runtime.
     */
-    #[cfg(feature = "implicit_rt")]
+    #[cfg(feature = "implicit_internal_rt")]
     pub struct AmbientInternalSlot(AmbientSlot);
 
     struct AmbientSync {
@@ -732,7 +732,7 @@ mod std_support {
         }
     }
 
-    #[cfg(feature = "implicit_rt")]
+    #[cfg(feature = "implicit_internal_rt")]
     impl AmbientInternalSlot {
         pub(in crate::runtime) const fn new() -> Self {
             AmbientInternalSlot(AmbientSlot(OnceLock::new()))
@@ -790,7 +790,7 @@ mod no_std_support {
     */
     pub struct AmbientSlot {}
 
-    #[cfg(feature = "implicit_rt")]
+    #[cfg(feature = "implicit_internal_rt")]
     pub struct AmbientInternalSlot(AmbientSlot);
 
     impl AmbientSlot {
@@ -819,7 +819,7 @@ mod no_std_support {
         }
     }
 
-    #[cfg(feature = "implicit_rt")]
+    #[cfg(feature = "implicit_internal_rt")]
     impl AmbientInternalSlot {
         pub(in crate::runtime) const fn new() -> Self {
             AmbientInternalSlot(AmbientSlot::new())

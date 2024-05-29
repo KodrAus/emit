@@ -26,27 +26,9 @@ const ANY_VALUE_KVLIST_INDEX: sval::Index = sval::Index::new(6);
 const ANY_VALUE_BYTES_INDEX: sval::Index = sval::Index::new(7);
 
 #[derive(Value)]
-pub enum AnyValue<
-    'a,
-    SV: ?Sized = str,
-    AV: ?Sized = ArrayValue<'a>,
-    KV: ?Sized = KvList<'a>,
-    BV: ?Sized = sval::BinarySlice,
-> {
+pub enum AnyValue<'a, SV: ?Sized = str> {
     #[sval(label = ANY_VALUE_STRING_LABEL, index = ANY_VALUE_STRING_INDEX)]
     String(&'a SV),
-    #[sval(label = ANY_VALUE_BOOL_LABEL, index = ANY_VALUE_BOOL_INDEX)]
-    Bool(bool),
-    #[sval(label = ANY_VALUE_INT_LABEL, index = ANY_VALUE_INT_INDEX)]
-    Int(i64),
-    #[sval(label = ANY_VALUE_DOUBLE_LABEL, index = ANY_VALUE_DOUBLE_INDEX)]
-    Double(f64),
-    #[sval(label = ANY_VALUE_ARRAY_LABEL, index = ANY_VALUE_ARRAY_INDEX)]
-    Array(&'a AV),
-    #[sval(label = ANY_VALUE_KVLIST_LABEL, index = ANY_VALUE_KVLIST_INDEX)]
-    Kvlist(&'a KV),
-    #[sval(label = ANY_VALUE_BYTES_LABEL, index = ANY_VALUE_BYTES_INDEX)]
-    Bytes(&'a BV),
 }
 
 const ARRAY_VALUES_LABEL: sval::Label =

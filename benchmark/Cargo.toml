@@ -28,7 +28,7 @@ path = "batcher.rs"
 harness = false
 
 [features]
-full = ["emit/std", "emit/rng", "emit/serde", "emit/sval", "log/std", "log/kv_std"]
+full = ["emit/std", "emit/serde", "emit/sval", "log/std", "log/kv_std"]
 
 [dependencies.log]
 version = "0.4.21"

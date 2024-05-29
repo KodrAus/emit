@@ -15,7 +15,7 @@ mod any_value;
 mod instrumentation_scope;
 mod resource;
 
-#[cfg(feature = "decode_responses")]
+#[cfg(test)]
 pub(crate) mod generated;
 
 use crate::Error;

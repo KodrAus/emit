@@ -8,7 +8,8 @@ std = ["alloc", "value-bag/error", "sval_nested?/std", "sval?/std", "serde?/std"
 alloc = ["value-bag/alloc", "value-bag/owned", "sval_nested?/alloc", "sval?/alloc", "serde?/alloc"]
 sval = ["value-bag/sval", "dep:sval", "dep:sval_ref", "dep:sval_nested"]
 serde = ["value-bag/serde", "dep:serde"]
-implicit_rt = []
+implicit_rt = ["implicit_internal_rt"]
+implicit_internal_rt = []
 
 [dependencies.value-bag]
 version = "1"

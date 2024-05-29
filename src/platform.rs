@@ -13,13 +13,13 @@ pub mod system_clock;
 #[cfg(feature = "std")]
 pub mod thread_local_ctxt;
 
-#[cfg(feature = "rng")]
+#[cfg(feature = "rand")]
 pub mod rand_rng;
 
 #[cfg(feature = "std")]
 type DefaultClock = system_clock::SystemClock;
 
-#[cfg(feature = "rng")]
+#[cfg(feature = "rand")]
 type DefaultIdGen = rand_rng::RandRng;
 
 #[cfg(feature = "std")]

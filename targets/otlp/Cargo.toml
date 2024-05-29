@@ -7,11 +7,10 @@ edition = "2021"
 default = ["tls", "gzip"]
 gzip = ["flate2"]
 tls = ["tokio-rustls", "rustls-native-certs"]
-decode_responses = ["dep:prost", "dep:prost-types"]
 
 [dependencies.emit]
 path = "../../"
-features = ["std", "sval"]
+features = ["std", "sval", "implicit_internal_rt"]
 default-features = false
 
 [dependencies.emit_batcher]
@@ -66,14 +65,16 @@ optional = true
 [dependencies.bytes]
 version = "1"
 
-[dependencies.prost]
+[dev-dependencies.prost]
 version = "0.12"
-optional = true
 
-[dependencies.prost-types]
+[dev-dependencies.prost-types]
 version = "0.12"
-optional = true
 
-[dependencies.serde]
+[dev-dependencies.tokio]
 version = "1"
-optional = true
+features = ["full"]
+
+[dev-dependencies.emit]
+path = "../../"
+features = ["implicit_rt"]

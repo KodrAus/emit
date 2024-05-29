@@ -276,7 +276,7 @@ where
     This method initializes [`crate::runtime::internal`].
     */
     #[must_use = "call `blocking_flush` at the end of `main` (after flushing the main runtime) to ensure events are flushed."]
-    #[cfg(feature = "implicit_rt")]
+    #[cfg(feature = "implicit_internal_rt")]
     pub fn init_internal(self) -> Init<&'static TEmitter, &'static TCtxt> {
         let ambient = emit_core::runtime::internal_slot()
             .init(

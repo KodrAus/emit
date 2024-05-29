@@ -22,12 +22,23 @@ mod traces;
 
 pub use self::{logs::*, metrics::*, traces::*};
 
+/**
+An [`emit::Emitter`] that sends diagnostic events via the OpenTelemetry Protocol (OTLP).
+
+Use [`crate::new`] to start an [`OtlpBuilder`] for configuring an [`Otlp`] instance.
+*/
 pub struct Otlp {
     otlp_logs: Option<ClientEventEncoder<LogsEventEncoder>>,
     otlp_traces: Option<ClientEventEncoder<TracesEventEncoder>>,
     otlp_metrics: Option<ClientEventEncoder<MetricsEventEncoder>>,
     metrics: Arc<InternalMetrics>,
     sender: emit_batcher::Sender<Channel>,
+}
+
+impl Otlp {
+    pub fn builder() -> OtlpBuilder {
+        OtlpBuilder::new()
+    }
 }
 
 pub struct OtlpMetrics {
@@ -142,6 +153,15 @@ impl emit_batcher::Channel for Channel {
     }
 }
 
+/**
+A builder for [`Otlp`].
+
+Use [`crate::new`] to start a builder and [`OtlpBuilder::spawn`] to complete it, passing the resulting [`Otlp`] to [`emit::Setup::emit_to`].
+
+Signals can be configured on the builder through [`OtlpBuilder::logs`], [`OtlpBuilder::traces`], and [`OtlpBuilder::metrics`].
+
+See the crate root documentation for more details.
+*/
 #[must_use = "call `.spawn()` to complete the builder"]
 pub struct OtlpBuilder {
     resource: Option<Resource>,
@@ -174,6 +194,11 @@ impl Encoding {
     }
 }
 
+/**
+A builder for an OTLP transport channel, either HTTP or gRPC.
+
+Use [`crate::http`] or [`crate::grpc`] to start a new builder.
+*/
 pub struct OtlpTransportBuilder {
     protocol: Protocol,
     url_base: String,
@@ -238,6 +263,7 @@ impl OtlpTransportBuilder {
                     |res| async move {
                         let status = res.http_status();
 
+                        // A request is considered success if it returns 2xx status code
                         if status >= 200 && status < 300 {
                             Ok(vec![])
                         } else {
@@ -265,9 +291,13 @@ impl OtlpTransportBuilder {
                             }
                         };
 
+                        // Wrap the content in the gRPC frame protocol
+                        // This is a simple length-prefixed format that uses
+                        // 5 bytes to indicate the length and compression of the message
                         let len = (u32::try_from(req.content_payload_len()).unwrap()).to_be_bytes();
 
                         Ok(
+                            // If the content is compressed then set the gRPC compression header byte for it
                             if let Some(compression) = req.take_content_encoding_header() {
                                 req.with_content_type_header(content_type_header)
                                     .with_headers(match compression {
@@ -279,7 +309,9 @@ impl OtlpTransportBuilder {
                                         }
                                     })
                                     .with_content_frame([1, len[0], len[1], len[2], len[3]])
-                            } else {
+                            }
+                            // If the content is not compressed then leave the gRPC compression header byte unset
+                            else {
                                 req.with_content_type_header(content_type_header)
                                     .with_content_frame([0, len[0], len[1], len[2], len[3]])
                             },
@@ -425,7 +457,8 @@ impl OtlpBuilder {
 
                 let mut r = Ok::<(), BatchError<Channel>>(());
 
-                if otlp_logs.total_scopes() > 0 {
+                // Send a batch of OTLP log records
+                if otlp_logs.total_items() > 0 {
                     if let Some(client) = client.logs {
                         send_channel_batch(&mut r, &client, otlp_logs, |channel, otlp_logs| {
                             channel.otlp_logs = otlp_logs;
@@ -434,7 +467,8 @@ impl OtlpBuilder {
                     }
                 }
 
-                if otlp_traces.total_scopes() > 0 {
+                // Send a batch of OTLP spans
+                if otlp_traces.total_items() > 0 {
                     if let Some(client) = client.traces {
                         send_channel_batch(&mut r, &client, otlp_traces, |channel, otlp_traces| {
                             channel.otlp_traces = otlp_traces;
@@ -443,7 +477,8 @@ impl OtlpBuilder {
                     }
                 }
 
-                if otlp_metrics.total_scopes() > 0 {
+                // Send a batch of OTLP metrics
+                if otlp_metrics.total_items() > 0 {
                     if let Some(client) = client.metrics {
                         send_channel_batch(
                             &mut r,
@@ -553,7 +588,7 @@ enum OtlpTransport<R> {
 }
 
 impl<R: data::RequestEncoder> OtlpTransport<R> {
-    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.total_scopes())]
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.total_items())]
     pub(crate) async fn send(
         &self,
         batch: EncodedScopeItems,

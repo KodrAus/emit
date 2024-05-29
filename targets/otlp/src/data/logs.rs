@@ -44,7 +44,7 @@ impl EventEncoder for LogsEventEncoder {
             payload: E::encode(LogRecord {
                 time_unix_nano,
                 observed_time_unix_nano,
-                body: &Some(AnyValue::<_, (), (), ()>::String(&sval::Display::new(
+                body: &Some(AnyValue::<_>::String(&sval::Display::new(
                     MessageRenderer {
                         fmt: &self.body,
                         evt,

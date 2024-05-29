@@ -80,8 +80,10 @@ The [`Otlp`] emitter doesn't do any work directly. That's all handled by a backg
 If [`OtlpBuilder::spawn`] is called within a `tokio` runtime, then the worker will spawn into that runtime:
 
 ```
+// This will spawn in the active tokio runtime because of #[tokio::main]
+
 #[tokio::main]
-fn main() {
+async fn main() {
     let rt = emit::setup()
         .emit_to(emit_otlp::new()
             .resource(emit::props! {
@@ -89,7 +91,6 @@ fn main() {
                 service_name: env!("CARGO_PKG_NAME"),
             })
             .logs(emit_otlp::logs_grpc_proto("http://localhost:4319"))
-            // This will spawn in the current tokio runtime because of #[tokio::main]
             .spawn()
             .unwrap())
         .init();
@@ -101,6 +102,8 @@ fn main() {
 If [`OtlpBuilder::spawn`] is called outside a `tokio` runtime, then the worker will spawn on a background thread with a single-threaded executor on it:
 
 ```
+// This will spawn on a background thread because there's no active tokio runtime
+
 fn main() {
     let rt = emit::setup()
         .emit_to(emit_otlp::new()
@@ -109,7 +112,6 @@ fn main() {
                 service_name: env!("CARGO_PKG_NAME"),
             })
             .logs(emit_otlp::logs_grpc_proto("http://localhost:4319"))
-            // This will spawn on a background thread because there's no tokio runtime
             .spawn()
             .unwrap())
         .init();
@@ -647,6 +649,110 @@ http://localhost:4318/v1/logs
 }
 ```
 
+If the [`emit::well_known::KEY_ERR`] property is set, then the resulting OTLP span will carry the semantic exception event:
+
+```
+#[emit::span(arg: span, "Compute {a} + {b}")]
+fn add(a: i32, b: i32) -> i32 {
+   let r = a + b;
+
+   if r == 4 {
+      span.complete_with(|event| {
+            emit::error!(
+               event,
+               "Compute {a} + {b} failed",
+               a,
+               b,
+               r,
+               err: "Invalid result",
+            );
+      });
+   }
+
+   r
+}
+
+add(1, 3);
+```
+
+```text
+http://localhost:4318/v1/traces
+```
+
+```json
+{
+   "resourceSpans": [
+      {
+         "resource": {
+            "attributes": [
+               {
+                  "key": "service.name",
+                  "value": {
+                     "stringValue": "my_app"
+                  }
+               }
+            ]
+         },
+         "scopeSpans": [
+            {
+               "scope": {
+                  "name": "my_app"
+               },
+               "spans": [
+                  {
+                     "name": "Compute {a} + {b}",
+                     "kind": 0,
+                     "startTimeUnixNano": 1716936430882852000,
+                     "endTimeUnixNano": 1716936430883250000,
+                     "attributes": [
+                        {
+                           "key": "a",
+                           "value": {
+                              "intValue": 1
+                           }
+                        },
+                        {
+                           "key": "b",
+                           "value": {
+                              "intValue": 3
+                           }
+                        },
+                        {
+                           "key": "r",
+                           "value": {
+                              "intValue": 4
+                           }
+                        }
+                     ],
+                     "traceId": "6499bc190add060dad8822600ba65226",
+                     "spanId": "b72c5152c32cc432",
+                     "events": [
+                        {
+                           "name": "exception",
+                           "timeUnixNano": 1716936430883250000,
+                           "attributes": [
+                              {
+                                 "key": "exception.message",
+                                 "value": {
+                                    "stringValue": "Invalid result"
+                                 }
+                              }
+                           ]
+                        }
+                     ],
+                     "status": {
+                        "message": "Invalid result",
+                        "code": 2
+                     }
+                  }
+               ]
+            }
+         ]
+      }
+   ]
+}
+```
+
 # Metrics
 
 When the metrics signal is configured, [`emit::Event`]s can be represented as OTLP metrics so long as they satisfy the following conditions:
@@ -979,10 +1085,17 @@ This library is not an alternative to the OpenTelemetry SDK. It's specifically t
 If you're not seeing diagnostics appear in your OTLP receiver, you can rule out configuration issues in `emit_otlp` by configuring `emit`'s internal logger, and collect metrics from it:
 
 ```
+# mod emit_term {
+#     pub fn stdout() -> impl emit::runtime::InternalEmitter + Send + Sync + 'static {
+#        emit::runtime::AssertInternal(emit::emitter::from_fn(|_| {}))
+#     }
+# }
+use emit::metric::Source;
+
 fn main() {
     // 1. Initialize the internal logger
     //    Diagnostics produced by `emit_otlp` itself will go here
-    let _ = emit::setup()
+    let internal = emit::setup()
         .emit_to(emit_term::stdout())
         .init_internal();
 
@@ -1025,91 +1138,164 @@ Diagnostics include when batches are emitted, and any failures observed along th
 #[macro_use]
 mod internal_metrics;
 mod client;
-pub mod data;
+mod data;
 mod error;
 
 pub use self::{client::*, error::*};
 
+/**
+A value to use as `telemetry.sdk.name` in [`OtlpBuilder::resource`].
+*/
 pub const fn telemetry_sdk_name() -> &'static str {
     env!("CARGO_PKG_NAME")
 }
 
+/**
+A value to use as `telemetry.sdk.version` in [`OtlpBuilder::resource`].
+*/
 pub const fn telemetry_sdk_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/**
+A value to use as `telemetry.sdk.language` in [`OtlpBuilder::resource`].
+*/
 pub const fn telemetry_sdk_language() -> &'static str {
     "rust"
 }
 
+/**
+Start a builder for an [`Otlp`] emitter.
+
+Signals can be configured on the builder through [`OtlpBuilder::logs`], [`OtlpBuilder::traces`], and [`OtlpBuilder::metrics`].
+
+Once the builder is configured, call [`OtlpBuilder::spawn`] to complete it, passing the resulting [`Otlp`] to [`emit::Setup::emit_to`].
+
+See the crate root documentation for more details.
+*/
 pub fn new() -> OtlpBuilder {
     OtlpBuilder::new()
 }
 
+/**
+Get a transport builder for gRPC.
+
+The builder can be used by [`OtlpLogsBuilder`], [`OtlpTracesBuilder`], and [`OtlpMetricsBuilder`] to configure a signal to send OTLP via gRPC.
+*/
 pub fn grpc(dst: impl Into<String>) -> OtlpTransportBuilder {
     OtlpTransportBuilder::grpc(dst)
 }
 
+/**
+Get a transport builder for HTTP.
+
+The builder can be used by [`OtlpLogsBuilder`], [`OtlpTracesBuilder`], and [`OtlpMetricsBuilder`] to configure a signal to send OTLP via HTTP.
+*/
 pub fn http(dst: impl Into<String>) -> OtlpTransportBuilder {
     OtlpTransportBuilder::http(dst)
 }
 
+/**
+Get a logs signal builder for gRPC+protobuf.
+*/
 pub fn logs_grpc_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::grpc_proto(dst)
 }
 
+/**
+Get a logs signal builder for HTTP+protobuf.
+*/
 pub fn logs_http_proto(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::http_proto(dst)
 }
 
+/**
+Get a logs signal builder for HTTP+JSON.
+*/
 pub fn logs_http_json(dst: impl Into<String>) -> OtlpLogsBuilder {
     OtlpLogsBuilder::http_json(dst)
 }
 
+/**
+Get a logs signal builder for the given transport with protobuf encoding.
+*/
 pub fn logs_proto(transport: OtlpTransportBuilder) -> OtlpLogsBuilder {
     OtlpLogsBuilder::proto(transport)
 }
 
+/**
+Get a logs signal builder for the given transport with JSON encoding.
+*/
 pub fn logs_json(transport: OtlpTransportBuilder) -> OtlpLogsBuilder {
     OtlpLogsBuilder::json(transport)
 }
 
+/**
+Get a traces signal builder for gRPC+protobuf.
+*/
 pub fn traces_grpc_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::grpc_proto(dst)
 }
 
+/**
+Get a traces signal builder for HTTP+protobuf.
+*/
 pub fn traces_http_proto(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http_proto(dst)
 }
 
+/**
+Get a traces signal builder for HTTP+JSON.
+*/
 pub fn traces_http_json(dst: impl Into<String>) -> OtlpTracesBuilder {
     OtlpTracesBuilder::http_json(dst)
 }
 
+/**
+Get a traces signal builder for the given transport with protobuf encoding.
+*/
 pub fn traces_proto(transport: OtlpTransportBuilder) -> OtlpTracesBuilder {
     OtlpTracesBuilder::proto(transport)
 }
 
+/**
+Get a traces signal builder for the given transport with JSON encoding.
+*/
 pub fn traces_json(transport: OtlpTransportBuilder) -> OtlpTracesBuilder {
     OtlpTracesBuilder::json(transport)
 }
 
+/**
+Get a metrics signal builder for gRPC+protobuf.
+*/
 pub fn metrics_grpc_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::grpc_proto(dst)
 }
 
+/**
+Get a metrics signal builder for HTTP+protobuf.
+*/
 pub fn metrics_http_proto(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::http_proto(dst)
 }
 
+/**
+Get a metrics signal builder for HTTP+JSON.
+*/
 pub fn metrics_http_json(dst: impl Into<String>) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::http_json(dst)
 }
 
+/**
+Get a metrics signal builder for the given transport with protobuf encoding.
+*/
 pub fn metrics_proto(transport: OtlpTransportBuilder) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::proto(transport)
 }
 
+/**
+Get a metrics signal builder for the given transport with JSON encoding.
+*/
 pub fn metrics_json(transport: OtlpTransportBuilder) -> OtlpMetricsBuilder {
     OtlpMetricsBuilder::json(transport)
 }
