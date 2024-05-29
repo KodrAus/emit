@@ -153,10 +153,15 @@ impl OtlpBuilder {
 
         let (sender, receiver) = emit_batcher::bounded(10_000);
 
+        // Encoders are used by the caller to convert emit's events
+        // into the right OTLP item
         let mut logs_event_encoder = None;
         let mut traces_event_encoder = None;
         let mut metrics_event_encoder = None;
 
+        // Build the client
+        // This type is used by the background worker to send requests
+        // It owns the actual HTTP connections used by each configured signal
         let client = OtlpClient {
             logs: match self.otlp_logs {
                 Some(otlp_logs) => {
@@ -190,7 +195,34 @@ impl OtlpBuilder {
             },
         };
 
+        // Spawn the background worker to receive and forward batches of OTLP items
         emit_batcher::tokio::spawn(receiver, move |batch: Channel| {
+            async fn send_channel_batch<R: RequestEncoder>(
+                r: &mut Result<(), BatchError<Channel>>,
+                client: &OtlpTransport<R>,
+                batch: EncodedScopeItems,
+                set: impl Fn(&mut Channel, EncodedScopeItems),
+            ) {
+                // Attempt to send the batch, restoring it on the channel if it fails
+                if let Err(e) = client.send(batch).await {
+                    *r = if let Err(re) = mem::replace(r, Ok(())) {
+                        Err(re.map_retryable(|channel| {
+                            let mut channel = channel.unwrap_or_default();
+                            set(&mut channel, e.into_retryable().unwrap_or_default());
+
+                            Some(channel)
+                        }))
+                    } else {
+                        Err(e.map_retryable(|batch| {
+                            let mut channel = Channel::default();
+                            set(&mut channel, batch.unwrap_or_default());
+
+                            Some(channel)
+                        }))
+                    };
+                }
+            }
+
             let client = client.clone();
 
             /*
@@ -350,6 +382,7 @@ impl OtlpTransportBuilder {
         }
 
         Ok(match self.protocol {
+            // Configure the transport to use regular HTTP requests
             Protocol::Http => OtlpTransport::Http {
                 http: HttpConnection::http1(
                     metrics.clone(),
@@ -363,7 +396,7 @@ impl OtlpTransportBuilder {
                         async move {
                             let status = res.http_status();
 
-                            // A request is considered success if it returns 2xx status code
+                            // A request is considered successful if it returns 2xx status code
                             if status >= 200 && status < 300 {
                                 metrics.otlp_http_batch_sent.increment();
 
@@ -381,6 +414,10 @@ impl OtlpTransportBuilder {
                 resource,
                 request_encoder,
             },
+            // Configure the transport to use gRPC requests
+            // These are mostly the same as regular HTTP requests, but use
+            // a simple message framing protocol and carry status codes in a trailer
+            // instead of the response status
             Protocol::Grpc => OtlpTransport::Http {
                 http: HttpConnection::http2(
                     metrics.clone(),
@@ -444,11 +481,14 @@ impl OtlpTransportBuilder {
                             )
                             .await?;
 
+                            // A request is considered successful if the grpc-status trailer is 0
                             if status == 0 {
                                 metrics.otlp_grpc_batch_sent.increment();
 
                                 Ok(vec![])
-                            } else {
+                            }
+                            // In any other case the request failed and may carry some diagnostic message
+                            else {
                                 metrics.otlp_grpc_batch_failed.increment();
 
                                 if msg.len() > 0 {
@@ -468,6 +508,73 @@ impl OtlpTransportBuilder {
                 request_encoder,
             },
         })
+    }
+}
+
+#[derive(Clone)]
+struct OtlpClient {
+    logs: Option<Arc<OtlpTransport<LogsRequestEncoder>>>,
+    traces: Option<Arc<OtlpTransport<TracesRequestEncoder>>>,
+    metrics: Option<Arc<OtlpTransport<MetricsRequestEncoder>>>,
+}
+
+enum OtlpTransport<R> {
+    Http {
+        http: HttpConnection,
+        resource: Option<EncodedPayload>,
+        request_encoder: ClientRequestEncoder<R>,
+    },
+}
+
+impl<R: data::RequestEncoder> OtlpTransport<R> {
+    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.total_items())]
+    pub(crate) async fn send(
+        &self,
+        batch: EncodedScopeItems,
+    ) -> Result<(), BatchError<EncodedScopeItems>> {
+        match self {
+            OtlpTransport::Http {
+                ref http,
+                ref resource,
+                ref request_encoder,
+            } => {
+                let uri = http.uri();
+                let batch_size = batch.total_items();
+
+                match http
+                    .send(request_encoder.encode_request(resource.as_ref(), &batch)?)
+                    .await
+                {
+                    Ok(res) => {
+                        span.complete_with(|span| {
+                            emit::debug!(
+                                rt: emit::runtime::internal(),
+                                event: span,
+                                "OTLP batch of {batch_size} events to {uri}",
+                                batch_size,
+                            )
+                        });
+
+                        res
+                    }
+                    Err(err) => {
+                        span.complete_with(|span| {
+                            emit::warn!(
+                                rt: emit::runtime::internal(),
+                                event: span,
+                                "OTLP batch of {batch_size} events to {uri} failed: {err}",
+                                batch_size,
+                                err,
+                            )
+                        });
+
+                        return Err(BatchError::retry(err, batch));
+                    }
+                };
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -772,100 +879,5 @@ fn encode_resource(encoding: Encoding, resource: &Resource) -> EncodedPayload {
     match encoding {
         Encoding::Proto => data::Proto::encode(&resource),
         Encoding::Json => data::Json::encode(&resource),
-    }
-}
-
-#[derive(Clone)]
-struct OtlpClient {
-    logs: Option<Arc<OtlpTransport<LogsRequestEncoder>>>,
-    traces: Option<Arc<OtlpTransport<TracesRequestEncoder>>>,
-    metrics: Option<Arc<OtlpTransport<MetricsRequestEncoder>>>,
-}
-
-enum OtlpTransport<R> {
-    Http {
-        http: HttpConnection,
-        resource: Option<EncodedPayload>,
-        request_encoder: ClientRequestEncoder<R>,
-    },
-}
-
-impl<R: data::RequestEncoder> OtlpTransport<R> {
-    #[emit::span(rt: emit::runtime::internal(), arg: span, "send OTLP batch of {batch_size} events", batch_size: batch.total_items())]
-    pub(crate) async fn send(
-        &self,
-        batch: EncodedScopeItems,
-    ) -> Result<(), BatchError<EncodedScopeItems>> {
-        match self {
-            OtlpTransport::Http {
-                ref http,
-                ref resource,
-                ref request_encoder,
-            } => {
-                let uri = http.uri();
-                let batch_size = batch.total_items();
-
-                match http
-                    .send(request_encoder.encode_request(resource.as_ref(), &batch)?)
-                    .await
-                {
-                    Ok(res) => {
-                        span.complete_with(|span| {
-                            emit::debug!(
-                                rt: emit::runtime::internal(),
-                                extent: span.extent(),
-                                props: span.props(),
-                                "OTLP batch of {batch_size} events to {uri}",
-                                batch_size,
-                            )
-                        });
-
-                        res
-                    }
-                    Err(err) => {
-                        span.complete_with(|span| {
-                            emit::warn!(
-                                rt: emit::runtime::internal(),
-                                extent: span.extent(),
-                                props: span.props(),
-                                "OTLP batch of {batch_size} events to {uri} failed: {err}",
-                                batch_size,
-                                err,
-                            )
-                        });
-
-                        return Err(BatchError::retry(err, batch));
-                    }
-                };
-            }
-        }
-
-        Ok(())
-    }
-}
-
-async fn send_channel_batch<R: RequestEncoder>(
-    r: &mut Result<(), BatchError<Channel>>,
-    client: &OtlpTransport<R>,
-    batch: EncodedScopeItems,
-    set: impl Fn(&mut Channel, EncodedScopeItems),
-) {
-    // Attempt to send the batch, restoring it on the channel if it fails
-    if let Err(e) = client.send(batch).await {
-        *r = if let Err(re) = mem::replace(r, Ok(())) {
-            Err(re.map_retryable(|channel| {
-                let mut channel = channel.unwrap_or_default();
-                set(&mut channel, e.into_retryable().unwrap_or_default());
-
-                Some(channel)
-            }))
-        } else {
-            Err(e.map_retryable(|batch| {
-                let mut channel = Channel::default();
-                set(&mut channel, batch.unwrap_or_default());
-
-                Some(channel)
-            }))
-        };
     }
 }
