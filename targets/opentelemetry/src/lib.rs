@@ -1,9 +1,7 @@
 /*!
 Integrate `emit` with the OpenTelemetry SDK.
 
-This library forwards logs and traces from emit through the global OpenTelemetry provider. If your application is already using the OpenTelemetry SDK then this library lets you use `emit`'s APIs to instrument through it. It's also intended for applications that need to unify multiple instrumentation libraries, like `emit`, `log`, and `tracing`, into a shared pipeline.
-
-If you'd just like to send `emit` diagnostics via OTLP, then consider `emit_otlp`.
+This library forwards logs and traces from emit through the OpenTelemetry SDK. This library is for applications that already use the OpenTelemetry SDK. It's also intended for applications that need to unify multiple instrumentation libraries, like `emit`, `log`, and `tracing`, into a shared pipeline. If you'd just like to send `emit` diagnostics via OTLP to the OpenTelemetry Collector or other compatible service, then consider `emit_otlp`.
 
 # Getting started
 
@@ -17,7 +15,7 @@ version = "0.0.0"
 version = "0.0.0"
 ```
 
-Initialize `emit` using [`new`]:
+Initialize `emit` to send diagnostics to the OpenTelemetry SDK using [`new`]:
 
 ```
 fn main() {
@@ -33,11 +31,17 @@ fn main() {
     // Your app code goes here
 
     rt.blocking_flush(std::time::Duration::from_secs(30));
+
+    // Shutdown the OpenTelemetry SDK
 }
 ```
 
-Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate properly.
+Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
+
+Diagnostic events produced by the [`emit::span!`] macro are sent to an [`opentelemetry::global::tracer`] on completion. All other events are sent to an [`opentelemetry::global::logger`].
 */
+
+#![deny(missing_docs)]
 
 use std::{cell::RefCell, fmt, ops::ControlFlow};
 
@@ -60,23 +64,90 @@ use opentelemetry::{
     Context, ContextGuard, Key, KeyValue, Value,
 };
 
+/**
+Start a builder for the `emit` to OpenTelemetry SDK integration.
+
+The `name` argument is passed to the underlying [`opentelemetry::global::tracer`] and [`opentelemetry::global::logger`] used by the integration. Pass the result of [`OpenTelemetry::emitter`] to [`emit::Setup::emit_to`] and [`OpenTelemetry::ctxt`] to [`emit::Setup::map_ctxt`] to complete configuration:
+
+```
+fn main() {
+    // Configure the OpenTelemetry SDK
+
+    let mut builder = emit_opentelemetry::new("my_app");
+
+    let rt = emit::setup()
+        .emit_to(builder.emitter())
+        .map_ctxt(|ctxt| builder.ctxt(ctxt))
+        .init();
+
+    // Your app code goes here
+
+    rt.blocking_flush(std::time::Duration::from_secs(30));
+
+    // Shutdown the OpenTelemetry SDK
+}
+```
+
+Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
+*/
 pub fn new(name: &'static str) -> OpenTelemetry {
     OpenTelemetry::new(name)
 }
 
+/**
+A builder for the `emit` to OpenTelemetry SDK integration.
+
+Use [`new`] to start an [`OpenTelemetry`] builder.
+*/
 pub struct OpenTelemetry {
     name: &'static str,
 }
 
 impl OpenTelemetry {
+    /**
+    Start a builder for the `emit` to OpenTelemetry SDK integration.
+
+    The `name` argument is passed to the underlying [`opentelemetry::global::tracer`] and [`opentelemetry::global::logger`] used by the integration. Pass the result of [`OpenTelemetry::emitter`] to [`emit::Setup::emit_to`] and [`OpenTelemetry::ctxt`] to [`emit::Setup::map_ctxt`] to complete configuration:
+
+    ```
+    fn main() {
+        // Configure the OpenTelemetry SDK
+
+        let mut builder = emit_opentelemetry::new("my_app");
+
+        let rt = emit::setup()
+            .emit_to(builder.emitter())
+            .map_ctxt(|ctxt| builder.ctxt(ctxt))
+            .init();
+
+        // Your app code goes here
+
+        rt.blocking_flush(std::time::Duration::from_secs(30));
+
+        // Shutdown the OpenTelemetry SDK
+    }
+    ```
+
+    Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
+    */
     pub fn new(name: &'static str) -> Self {
         OpenTelemetry { name }
     }
 
+    /**
+    Get an emitter to pass to [`emit::Setup::emit_to`].
+
+    The returned [`OpenTelemetryEmitter`] has additional configuration methods on it.
+    */
     pub fn emitter(&mut self) -> OpenTelemetryEmitter {
         OpenTelemetryEmitter::new(self.name)
     }
 
+    /**
+    Get a ctxt to pass to [`emit::Setup::map_ctxt`].
+
+    The returned [`OpenTelemetryCtxt`] has additional configuration methods on it.
+    */
     pub fn ctxt<C>(&mut self, ctxt: C) -> OpenTelemetryCtxt<C> {
         OpenTelemetryCtxt::new(self.name, ctxt)
     }
@@ -107,11 +178,19 @@ fn with_current(f: impl FnOnce(&mut ActiveFrame)) {
     })
 }
 
+/**
+An [`emit::Ctxt`] returned by [`OpenTelemetry::ctxt`] for integrating `emit` with the OpenTelemetry SDK.
+
+This type is responsible for intercepting calls that push span state to `emit`'s ambient context and forwarding them to the OpenTelemetry SDK's own context.
+*/
 pub struct OpenTelemetryCtxt<C> {
     tracer: BoxedTracer,
     inner: C,
 }
 
+/**
+The [`emit::Ctxt::Frame`] used by [`OpenTelemetryCtxt`].
+*/
 pub struct OpenTelemetryFrame<F> {
     slot: Option<Context>,
     active: bool,
@@ -119,6 +198,9 @@ pub struct OpenTelemetryFrame<F> {
     inner: F,
 }
 
+/**
+The [`emit::Ctxt::Current`] used by [`OpenTelemetryCtxt`].
+*/
 pub struct OpenTelemetryProps<P: ?Sized> {
     trace_id: Option<emit::span::TraceId>,
     span_id: Option<emit::span::SpanId>,
@@ -257,6 +339,11 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
     }
 }
 
+/**
+An [`emit::Emitter`] returned by [`OpenTelemetry::emitter`] for integrating `emit` with the OpenTelemetry SDK.
+
+This type is responsible for emitting diagnostic events as log records through the OpenTelemetry SDK and completing spans created through the integration.
+*/
 pub struct OpenTelemetryEmitter {
     inner: <GlobalLoggerProvider as LoggerProvider>::Logger,
     span_name: Box<MessageFormatter>,
@@ -301,6 +388,11 @@ impl OpenTelemetryEmitter {
         }
     }
 
+    /**
+    Specify a function that gets the name of a span from a diagnostic event.
+
+    The default implementation uses the [`KEY_SPAN_NAME`] property on the event, or [`emit::Event::msg`] if it's not present.
+    */
     pub fn with_span_name(
         mut self,
         writer: impl Fn(
@@ -315,6 +407,11 @@ impl OpenTelemetryEmitter {
         self
     }
 
+    /**
+    Specify a function that gets the body of a log record from a diagnostic event.
+
+    The default implementation uses [`emit::Event::msg`].
+    */
     pub fn with_log_body(
         mut self,
         writer: impl Fn(
