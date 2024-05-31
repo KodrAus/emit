@@ -1169,7 +1169,7 @@ mod client;
 mod data;
 mod error;
 
-pub use self::{client::*, error::*};
+pub use self::{client::*, error::*, internal_metrics::*};
 
 /**
 A value to use as `telemetry.sdk.name` in [`OtlpBuilder::resource`].

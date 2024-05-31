@@ -10,7 +10,7 @@ use crate::{
         EncodedEvent, EncodedPayload, EncodedScopeItems, RawEncoder, RequestEncoder,
     },
     internal_metrics::InternalMetrics,
-    Error,
+    Error, OtlpMetrics,
 };
 
 use self::http::HttpConnection;
@@ -398,11 +398,11 @@ impl OtlpTransportBuilder {
 
                             // A request is considered successful if it returns 2xx status code
                             if status >= 200 && status < 300 {
-                                metrics.otlp_http_batch_sent.increment();
+                                metrics.http_batch_sent.increment();
 
                                 Ok(vec![])
                             } else {
-                                metrics.otlp_http_batch_failed.increment();
+                                metrics.http_batch_failed.increment();
 
                                 Err(Error::msg(format_args!(
                                     "OTLP HTTP server responded {status}"
@@ -483,13 +483,13 @@ impl OtlpTransportBuilder {
 
                             // A request is considered successful if the grpc-status trailer is 0
                             if status == 0 {
-                                metrics.otlp_grpc_batch_sent.increment();
+                                metrics.grpc_batch_sent.increment();
 
                                 Ok(vec![])
                             }
                             // In any other case the request failed and may carry some diagnostic message
                             else {
-                                metrics.otlp_grpc_batch_failed.increment();
+                                metrics.grpc_batch_failed.increment();
 
                                 if msg.len() > 0 {
                                     Err(Error::msg(format_args!(
@@ -578,135 +578,6 @@ impl<R: data::RequestEncoder> OtlpTransport<R> {
     }
 }
 
-/**
-Metrics produced by an [`Otlp`] itself.
-
-This type doesn't collect any OTLP metrics you emit, it includes metrics about the [`Otlp`]'s own activity.
-
-You can enumerate the metrics using the [`emit::metric::Source`] implementation. See [`emit::metric`] for details.
-*/
-pub struct OtlpMetrics {
-    channel_metrics: emit_batcher::ChannelMetrics<Channel>,
-    metrics: Arc<InternalMetrics>,
-}
-
-impl OtlpMetrics {
-    fn _ensure_present(self) {
-        // If anything is missing here it means a method is missing on `OtlpMetrics` to sample it
-        let InternalMetrics {
-            otlp_event_discarded: _,
-            otlp_transport_conn_established: _,
-            otlp_transport_conn_failed: _,
-            otlp_transport_conn_tls_handshake: _,
-            otlp_transport_conn_tls_failed: _,
-            otlp_transport_request_sent: _,
-            otlp_transport_request_failed: _,
-            otlp_transport_request_compress_gzip: _,
-            otlp_grpc_batch_sent: _,
-            otlp_grpc_batch_failed: _,
-            otlp_http_batch_sent: _,
-            otlp_http_batch_failed: _,
-        } = &*self.metrics;
-    }
-
-    /**
-    An event didn't match a configured OTLP signal and the logs signal is not configured, so it was discarded.
-    */
-    pub fn event_discarded(&self) -> usize {
-        self.metrics.otlp_event_discarded.sample()
-    }
-
-    /**
-    A connection to a remote OTLP receiver was established successfully.
-    */
-    pub fn transport_conn_established(&self) -> usize {
-        self.metrics.otlp_transport_conn_established.sample()
-    }
-
-    /**
-    A connection to a remote OTLP receiver could not be established.
-    */
-    pub fn transport_conn_failed(&self) -> usize {
-        self.metrics.otlp_transport_conn_failed.sample()
-    }
-
-    /**
-    A TLS handshake with a remote OTLP receiver was made successfully.
-    */
-    pub fn transport_conn_tls_handshake(&self) -> usize {
-        self.metrics.otlp_transport_conn_tls_handshake.sample()
-    }
-
-    /**
-    A TLS handshake with a remote OTLP receiver could not be made.
-    */
-    pub fn transport_conn_tls_failed(&self) -> usize {
-        self.metrics.otlp_transport_conn_tls_failed.sample()
-    }
-
-    /**
-    A request was sent successfully.
-    */
-    pub fn transport_request_sent(&self) -> usize {
-        self.metrics.otlp_transport_request_sent.sample()
-    }
-
-    /**
-    A request could not be sent.
-    */
-    pub fn transport_request_failed(&self) -> usize {
-        self.metrics.otlp_transport_request_failed.sample()
-    }
-
-    /**
-    The body of a request was compressed using gzip.
-    */
-    pub fn transport_request_compress_gzip(&self) -> usize {
-        self.metrics.otlp_transport_request_compress_gzip.sample()
-    }
-
-    /**
-    A gRPC export request was sent and responded with a successful status code.
-    */
-    pub fn grpc_batch_sent(&self) -> usize {
-        self.metrics.otlp_grpc_batch_sent.sample()
-    }
-
-    /**
-    A gRPC export request was sent but responded with a failed status code.
-    */
-    pub fn grpc_batch_failed(&self) -> usize {
-        self.metrics.otlp_grpc_batch_failed.sample()
-    }
-
-    /**
-    A HTTP export request was sent and responded with a successful status code.
-    */
-    pub fn http_batch_sent(&self) -> usize {
-        self.metrics.otlp_http_batch_sent.sample()
-    }
-
-    /**
-    A HTTP export request was sent but responded with a failed status code.
-    */
-    pub fn http_batch_failed(&self) -> usize {
-        self.metrics.otlp_http_batch_failed.sample()
-    }
-}
-
-impl emit::metric::Source for OtlpMetrics {
-    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        self.channel_metrics
-            .sample_metrics(emit::metric::sampler::from_fn(|metric| {
-                sampler.metric(metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
-            }));
-
-        for metric in self.metrics.sample() {
-            sampler.metric(metric);
-        }
-    }
-}
-
 impl emit::emitter::Emitter for Otlp {
     fn emit<E: emit::event::ToEvent>(&self, evt: E) {
         let evt = evt.to_event();
@@ -729,7 +600,7 @@ impl emit::emitter::Emitter for Otlp {
             }
         }
 
-        self.metrics.otlp_event_discarded.increment();
+        self.metrics.event_discarded.increment();
     }
 
     fn blocking_flush(&self, timeout: Duration) -> bool {
@@ -738,13 +609,13 @@ impl emit::emitter::Emitter for Otlp {
 }
 
 #[derive(Default)]
-struct Channel {
+pub(crate) struct Channel {
     otlp_logs: EncodedScopeItems,
     otlp_traces: EncodedScopeItems,
     otlp_metrics: EncodedScopeItems,
 }
 
-enum ChannelItem {
+pub(crate) enum ChannelItem {
     LogRecord(EncodedEvent),
     Span(EncodedEvent),
     Metric(EncodedEvent),

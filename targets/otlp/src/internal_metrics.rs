@@ -1,28 +1,52 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 macro_rules! metrics {
-    ($container:ident {
-        $($name:ident: $ty:ty,)*
-    }) => {
+    (
+        $pub_container:ty {
+            $field:ident: $internal_container:ident {
+                $(
+                    $(#[$meta:meta])*
+                    $metric:ident: $ty:ident -> $pub_ty:ident,
+                )*
+            }
+        }
+    ) => {
         #[derive(Default)]
-        pub(crate) struct $container { $(pub(crate) $name: $ty),* }
+        pub(crate) struct $internal_container {
+            $(
+                $(#[$meta])*
+                pub(crate) $metric: $ty,
+            )*
+        }
 
-        impl $container {
+        impl $internal_container {
             pub fn sample(&self) -> impl Iterator<Item = emit::metric::Metric<'static, emit::empty::Empty>> + 'static {
-                let $container { $($name),* } = self;
+                let $internal_container { $($metric),* } = self;
 
                 [$(
                     emit::metric::Metric::new(
                         env!("CARGO_PKG_NAME"),
                         emit::empty::Empty,
-                        stringify!($name),
+                        stringify!($metric),
                         <$ty>::AGG,
-                        $name.sample(),
+                        $metric.sample(),
                         emit::empty::Empty,
-                    )
-                ),*]
+                    ),
+                )*]
                 .into_iter()
             }
+        }
+
+        impl $pub_container {
+            $(
+                $(#[$meta])*
+                pub fn $metric(&self) -> $pub_ty {
+                    self.$field.$metric.sample()
+                }
+            )*
         }
     };
 }
@@ -46,17 +70,82 @@ impl Counter {
     }
 }
 
-metrics!(InternalMetrics {
-    otlp_event_discarded: Counter,
-    otlp_transport_conn_established: Counter,
-    otlp_transport_conn_failed: Counter,
-    otlp_transport_conn_tls_handshake: Counter,
-    otlp_transport_conn_tls_failed: Counter,
-    otlp_transport_request_sent: Counter,
-    otlp_transport_request_failed: Counter,
-    otlp_transport_request_compress_gzip: Counter,
-    otlp_http_batch_sent: Counter,
-    otlp_http_batch_failed: Counter,
-    otlp_grpc_batch_sent: Counter,
-    otlp_grpc_batch_failed: Counter,
-});
+metrics!(
+    OtlpMetrics {
+        metrics: InternalMetrics {
+            /**
+            An event didn't match a configured OTLP signal and the logs signal is not configured, so it was discarded.
+            */
+            event_discarded: Counter -> usize,
+            /**
+            A connection to a remote OTLP receiver was established successfully.
+            */
+            transport_conn_established: Counter -> usize,
+            /**
+            A connection to a remote OTLP receiver could not be established.
+            */
+            transport_conn_failed: Counter -> usize,
+            /**
+            A TLS handshake with a remote OTLP receiver was made successfully.
+            */
+            transport_conn_tls_handshake: Counter -> usize,
+            /**
+            A TLS handshake with a remote OTLP receiver could not be made.
+            */
+            transport_conn_tls_failed: Counter -> usize,
+            /**
+            A request was sent successfully.
+            */
+            transport_request_sent: Counter -> usize,
+            /**
+            A request could not be sent.
+            */
+            transport_request_failed: Counter -> usize,
+            /**
+            The body of a request was compressed using gzip.
+            */
+            transport_request_compress_gzip: Counter -> usize,
+            /**
+            A gRPC export request was sent and responded with a successful status code.
+            */
+            http_batch_sent: Counter -> usize,
+            /**
+            A gRPC export request was sent but responded with a failed status code.
+            */
+            http_batch_failed: Counter -> usize,
+            /**
+            A HTTP export request was sent and responded with a successful status code.
+            */
+            grpc_batch_sent: Counter -> usize,
+            /**
+            A HTTP export request was sent but responded with a failed status code.
+            */
+            grpc_batch_failed: Counter -> usize,
+        }
+    }
+);
+
+/**
+Metrics produced by an OTLP emitter itself.
+
+This type doesn't collect any OTLP metrics you emit, it includes metrics about the OTLP emitter's own activity.
+
+You can enumerate the metrics using the [`emit::metric::Source`] implementation. See [`emit::metric`] for details.
+*/
+pub struct OtlpMetrics {
+    pub(crate) channel_metrics: emit_batcher::ChannelMetrics<crate::client::Channel>,
+    pub(crate) metrics: Arc<InternalMetrics>,
+}
+
+impl emit::metric::Source for OtlpMetrics {
+    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
+        self.channel_metrics
+            .sample_metrics(emit::metric::sampler::from_fn(|metric| {
+                sampler.metric(metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
+            }));
+
+        for metric in self.metrics.sample() {
+            sampler.metric(metric);
+        }
+    }
+}

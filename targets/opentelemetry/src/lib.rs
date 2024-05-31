@@ -1,7 +1,7 @@
 /*!
 Integrate `emit` with the OpenTelemetry SDK.
 
-This library forwards logs and traces from emit through the OpenTelemetry SDK. This library is for applications that already use the OpenTelemetry SDK. It's also intended for applications that need to unify multiple instrumentation libraries, like `emit`, `log`, and `tracing`, into a shared pipeline. If you'd just like to send `emit` diagnostics via OTLP to the OpenTelemetry Collector or other compatible service, then consider `emit_otlp`.
+This library forwards diagnostic events from emit through the OpenTelemetry SDK as log records and spans. This library is for applications that already use the OpenTelemetry SDK. It's also intended for applications that need to unify multiple instrumentation libraries, like `emit`, `log`, and `tracing`, into a shared pipeline. If you'd just like to send `emit` diagnostics via OTLP to the OpenTelemetry Collector or other compatible service, then consider `emit_otlp`.
 
 # Getting started
 
@@ -38,12 +38,16 @@ fn main() {
 
 Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
 
-Diagnostic events produced by the [`emit::span!`] macro are sent to an [`opentelemetry::global::tracer`] on completion. All other events are sent to an [`opentelemetry::global::logger`].
+Diagnostic events produced by the [`macro@emit::span`] macro are sent to an [`opentelemetry::global::tracer`] as an [`opentelemetry::trace::Span`] on completion. All other emitted events are sent to an [`opentelemetry::global::logger`] as [`opentelemetry::logs::LogRecord`]s.
+
+# Limitations
+
+This library doesn't support `emit`'s metrics as OpenTelemetry metrics. Any metric samples produced by `emit` will be emitted as log records.
 */
 
 #![deny(missing_docs)]
 
-use std::{cell::RefCell, fmt, ops::ControlFlow};
+use std::{cell::RefCell, fmt, ops::ControlFlow, sync::Arc};
 
 use emit::{
     str::ToStr,
@@ -63,6 +67,10 @@ use opentelemetry::{
     },
     Context, ContextGuard, Key, KeyValue, Value,
 };
+
+mod internal_metrics;
+
+pub use internal_metrics::*;
 
 /**
 Start a builder for the `emit` to OpenTelemetry SDK integration.
@@ -90,20 +98,21 @@ fn main() {
 
 Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
 */
-pub fn new(name: &'static str) -> OpenTelemetry {
-    OpenTelemetry::new(name)
+pub fn new(name: &'static str) -> EmitOpenTelemetry {
+    EmitOpenTelemetry::new(name)
 }
 
 /**
 A builder for the `emit` to OpenTelemetry SDK integration.
 
-Use [`new`] to start an [`OpenTelemetry`] builder.
+Use [`new`] to start an [`EmitOpenTelemetry`] builder.
 */
-pub struct OpenTelemetry {
+pub struct EmitOpenTelemetry {
     name: &'static str,
+    metrics: Arc<InternalMetrics>,
 }
 
-impl OpenTelemetry {
+impl EmitOpenTelemetry {
     /**
     Start a builder for the `emit` to OpenTelemetry SDK integration.
 
@@ -131,7 +140,10 @@ impl OpenTelemetry {
     Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
     */
     pub fn new(name: &'static str) -> Self {
-        OpenTelemetry { name }
+        EmitOpenTelemetry {
+            name,
+            metrics: Default::default(),
+        }
     }
 
     /**
@@ -140,7 +152,7 @@ impl OpenTelemetry {
     The returned [`OpenTelemetryEmitter`] has additional configuration methods on it.
     */
     pub fn emitter(&mut self) -> OpenTelemetryEmitter {
-        OpenTelemetryEmitter::new(self.name)
+        OpenTelemetryEmitter::new(self.metrics.clone(), self.name)
     }
 
     /**
@@ -149,7 +161,97 @@ impl OpenTelemetry {
     The returned [`OpenTelemetryCtxt`] has additional configuration methods on it.
     */
     pub fn ctxt<C>(&mut self, ctxt: C) -> OpenTelemetryCtxt<C> {
-        OpenTelemetryCtxt::new(self.name, ctxt)
+        OpenTelemetryCtxt::wrap(self.metrics.clone(), self.name, ctxt)
+    }
+
+    /**
+    Get an [`emit::metric::Source`] for instrumentation produced by the `emit` to the OpenTelemetry SDK integration.
+
+    These metrics can be used to monitor the running health of your diagnostic pipeline.
+    */
+    pub fn metric_source(&self) -> EmitOpenTelemetryMetrics {
+        EmitOpenTelemetryMetrics {
+            metrics: self.metrics.clone(),
+        }
+    }
+}
+
+/**
+An [`emit::Ctxt`] returned by [`OpenTelemetry::ctxt`] for integrating `emit` with the OpenTelemetry SDK.
+
+This type is responsible for intercepting calls that push span state to `emit`'s ambient context and forwarding them to the OpenTelemetry SDK's own context.
+
+When [`macro@emit::span`] is called, an [`opentelemetry::trace::Span`] is started using the given trace and span ids. The span doesn't carry any other ambient properties until it's completed either through [`emit::span::Span::complete`], or at the end of the scope the [`macro@emit::span`] macro covers.
+*/
+pub struct OpenTelemetryCtxt<C> {
+    tracer: BoxedTracer,
+    metrics: Arc<InternalMetrics>,
+    inner: C,
+}
+
+/**
+The [`emit::Ctxt::Frame`] used by [`OpenTelemetryCtxt`].
+*/
+pub struct OpenTelemetryFrame<F> {
+    // Holds the OpenTelemetry context fetched when the span was started
+    // If this field is `None`, and `active` is true then the slot has been
+    // moved into the thread-local stack
+    slot: Option<Context>,
+    // Whether `slot` has been moved into the thread-local stack
+    // If this field is false and `active` is `None` then the frame doesn't
+    // hold an OpenTelemetry span
+    active: bool,
+    // Whether to try end the span upon closing the frame
+    // Normally, this should be false by the time `close`` is called because
+    // the emitter will have ended the span
+    end_on_close: bool,
+    // The frame from the wrapped `Ctxt`
+    inner: F,
+}
+
+/**
+The [`emit::Ctxt::Current`] used by [`OpenTelemetryCtxt`].
+*/
+pub struct OpenTelemetryProps<P: ?Sized> {
+    trace_id: Option<emit::span::TraceId>,
+    span_id: Option<emit::span::SpanId>,
+    // Props from the wrapped `Ctxt`
+    inner: *const P,
+}
+
+impl<C> OpenTelemetryCtxt<C> {
+    fn wrap(metrics: Arc<InternalMetrics>, name: &'static str, ctxt: C) -> Self {
+        OpenTelemetryCtxt {
+            tracer: global::tracer(name),
+            inner: ctxt,
+            metrics,
+        }
+    }
+}
+
+impl<P: emit::Props + ?Sized> emit::Props for OpenTelemetryProps<P> {
+    fn for_each<'kv, F: FnMut(emit::Str<'kv>, emit::Value<'kv>) -> ControlFlow<()>>(
+        &'kv self,
+        mut for_each: F,
+    ) -> ControlFlow<()> {
+        if let Some(ref trace_id) = self.trace_id {
+            for_each(emit::well_known::KEY_TRACE_ID.to_str(), trace_id.to_value())?;
+        }
+
+        if let Some(ref span_id) = self.span_id {
+            for_each(emit::well_known::KEY_SPAN_ID.to_str(), span_id.to_value())?;
+        }
+
+        // SAFETY: This type is only exposed for arbitrarily short (`for<'a>`) lifetimes
+        // so inner it's guaranteed to be valid for `'kv`, which must be shorter than its
+        // original lifetime
+        unsafe { &*self.inner }.for_each(|k, v| {
+            if k != emit::well_known::KEY_TRACE_ID && k != emit::well_known::KEY_SPAN_ID {
+                for_each(k, v)?;
+            }
+
+            ControlFlow::Continue(())
+        })
     }
 }
 
@@ -176,67 +278,6 @@ fn with_current(f: impl FnOnce(&mut ActiveFrame)) {
             f(frame);
         }
     })
-}
-
-/**
-An [`emit::Ctxt`] returned by [`OpenTelemetry::ctxt`] for integrating `emit` with the OpenTelemetry SDK.
-
-This type is responsible for intercepting calls that push span state to `emit`'s ambient context and forwarding them to the OpenTelemetry SDK's own context.
-*/
-pub struct OpenTelemetryCtxt<C> {
-    tracer: BoxedTracer,
-    inner: C,
-}
-
-/**
-The [`emit::Ctxt::Frame`] used by [`OpenTelemetryCtxt`].
-*/
-pub struct OpenTelemetryFrame<F> {
-    slot: Option<Context>,
-    active: bool,
-    end_on_close: bool,
-    inner: F,
-}
-
-/**
-The [`emit::Ctxt::Current`] used by [`OpenTelemetryCtxt`].
-*/
-pub struct OpenTelemetryProps<P: ?Sized> {
-    trace_id: Option<emit::span::TraceId>,
-    span_id: Option<emit::span::SpanId>,
-    props: *const P,
-}
-
-impl<C> OpenTelemetryCtxt<C> {
-    fn new(name: &'static str, ctxt: C) -> Self {
-        OpenTelemetryCtxt {
-            tracer: global::tracer(name),
-            inner: ctxt,
-        }
-    }
-}
-
-impl<P: emit::Props + ?Sized> emit::Props for OpenTelemetryProps<P> {
-    fn for_each<'kv, F: FnMut(emit::Str<'kv>, emit::Value<'kv>) -> ControlFlow<()>>(
-        &'kv self,
-        mut for_each: F,
-    ) -> ControlFlow<()> {
-        if let Some(ref trace_id) = self.trace_id {
-            for_each(emit::well_known::KEY_TRACE_ID.to_str(), trace_id.to_value())?;
-        }
-
-        if let Some(ref span_id) = self.span_id {
-            for_each(emit::well_known::KEY_SPAN_ID.to_str(), span_id.to_value())?;
-        }
-
-        unsafe { &*self.props }.for_each(|k, v| {
-            if k != emit::well_known::KEY_TRACE_ID && k != emit::well_known::KEY_SPAN_ID {
-                for_each(k, v)?;
-            }
-
-            ControlFlow::Continue(())
-        })
-    }
 }
 
 impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
@@ -283,6 +324,8 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
         }
     }
 
+    // TODO: open_push
+
     fn enter(&self, local: &mut Self::Frame) {
         self.inner.enter(&mut local.inner);
 
@@ -301,6 +344,11 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
         let ctxt = Context::current();
         let span = ctxt.span();
 
+        // Use the trace and span ids from OpenTelemetry
+        // If an OpenTelemetry span is created between calls to `enter`
+        // and `exit` then these values won't match what's on the frame
+        // We need to observe that to keep `emit`'s diagnostics aligned
+        // with other OpenTelemetry consumers in the same application
         let trace_id = span.span_context().trace_id().to_bytes();
         let span_id = span.span_context().span_id().to_bytes();
 
@@ -308,7 +356,7 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
             let props = OpenTelemetryProps {
                 trace_id: emit::span::TraceId::from_bytes(trace_id),
                 span_id: emit::span::SpanId::from_bytes(span_id),
-                props: props as *const C::Current,
+                inner: props as *const C::Current,
             };
 
             with(&props)
@@ -331,7 +379,11 @@ impl<C: emit::Ctxt> emit::Ctxt for OpenTelemetryCtxt<C> {
     fn close(&self, mut frame: Self::Frame) {
         // If the span hasn't been closed through an event, then close it now
         if frame.end_on_close {
+            // This will only be `None` if `close` is called out-of-order
+            // with `exit`
             if let Some(ctxt) = frame.slot.take() {
+                self.metrics.span_unexpected_close.increment();
+
                 let span = ctxt.span();
                 span.end();
             }
@@ -348,6 +400,7 @@ pub struct OpenTelemetryEmitter {
     inner: <GlobalLoggerProvider as LoggerProvider>::Logger,
     span_name: Box<MessageFormatter>,
     log_body: Box<MessageFormatter>,
+    metrics: Arc<InternalMetrics>,
 }
 
 type MessageFormatter = dyn Fn(&emit::event::Event<&dyn emit::props::ErasedProps>, &mut fmt::Formatter) -> fmt::Result
@@ -380,11 +433,12 @@ impl<'a, P: emit::props::Props> fmt::Display for MessageRenderer<'a, P> {
 }
 
 impl OpenTelemetryEmitter {
-    fn new(name: &'static str) -> Self {
+    fn new(metrics: Arc<InternalMetrics>, name: &'static str) -> Self {
         OpenTelemetryEmitter {
             inner: global::logger_provider().logger(name),
             span_name: default_span_name(),
             log_body: default_log_body(),
+            metrics,
         }
     }
 
@@ -509,6 +563,8 @@ impl emit::Emitter for OpenTelemetryEmitter {
 
             if emitted {
                 return;
+            } else {
+                self.metrics.span_unexpected_emit.increment();
             }
         }
 

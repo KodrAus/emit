@@ -30,12 +30,12 @@ async fn connect(
     let io = tokio::net::TcpStream::connect((uri.host(), uri.port()))
         .await
         .map_err(|e| {
-            metrics.otlp_transport_conn_failed.increment();
+            metrics.transport_conn_failed.increment();
 
             Error::new("failed to connect TCP stream", e)
         })?;
 
-    metrics.otlp_transport_conn_established.increment();
+    metrics.transport_conn_established.increment();
 
     if uri.is_https() {
         #[cfg(feature = "tls")]
@@ -62,7 +62,7 @@ async fn tls_handshake(
     use tokio_rustls::{rustls, TlsConnector};
 
     let domain = uri.host().to_owned().try_into().map_err(|e| {
-        metrics.otlp_transport_conn_tls_failed.increment();
+        metrics.transport_conn_tls_failed.increment();
 
         Error::new(format_args!("could not extract a DNS name from {uri}"), e)
     })?;
@@ -71,7 +71,7 @@ async fn tls_handshake(
         let mut root_store = rustls::RootCertStore::empty();
 
         for cert in rustls_native_certs::load_native_certs().map_err(|e| {
-            metrics.otlp_transport_conn_tls_failed.increment();
+            metrics.transport_conn_tls_failed.increment();
             Error::new("failed to load native certificates", e)
         })? {
             let _ = root_store.add(cert);
@@ -87,12 +87,12 @@ async fn tls_handshake(
     let conn = TlsConnector::from(tls);
 
     let io = conn.connect(domain, io).await.map_err(|e| {
-        metrics.otlp_transport_conn_tls_failed.increment();
+        metrics.transport_conn_tls_failed.increment();
 
         Error::new("failed to connect TLS stream", e)
     })?;
 
-    metrics.otlp_transport_conn_tls_handshake.increment();
+    metrics.transport_conn_tls_handshake.increment();
 
     Ok(io)
 }
@@ -113,7 +113,7 @@ async fn http1_handshake(
     io: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + Unpin + 'static,
 ) -> Result<HttpSender, Error> {
     let (sender, conn) = http1::handshake(HttpIo(io)).await.map_err(|e| {
-        metrics.otlp_transport_conn_failed.increment();
+        metrics.transport_conn_failed.increment();
 
         Error::new("failed to perform HTTP1 handshake", e)
     })?;
@@ -132,7 +132,7 @@ async fn http2_handshake(
     let (sender, conn) = http2::handshake(TokioAmbientExecutor, HttpIo(io))
         .await
         .map_err(|e| {
-            metrics.otlp_transport_conn_failed.increment();
+            metrics.transport_conn_failed.increment();
 
             Error::new("failed to perform HTTP2 handshake", e)
         })?;
@@ -191,7 +191,7 @@ async fn send_request(
             };
 
             req.body(content).map_err(|e| {
-                metrics.otlp_transport_request_failed.increment();
+                metrics.transport_request_failed.increment();
 
                 Error::new("failed to stream HTTP body", e)
             })?
@@ -307,9 +307,7 @@ impl HttpConnection {
             #[cfg(feature = "gzip")]
             {
                 if self.allow_compression && !self.uri.is_https() {
-                    self.metrics
-                        .otlp_transport_request_compress_gzip
-                        .increment();
+                    self.metrics.transport_request_compress_gzip.increment();
 
                     HttpContent::gzip(body)?
                 } else {
@@ -361,12 +359,12 @@ impl HttpSender {
             HttpSender::Http2(sender) => sender.send_request(req).await,
         }
         .map_err(|e| {
-            metrics.otlp_transport_request_failed.increment();
+            metrics.transport_request_failed.increment();
 
             Error::new("failed to send HTTP request", e)
         })?;
 
-        metrics.otlp_transport_request_sent.increment();
+        metrics.transport_request_sent.increment();
 
         Ok(HttpResponse { res })
     }
