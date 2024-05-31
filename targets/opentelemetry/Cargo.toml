@@ -18,3 +18,7 @@ features = ["logs", "trace"]
 
 [dependencies.serde]
 version = "1"
+
+[dev-dependencies.emit]
+path = "../../"
+features = ["implicit_rt"]
