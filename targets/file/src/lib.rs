@@ -1,3 +1,92 @@
+/*!
+Emit diagnostic events to rolling files.
+
+All file IO is performed on batches in a dedicated background thread.
+
+This library writes newline delimited JSON by default, like:
+
+```text
+{"ts_start":"2024-05-29T03:35:13.922768000Z","ts":"2024-05-29T03:35:13.943506000Z","msg":"in_ctxt failed with `a` is odd","tpl":"in_ctxt failed with `err`","a":1,"err":"`a` is odd","lvl":"warn","span_id":"0a3686d1b788b277","span_parent":"1a50b58f2ef93f3b","trace_id":"8dd5d1f11af6ba1db4124072024933cb"}
+```
+
+# Getting started
+
+Add `emit` and `emit_file` to your `Cargo.toml`:
+
+```toml
+[dependencies.emit]
+version = "0.0.0"
+
+[dependencies.emit_file]
+version = "0.0.0"
+```
+
+Initialize `emit` using a rolling file set:
+
+```
+fn main() {
+    let rt = emit::setup()
+        .emit_to(emit_file::set("./target/logs/my_app.txt").spawn().unwrap())
+        .init();
+
+    // Your app code goes here
+
+    rt.blocking_flush(std::time::Duration::from_secs(30));
+}
+```
+
+The input to [`set`] is a template for log file naming. The example earlier used `./target/logs/my_app.txt`. From this template, log files will be written to `./target/logs`, each log file name will start with `my_app`, and use `.txt` as its extension.
+
+# File naming
+
+Log files are created using the following naming scheme:
+
+```text
+{prefix}.{date}.{counter}.{id}.{ext}
+```
+
+where:
+
+- `prefix`: A user-defined name that groups all log files related to the same application together.
+- `date`: The rollover interval the file was created in. This isn't necessarily related to the timestamps of events within the file.
+- `counter`: The number of milliseconds since the start of the current rollover interval when the file was created.
+- `id`: A unique identifier for the file in the interval.
+- `ext`: A user-defined file extension.
+
+In the following log file:
+
+```text
+log.2024-05-27-03-00.00012557.37c57fa1.txt
+```
+
+the parts are:
+
+- `prefix`: `log`.
+- `date`: `2024-05-27-03-00`.
+- `counter`: `00012557`.
+- `id`: `37c57fa1`.
+- `ext`: `txt`.
+
+# When files roll
+
+Diagnostic events are only ever written to a single file at a time. That file changes when:
+
+1. The application restarts and [`FileSetBuilder::reuse_files`] is false.
+2. The rollover period changes. This is set by [`FileSetBuilder::roll_by_day`], [`FileSetBuilder::roll_by_hour`], and [`FileSetBuilder::roll_by_minute`].
+3. The size of the file exceeds [`FileSetBuilder::max_file_size_bytes`].
+4. Writing to the file fails.
+
+# Durability
+
+Diagnostic events are written to files in asynchronous batches. Under normal operation, after a call to [`emit::Emitter::blocking_flush`], all events emitted before the call are guaranteed to be written and synced via Rust's [`std::fs::File::sync_all`] method. This is usually enough to guarantee durability.
+
+# Handling IO failures
+
+If writing a batch fails while attempting to write to a file then the file being written to is considered poisoned and no future attempts will be made to write to it. The batch will instead be retried on a new file. Batches that fail attempting to sync are not retried. Since batches don't have explicit transactions, it's possible on failure for part or all of the failed batch to actually be present in the original file. That means diagnostic events may be duplicated in the case of an IO error while writing them.
+*/
+
+#![deny(missing_docs)]
+
 mod internal_metrics;
 
 use std::{
@@ -14,23 +103,62 @@ use emit::Props as _;
 use emit_batcher::BatchError;
 use internal_metrics::InternalMetrics;
 
+pub use internal_metrics::*;
+
+/**
+An error attempting to create a [`FileSet`].
+*/
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
+/**
+Create a builder for a [`FileSet`] using the default newline-delimited JSON format.
+
+The builder will use `file_set` as its template for naming log files. See the crate root documentation for details on how this argument is interpreted.
+
+It will use the other following defaults:
+
+- Roll by hour.
+- 32 max files.
+- 1GiB max file size.
+
+The [`FileSetBuilder`] has configuration options for managing the number and size of log files.
+
+Once configured, call [`FileSetBuilder::spawn`] to complete the builder, passing the resulting [`FileSet`] to [`emit::Setup::emit_to`].
+*/
 #[cfg(feature = "default_writer")]
 pub fn set(file_set: impl AsRef<Path>) -> FileSetBuilder {
     FileSetBuilder::new(file_set.as_ref())
 }
 
+/**
+Create a builder for a [`FileSet`].
+
+The builder will use `file_set` as its template for naming log files. See the crate root documentation for details on how this argument is interpreted.
+
+The `writer` is used to format incoming [`emit::Event`]s into their on-disk format. If formatting fails then the event will be discarded.
+
+The `separator` is written between individual events.
+*/
 pub fn set_with_writer(
     file_set: impl AsRef<Path>,
     writer: impl Fn(&mut FileBuf, &emit::Event<&dyn emit::props::ErasedProps>) -> io::Result<()>
         + Send
         + Sync
         + 'static,
+    separator: &'static [u8],
 ) -> FileSetBuilder {
-    FileSetBuilder::new_with_writer(file_set.as_ref(), writer)
+    FileSetBuilder::new_with_writer(file_set.as_ref(), writer, separator)
 }
 
+/**
+A builder for a [`FileSet`].
+
+Use [`set`] or [`set_with_writer`] to begin a [`FileSetBuilder`].
+
+The [`FileSetBuilder`] has configuration options for managing the number and size of log files.
+
+Once configured, call [`FileSetBuilder::spawn`] to complete the builder, passing the resulting [`FileSet`] to [`emit::Setup::emit_to`].
+*/
 pub struct FileSetBuilder {
     file_set: PathBuf,
     roll_by: RollBy,
@@ -42,6 +170,7 @@ pub struct FileSetBuilder {
             + Send
             + Sync,
     >,
+    separator: &'static [u8],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -52,74 +181,140 @@ enum RollBy {
 }
 
 const DEFAULT_ROLL_BY: RollBy = RollBy::Hour;
-const DEFUALT_MAX_FILES: usize = 32;
+const DEFAULT_MAX_FILES: usize = 32;
 const DEFAULT_MAX_FILE_SIZE_BYTES: usize = 1024 * 1024 * 1024; // 1GiB
 const DEFAULT_REUSE_FILES: bool = false;
 
 impl FileSetBuilder {
+    /**
+    Create a new [`FileSetBuilder`] using the default newline-delimited JSON format.
+
+    The builder will use `file_set` as its template for naming log files. See the crate root documentation for details on how this argument is interpreted.
+
+    It will use the other following defaults:
+
+    - Roll by hour.
+    - 32 max files.
+    - 1GiB max file size.
+    */
     #[cfg(feature = "default_writer")]
     pub fn new(file_set: impl Into<PathBuf>) -> Self {
-        Self::new_with_writer(file_set, default_writer)
+        Self::new_with_writer(file_set, default_writer, b"\n")
     }
 
+    /**
+    Create a builder for a [`FileSet`].
+
+    The builder will use `file_set` as its template for naming log files. See the crate root documentation for details on how this argument is interpreted.
+
+    The `writer` is used to format incoming [`emit::Event`]s into their on-disk format. If formatting fails then the event will be discarded.
+
+    The `separator` is written between individual events.
+
+    It will use the other following defaults:
+
+    - Roll by hour.
+    - 32 max files.
+    - 1GiB max file size.
+    */
     pub fn new_with_writer(
         file_set: impl Into<PathBuf>,
         writer: impl Fn(&mut FileBuf, &emit::Event<&dyn emit::props::ErasedProps>) -> io::Result<()>
             + Send
             + Sync
             + 'static,
+        separator: &'static [u8],
     ) -> Self {
         FileSetBuilder {
             file_set: file_set.into(),
             roll_by: DEFAULT_ROLL_BY,
-            max_files: DEFUALT_MAX_FILES,
+            max_files: DEFAULT_MAX_FILES,
             max_file_size_bytes: DEFAULT_MAX_FILE_SIZE_BYTES,
             reuse_files: DEFAULT_REUSE_FILES,
             writer: Box::new(writer),
+            separator,
         }
     }
 
+    /**
+    Create rolling log files based on the calendar day of when they're written to.
+    */
     pub fn roll_by_day(mut self) -> Self {
         self.roll_by = RollBy::Day;
         self
     }
 
+    /**
+    Create rolling log files based on the calendar day and hour of when they're written to.
+    */
     pub fn roll_by_hour(mut self) -> Self {
         self.roll_by = RollBy::Hour;
         self
     }
 
+    /**
+    Create rolling log files based on the calendar day, hour, and minute of when they're written to.
+    */
     pub fn roll_by_minute(mut self) -> Self {
         self.roll_by = RollBy::Minute;
         self
     }
 
+    /**
+    The maximum number of log files to keep.
+
+    Files are deleted from oldest first whenever a new file is created. Older files are determined based on the time period they belong to.
+    */
     pub fn max_files(mut self, max_files: usize) -> Self {
         self.max_files = max_files;
         self
     }
 
+    /**
+    The maximum size of a file before new writes will roll over to a new one.
+
+    The same time period can contain multiple log files. More recently created log files will sort ahead of older ones.
+    */
     pub fn max_file_size_bytes(mut self, max_file_size_bytes: usize) -> Self {
         self.max_file_size_bytes = max_file_size_bytes;
         self
     }
 
+    /**
+    Whether to re-use log files when first attempting to write to them.
+
+    This method can be used for applications that are started a lot and may result in lots of active log files.
+
+    Before writing new events to the log file, it will have the configured separator defensively written to it. This ensures any previous partial write doesn't corrupt any new writes.
+    */
     pub fn reuse_files(mut self, reuse_files: bool) -> Self {
         self.reuse_files = reuse_files;
         self
     }
 
+    /**
+    Specify a writer for incoming [`emit::Event`]s.
+
+    The `writer` is used to format incoming [`emit::Event`]s into their on-disk format. If formatting fails then the event will be discarded.
+
+    The `separator` is written between individual events.
+    */
     pub fn writer(
         mut self,
         writer: impl Fn(&mut FileBuf, &emit::Event<&dyn emit::props::ErasedProps>) -> io::Result<()>
             + Send
             + Sync
             + 'static,
+        separator: &'static [u8],
     ) -> Self {
         self.writer = Box::new(writer);
+        self.separator = separator;
         self
     }
 
+    /**
+    Complete the builder, returning a [`FileSet`] to pass to [`emit::Setup::emit_to`].
+    */
     pub fn spawn(self) -> Result<FileSet, Error> {
         let (dir, file_prefix, file_ext) = dir_prefix_ext(self.file_set)?;
 
@@ -134,6 +329,7 @@ impl FileSetBuilder {
             self.reuse_files,
             self.max_files,
             self.max_file_size_bytes,
+            self.separator,
         );
 
         let (sender, receiver) = emit_batcher::bounded(10_000);
@@ -146,11 +342,17 @@ impl FileSetBuilder {
             sender,
             metrics,
             writer: self.writer,
+            separator: self.separator,
             _handle: handle,
         })
     }
 }
 
+/**
+A handle to an asynchronous, background, rolling file writer.
+
+Create a file set through the [`set`] function, calling [`FileSetBuilder::spawn`] to complete configuration. Pass the resulting [`FileSet`] to [`emit::Setup::emit_to`] to configure `emit` to write diagnostic events through it.
+*/
 pub struct FileSet {
     sender: emit_batcher::Sender<EventBatch>,
     metrics: Arc<InternalMetrics>,
@@ -159,25 +361,8 @@ pub struct FileSet {
             + Send
             + Sync,
     >,
+    separator: &'static [u8],
     _handle: thread::JoinHandle<()>,
-}
-
-pub struct FileSetMetrics {
-    channel_metrics: emit_batcher::ChannelMetrics<EventBatch>,
-    metrics: Arc<InternalMetrics>,
-}
-
-impl emit::metric::Source for FileSetMetrics {
-    fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        self.channel_metrics
-            .sample_metrics(emit::metric::sampler::from_fn(|metric| {
-                sampler.metric(metric.by_ref().with_module(env!("CARGO_PKG_NAME")));
-            }));
-
-        for metric in self.metrics.sample() {
-            sampler.metric(metric);
-        }
-    }
 }
 
 impl emit::Emitter for FileSet {
@@ -188,11 +373,14 @@ impl emit::Emitter for FileSet {
 
         match (self.writer)(&mut buf, &evt.erase()) {
             Ok(()) => {
-                buf.push(b'\n');
+                if !buf.0.ends_with(self.separator) {
+                    buf.extend_from_slice(self.separator);
+                }
+
                 self.sender.send(buf.into_boxed_slice());
             }
             Err(err) => {
-                self.metrics.file_format_failed.increment();
+                self.metrics.event_format_failed.increment();
 
                 emit::warn!(
                     rt: emit::runtime::internal(),
@@ -208,6 +396,11 @@ impl emit::Emitter for FileSet {
 }
 
 impl FileSet {
+    /**
+    Get an [`emit::metric::Source`] for instrumentation produced by the file set.
+
+    These metrics can be used to monitor the running health of your diagnostic pipeline.
+    */
     pub fn metric_source(&self) -> FileSetMetrics {
         FileSetMetrics {
             channel_metrics: self.sender.metric_source(),
@@ -216,6 +409,9 @@ impl FileSet {
     }
 }
 
+/**
+A buffer to format [`emit::Event`]s into before writing them to a file.
+*/
 pub struct FileBuf(Vec<u8>);
 
 impl FileBuf {
@@ -223,10 +419,16 @@ impl FileBuf {
         FileBuf(Vec::new())
     }
 
+    /**
+    Push a byte onto the end of the buffer.
+    */
     pub fn push(&mut self, byte: u8) {
         self.0.push(byte)
     }
 
+    /**
+    Push a slice of bytes onto the end of the buffer.
+    */
     pub fn extend_from_slice(&mut self, bytes: &[u8]) {
         self.0.extend_from_slice(bytes)
     }
@@ -367,6 +569,7 @@ struct Worker {
     dir: String,
     file_prefix: String,
     file_ext: String,
+    separator: &'static [u8],
 }
 
 impl Worker {
@@ -379,6 +582,7 @@ impl Worker {
         reuse_files: bool,
         max_files: usize,
         max_file_size_bytes: usize,
+        separator: &'static [u8],
     ) -> Self {
         Worker {
             metrics,
@@ -390,6 +594,7 @@ impl Worker {
             dir,
             file_prefix,
             file_ext,
+            separator,
         }
     }
 
@@ -515,7 +720,7 @@ impl Worker {
         let written_bytes = batch.remaining_bytes;
 
         while let Some(buf) = batch.current() {
-            if let Err(err) = file.write_event(buf) {
+            if let Err(err) = file.write_event(buf, self.separator) {
                 self.metrics.file_write_failed.increment();
 
                 span.complete_with(|span| {
@@ -702,15 +907,15 @@ impl ActiveFile {
         })
     }
 
-    fn write_event(&mut self, event_buf: &[u8]) -> Result<(), io::Error> {
-        // If the file may be correupted then terminate
+    fn write_event(&mut self, event_buf: &[u8], separator: &'static [u8]) -> Result<(), io::Error> {
+        // If the file may be corrupted then terminate
         // any previously written content with a separator.
         // This ensures the event that's about to be written
         // isn't mangled together with an incomplete one written
         // previously
         if self.file_needs_recovery {
-            self.file_size_bytes += 1;
-            self.file.write_all(b"\n")?;
+            self.file_size_bytes += separator.len();
+            self.file.write_all(separator)?;
         }
 
         self.file_needs_recovery = true;
