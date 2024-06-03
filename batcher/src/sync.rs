@@ -1,3 +1,7 @@
+/*!
+Run channels on regular OS threads.
+*/
+
 use std::{
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
@@ -53,6 +57,9 @@ impl Trigger {
     }
 }
 
+/**
+Wait for a channel running on a regular OS thread to process all items active at the point this call was made.
+*/
 pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) -> bool {
     let on_flush = Trigger::new();
 

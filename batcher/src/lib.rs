@@ -1,3 +1,20 @@
+/*!
+Infrastructure for emitting diagnostic events in the background.
+
+This library implements a channel that can be used to spawn background workers on a dedicated thread or `tokio` runtime. The channel implements:
+
+- **Batching:** Events written to the channel are processed by the worker in batches rather than one-at-a-time.
+- **Retries with backoff:** If the worker fails or panics then the batch can be retried up to some number of times, with backoff applied between retries. The worker can decide how much of a batch needs to be retried.
+- **Maximum size management:** If the worker can't keep up then the channel truncates to avoid runaway memory use. The alternative would be to apply backpressure, but that would affect system availability so isn't suitable for diagnostics.
+- **Flushing:** Callers can ask the worker to signal when all diagnostic events in the channel at the point they called are processed. This can be used for auditing and flushing on shutdown.
+
+# Status
+
+This library is still experimental, so its API may change.
+*/
+
+#![deny(missing_docs)]
+
 use crate::internal_metrics::InternalMetrics;
 use std::{
     any::Any,
@@ -17,28 +34,60 @@ mod internal_metrics;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+/**
+A channel between a shared [`Sender`] and exclusive [`Receiver`].
+
+The sender pushes items onto the channel. At some point, the receiver swaps the channel out for a fresh one and processes it.
+*/
 pub trait Channel {
+    /**
+    The kind of item stored in this channel.
+    */
     type Item;
 
+    /**
+    Create a new, empty channel.
+
+    This method shouldn't allocate.
+    */
     fn new() -> Self;
 
-    fn with_capacity(capacity: usize) -> Self
+    /**
+    Create a channel with the given capacity hint.
+
+    The hint is to avoid potentially re-allocating the channel and should be respected, but is safe to ignore.
+    */
+    fn with_capacity(capacity_hint: usize) -> Self
     where
         Self: Sized,
     {
-        let _ = capacity;
+        let _ = capacity_hint;
 
         Self::new()
     }
 
+    /**
+    Push an item onto the end of the channel.
+    */
     fn push<'a>(&mut self, item: Self::Item);
 
-    fn remaining(&self) -> usize;
+    /**
+    The number of items in the channel.
+    */
+    fn len(&self) -> usize;
 
+    /**
+    Whether the channel has any items in it.
+    */
     fn is_empty(&self) -> bool {
-        self.remaining() == 0
+        self.len() == 0
     }
 
+    /**
+    Clear everything out of the channel.
+
+    After this call, [`Channel::len`] must return `0`.
+    */
     fn clear(&mut self);
 }
 
@@ -57,7 +106,7 @@ impl<T> Channel for Vec<T> {
         self.push(item);
     }
 
-    fn remaining(&self) -> usize {
+    fn len(&self) -> usize {
         self.len()
     }
 
@@ -70,6 +119,15 @@ impl<T> Channel for Vec<T> {
     }
 }
 
+/**
+Create a [`Sender`] and [`Receiver`] pair with the given [`Channel`] type, `T`.
+
+If the channel exceeds `max_capacity` then it will be cleared.
+
+Use [`Sender::send`] to push items onto the channel.
+
+Pass the receiver to [`tokio::spawn`] to spawn a background task that processes batches of items. You can also create a thread manually and call [`Receiver::blocking_exec`] on it.
+*/
 pub fn bounded<T: Channel>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
         metrics: Default::default(),
@@ -95,6 +153,9 @@ pub fn bounded<T: Channel>(max_capacity: usize) -> (Sender<T>, Receiver<T>) {
     )
 }
 
+/**
+The sending half of a channel.
+*/
 pub struct Sender<T> {
     max_capacity: usize,
     shared: Arc<Shared<T>>,
@@ -107,13 +168,18 @@ impl<T> Drop for Sender<T> {
 }
 
 impl<T: Channel> Sender<T> {
+    /**
+    Send an item on the channel.
+
+    The item will be processed at some future point by the [`Receiver`]. If pushing the item would overflow the maximum capacity of the channel it will be cleared first.
+    */
     pub fn send<'a>(&self, msg: T::Item) {
         let mut state = self.shared.state.lock().unwrap();
 
         // If the channel is full then drop it; this prevents OOMing
         // when the destination is unavailable. We don't notify the batch
         // in this case because the clearing is opaque to outside observers
-        if state.next_batch.channel.remaining() >= self.max_capacity {
+        if state.next_batch.channel.len() >= self.max_capacity {
             state.next_batch.channel.clear();
             self.shared.metrics.queue_overflow.increment();
         }
@@ -126,6 +192,9 @@ impl<T: Channel> Sender<T> {
         state.next_batch.channel.push(msg);
     }
 
+    /**
+    Set a callback to fire when all items in the active batch are processed by the [`Receiver`].
+    */
     pub fn on_next_flush(&self, watcher: impl FnOnce() + Send + 'static) {
         let watcher = Box::new(watcher);
 
@@ -149,6 +218,11 @@ impl<T: Channel> Sender<T> {
         }
     }
 
+    /**
+    Get an [`emit::metric::Source`] for instrumentation produced by the channel.
+
+    These metrics can be used to monitor the running health of your diagnostic pipeline.
+    */
     pub fn metric_source(&self) -> ChannelMetrics<T> {
         ChannelMetrics {
             shared: self.shared.clone(),
@@ -156,6 +230,11 @@ impl<T: Channel> Sender<T> {
     }
 }
 
+/**
+The receiving half of a channel.
+
+Use [`crate::tokio::spawn`], or [`Receiver::exec`] or [`Receiver::blocking_exec`] in a dedicated thread to run the receiver as a background worker.
+*/
 pub struct Receiver<T> {
     idle_delay: Delay,
     retry: Retry,
@@ -167,41 +246,17 @@ pub struct Receiver<T> {
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         self.shared.state.lock().unwrap().is_open = false;
-    }
-}
 
-pub struct BatchError<T> {
-    retryable: Option<T>,
-}
-
-impl<T> BatchError<T> {
-    pub fn no_retry(_: impl std::error::Error + Send + Sync + 'static) -> Self {
-        BatchError { retryable: None }
-    }
-
-    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: T) -> Self {
-        BatchError {
-            retryable: Some(retryable),
-        }
-    }
-
-    pub fn into_retryable(self) -> Option<T> {
-        self.retryable
-    }
-
-    /**
-    Map the retryable batch.
-
-    If the batch is already retryable, the input to `f` will be `Some`. The resulting batch is retryable if `f` returns `Some`.
-    */
-    pub fn map_retryable<U>(self, f: impl FnOnce(Option<T>) -> Option<U>) -> BatchError<U> {
-        BatchError {
-            retryable: f(self.retryable),
-        }
+        // TODO: Trigger callback for the current batch?
     }
 }
 
 impl<T: Channel> Receiver<T> {
+    /**
+    Run the receiver synchronously.
+
+    This method should be called on a dedicated thread. It will return once the [`Sender`] is dropped.
+    */
     pub fn blocking_exec(
         self,
         mut on_batch: impl FnMut(T) -> Result<(), BatchError<T>>,
@@ -238,6 +293,13 @@ impl<T: Channel> Receiver<T> {
         }
     }
 
+    /**
+    Run the receiver asynchronously.
+
+    The returned future will resolve once the [`Sender`] is dropped.
+
+    If you're using `tokio`, see [`crate::tokio::spawn`] for a more `tokio`-aware way to run the receiver asynchronously.
+    */
     pub async fn exec<
         FBatch: Future<Output = Result<(), BatchError<T>>>,
         FWait: Future<Output = ()>,
@@ -261,7 +323,7 @@ impl<T: Channel> Receiver<T> {
 
                 // If there are events then mark that we're in a batch and replace it with an empty one
                 // The sender will start filling this new batch
-                if state.next_batch.channel.remaining() > 0 {
+                if state.next_batch.channel.len() > 0 {
                     state.is_in_batch = true;
 
                     (
@@ -287,16 +349,14 @@ impl<T: Channel> Receiver<T> {
             };
 
             // Run outside of the lock
-            if current_batch.channel.remaining() > 0 {
+            if current_batch.channel.len() > 0 {
                 self.retry.reset();
                 self.retry_delay.reset();
                 self.idle_delay.reset();
 
                 // Re-allocate our next buffer outside of the lock
                 next_batch = Batch {
-                    channel: T::with_capacity(
-                        self.capacity.next(current_batch.channel.remaining()),
-                    ),
+                    channel: T::with_capacity(self.capacity.next(current_batch.channel.len())),
                     watchers: Watchers::new(),
                 };
 
@@ -314,7 +374,7 @@ impl<T: Channel> Receiver<T> {
                                     self.shared.metrics.queue_batch_failed.increment();
 
                                     if let Some(retryable) = retryable {
-                                        if retryable.remaining() > 0 && self.retry.next() {
+                                        if retryable.len() > 0 && self.retry.next() {
                                             // Delay a bit before trying again; this gives the external service
                                             // a chance to get itself together
                                             wait(self.retry_delay.next()).await;
@@ -364,9 +424,61 @@ impl<T: Channel> Receiver<T> {
         }
     }
 
+    /**
+    Get an [`emit::metric::Source`] for instrumentation produced by the channel.
+
+    These metrics can be used to monitor the running health of your diagnostic pipeline.
+    */
     pub fn metric_source(&self) -> ChannelMetrics<T> {
         ChannelMetrics {
             shared: self.shared.clone(),
+        }
+    }
+}
+
+/**
+An error encountered processing a batch.
+
+The error may contain part of the batch to retry.
+*/
+pub struct BatchError<T> {
+    retryable: Option<T>,
+}
+
+impl<T> BatchError<T> {
+    /**
+    An error that can't be retried.
+    */
+    pub fn no_retry(_: impl std::error::Error + Send + Sync + 'static) -> Self {
+        BatchError { retryable: None }
+    }
+
+    /**
+    An error that can be retried.
+    */
+    pub fn retry(_: impl std::error::Error + Send + Sync + 'static, retryable: T) -> Self {
+        BatchError {
+            retryable: Some(retryable),
+        }
+    }
+
+    /**
+    Try get the retryable batch from the error.
+
+    If the error is not retryable then this method will return `None`.
+    */
+    pub fn into_retryable(self) -> Option<T> {
+        self.retryable
+    }
+
+    /**
+    Map the retryable batch.
+
+    If the batch is already retryable, the input to `f` will be `Some`. The resulting batch is retryable if `f` returns `Some`.
+    */
+    pub fn map_retryable<U>(self, f: impl FnOnce(Option<T>) -> Option<U>) -> BatchError<U> {
+        BatchError {
+            retryable: f(self.retryable),
         }
     }
 }
@@ -449,21 +561,18 @@ struct Shared<T> {
     state: Mutex<State<T>>,
 }
 
+/**
+Metrics produced by a channel.
+
+You can enumerate the metrics using the [`emit::metric::Source`] implementation. See [`emit::metric`] for details.
+*/
 pub struct ChannelMetrics<T> {
     shared: Arc<Shared<T>>,
 }
 
 impl<T: Channel> emit::metric::Source for ChannelMetrics<T> {
     fn sample_metrics<S: emit::metric::sampler::Sampler>(&self, sampler: S) {
-        let queue_length = {
-            self.shared
-                .state
-                .lock()
-                .unwrap()
-                .next_batch
-                .channel
-                .remaining()
-        };
+        let queue_length = { self.shared.state.lock().unwrap().next_batch.channel.len() };
 
         let metrics = self
             .shared

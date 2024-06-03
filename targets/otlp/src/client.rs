@@ -640,7 +640,7 @@ impl emit_batcher::Channel for Channel {
         }
     }
 
-    fn remaining(&self) -> usize {
+    fn len(&self) -> usize {
         let Channel {
             otlp_logs: logs,
             otlp_traces: traces,

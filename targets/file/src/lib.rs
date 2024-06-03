@@ -537,7 +537,7 @@ impl emit_batcher::Channel for EventBatch {
         self.bufs.push(item);
     }
 
-    fn remaining(&self) -> usize {
+    fn len(&self) -> usize {
         self.bufs.len() - self.index
     }
 

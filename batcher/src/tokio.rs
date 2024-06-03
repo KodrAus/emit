@@ -1,3 +1,7 @@
+/*!
+Run channels in a `tokio` runtime.
+*/
+
 use std::{
     cmp,
     future::Future,
@@ -6,6 +10,11 @@ use std::{
 
 use crate::{BatchError, Channel, Receiver, Sender};
 
+/**
+Spawn a worker to run the [`Receiver`] on a `tokio` runtime.
+
+If the current thread is a `tokio` thread, then the worker will be spawned onto its runtime. If the current thread is not a `tokio` thread, then a single-threaded `tokio` runtime will be set up in a dedicated thread to run it.
+*/
 pub fn spawn<
     T: Channel + Send + 'static,
     F: Future<Output = Result<(), BatchError<T>>> + Send + 'static,
@@ -41,6 +50,11 @@ pub fn spawn<
     }
 }
 
+/**
+Wait for a channel potentially running on a `tokio` thread to process all items active at the point this call was made.
+
+If the current thread is a `tokio` thread then this call will be executed using [`tokio::task::block_in_place`] to avoid starving other work.
+*/
 pub fn blocking_flush<T: Channel>(sender: &Sender<T>, timeout: Duration) -> bool {
     tokio::task::block_in_place(|| {
         let (notifier, mut notified) = tokio::sync::oneshot::channel();
