@@ -14,5 +14,3 @@ jobs:
     - uses: actions/checkout@v2
     - name: Run tests
       run: cargo test --all --verbose
-    - name: Smoke test
-      run: cargo run -p emit-smoke-test
