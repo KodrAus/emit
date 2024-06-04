@@ -181,7 +181,7 @@ Format a template.
 
 # Syntax
 
-See the [`emit`] macro for syntax.
+See the [`macro@emit`] macro for syntax.
 
 # Control parameters
 
@@ -224,7 +224,7 @@ This macro accepts the following optional control parameters:
 
 # Template
 
-The template for the event. See the [`tpl`] macro for syntax.
+The template for the event. See the [`macro@tpl`] macro for syntax.
 
 # Properties
 
@@ -248,7 +248,7 @@ Construct a debug event.
 
 # Syntax
 
-See the [`event`] macro for syntax.
+See the [`macro@event`] macro for syntax.
 
 # Returns
 
@@ -268,7 +268,7 @@ Construct an info event.
 
 # Syntax
 
-See the [`event`] macro for syntax.
+See the [`macro@event`] macro for syntax.
 
 # Returns
 
@@ -288,7 +288,7 @@ Construct a warn event.
 
 # Syntax
 
-See the [`event`] macro for syntax.
+See the [`macro@event`] macro for syntax.
 
 # Returns
 
@@ -308,7 +308,7 @@ Construct an error event.
 
 # Syntax
 
-See the [`event`] macro for syntax.
+See the [`macro@event`] macro for syntax.
 
 # Returns
 
@@ -349,7 +349,7 @@ This macro accepts the following optional control parameters:
 
 # Template
 
-The template for the event. See the [`tpl`] macro for syntax.
+The template for the event. See the [`macro@tpl`] macro for syntax.
 
 # Properties
 
@@ -368,7 +368,7 @@ Wrap an operation in a debug span.
 
 # Syntax
 
-See the [`span`] macro for syntax.
+See the [`macro@span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn debug_span(
@@ -387,7 +387,7 @@ Wrap an operation in an info span.
 
 # Syntax
 
-See the [`span`] macro for syntax.
+See the [`macro@span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn info_span(
@@ -406,7 +406,7 @@ Wrap an operation in a warn span.
 
 # Syntax
 
-See the [`span`] macro for syntax.
+See the [`macro@span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn warn_span(
@@ -425,7 +425,7 @@ Wrap an operation in an error span.
 
 # Syntax
 
-See the [`span`] macro for syntax.
+See the [`macro@span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn error_span(
@@ -474,7 +474,7 @@ Get the parts of a template.
 
 # Syntax
 
-See the [`tpl`] macro for syntax.
+See the [`macro@tpl`] macro for syntax.
 
 # Returns
 
@@ -516,7 +516,7 @@ This macro accepts the following optional control parameters:
 
 # Template
 
-The template for the event. See the [`tpl`] macro for syntax.
+The template for the event. See the [`macro@tpl`] macro for syntax.
 
 # Properties
 
@@ -532,7 +532,7 @@ Emit a debug event.
 
 # Syntax
 
-See the [`emit`] macro for syntax.
+See the [`macro@emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -544,7 +544,7 @@ Emit a info event.
 
 # Syntax
 
-See the [`emit`] macro for syntax.
+See the [`macro@emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -556,7 +556,7 @@ Emit a warn event.
 
 # Syntax
 
-See the [`emit`] macro for syntax.
+See the [`macro@emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -568,7 +568,7 @@ Emit an error event.
 
 # Syntax
 
-See the [`emit`] macro for syntax.
+See the [`macro@emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
