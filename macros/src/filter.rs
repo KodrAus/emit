@@ -12,8 +12,8 @@ pub fn matches_build_filter() -> bool {
 }
 
 fn matches(filter: &str, this_crate: &str) -> bool {
-    // Just a simple `this_crate` in `crate_1;crate_2;..;crate_n` filter
-    filter.is_empty() || filter.split(';').any(|include| include == this_crate)
+    // Just a simple `this_crate` in `crate_1, crate_2, .. , crate_n` filter
+    filter.is_empty() || filter.split(',').any(|include| include.trim() == this_crate)
 }
 
 #[cfg(test)]
@@ -28,12 +28,12 @@ mod tests {
     #[test]
     fn matches_true() {
         assert!(matches("a", "a"));
-        assert!(matches("c;a;b", "a"));
+        assert!(matches("c, a, b", "a"));
     }
 
     #[test]
     fn matches_false() {
         assert!(!matches("b", "a"));
-        assert!(!matches("c;b", "a"));
+        assert!(!matches("c, b", "a"));
     }
 }
