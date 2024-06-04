@@ -178,6 +178,18 @@ fn hooks() -> HashMap<&'static str, fn(TokenStream, TokenStream) -> syn::Result<
 
 /**
 Format a template.
+
+# Syntax
+
+See the [`emit`] macro for syntax.
+
+# Control parameters
+
+This macro doesn't accept any control parameters.
+
+# Returns
+
+A `String`.
 */
 #[proc_macro]
 pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -189,6 +201,38 @@ pub fn format(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Construct an event.
+
+# Syntax
+
+```text
+(control_param),* tpl, (property),*
+```
+
+where
+
+- `control_param`: A Rust field-value with a pre-determined identifier (see below).
+- `tpl`: A template string literal.
+- `property`: A Rust field-value for a property to capture.
+
+# Control parameters
+
+This macro accepts the following optional control parameters:
+
+- `module: impl Into<emit::Path>`: The module the event belongs to. If unspecified the current module path is used.
+- `props: impl emit::Props`: A base set of properties to add to the event.
+- `extent: impl emit::ToExtent`: The extent to use on the event.
+
+# Template
+
+The template for the event. See the [`tpl`] macro for syntax.
+
+# Properties
+
+Properties that appear within the template or after it are added to the emitted event. The identifier of the property is its key. Property capturing can be adjusted through the `as_*` attribute macros.
+
+# Returns
+
+An `emit::Event`.
 */
 #[proc_macro]
 pub fn event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -200,7 +244,15 @@ pub fn event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Construct an event.
+Construct a debug event.
+
+# Syntax
+
+See the [`event`] macro for syntax.
+
+# Returns
+
+An `emit::Event`.
 */
 #[proc_macro]
 pub fn debug_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -212,7 +264,15 @@ pub fn debug_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Construct an event.
+Construct an info event.
+
+# Syntax
+
+See the [`event`] macro for syntax.
+
+# Returns
+
+An `emit::Event`.
 */
 #[proc_macro]
 pub fn info_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -224,7 +284,15 @@ pub fn info_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Construct an event.
+Construct a warn event.
+
+# Syntax
+
+See the [`event`] macro for syntax.
+
+# Returns
+
+An `emit::Event`.
 */
 #[proc_macro]
 pub fn warn_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -236,7 +304,15 @@ pub fn warn_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 /**
-Construct an event.
+Construct an error event.
+
+# Syntax
+
+See the [`event`] macro for syntax.
+
+# Returns
+
+An `emit::Event`.
 */
 #[proc_macro]
 pub fn error_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -249,6 +325,35 @@ pub fn error_event(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Wrap an operation in a span.
+
+# Syntax
+
+```text
+(control_param),* tpl, (property),*
+```
+
+where
+
+- `control_param`: A Rust field-value with a pre-determined identifier (see below).
+- `tpl`: A template string literal.
+- `property`: A Rust field-value for a property to capture.
+
+# Control parameters
+
+This macro accepts the following optional control parameters:
+
+- `rt: impl emit::runtime::Runtime`: The runtime to emit the event through.
+- `module: impl Into<emit::Path>`: The module the event belongs to. If unspecified the current module path is used.
+- `when: impl emit::Filter`: A filter to use instead of the one configured on the runtime.
+- `arg`: An identifier to bind an `emit::Span` to in the body of the span for manual completion.
+
+# Template
+
+The template for the event. See the [`tpl`] macro for syntax.
+
+# Properties
+
+Properties that appear within the template or after it are added to the emitted event. The identifier of the property is its key. Property capturing can be adjusted through the `as_*` attribute macros.
 */
 #[proc_macro_attribute]
 pub fn span(
@@ -259,7 +364,11 @@ pub fn span(
 }
 
 /**
-Wrap an operation in a span.
+Wrap an operation in a debug span.
+
+# Syntax
+
+See the [`span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn debug_span(
@@ -274,7 +383,11 @@ pub fn debug_span(
 }
 
 /**
-Wrap an operation in a span.
+Wrap an operation in an info span.
+
+# Syntax
+
+See the [`span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn info_span(
@@ -289,7 +402,11 @@ pub fn info_span(
 }
 
 /**
-Wrap an operation in a span.
+Wrap an operation in a warn span.
+
+# Syntax
+
+See the [`span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn warn_span(
@@ -304,7 +421,11 @@ pub fn warn_span(
 }
 
 /**
-Wrap an operation in a span.
+Wrap an operation in an error span.
+
+# Syntax
+
+See the [`span`] macro for syntax.
 */
 #[proc_macro_attribute]
 pub fn error_span(
@@ -320,6 +441,25 @@ pub fn error_span(
 
 /**
 Construct a template.
+
+Templates are text literals that include regular text with _holes_. A hole is a point in the template where a property should be interpolated in.
+
+# Syntax
+
+```text
+template_literal
+```
+
+where
+
+- `template_literal`: `(text | hole)*`
+- `text`: A fragment of plain text where `{` are escaped as `{{` and `}` are escaped as `}}`.
+- `hole`: `{property}`
+- `property`: A Rust field-value of a property to capture.
+
+# Returns
+
+An `emit::Template`.
 */
 #[proc_macro]
 pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -331,6 +471,14 @@ pub fn tpl(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Get the parts of a template.
+
+# Syntax
+
+See the [`tpl`] macro for syntax.
+
+# Returns
+
+An `[emit::template::Part; N]` array.
 */
 #[proc_macro]
 pub fn tpl_parts(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -342,6 +490,37 @@ pub fn tpl_parts(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Emit an event.
+
+# Syntax
+
+```text
+(control_param),* tpl, (property),*
+```
+
+where
+
+- `control_param`: A Rust field-value with a pre-determined identifier (see below).
+- `tpl`: A template string literal.
+- `property`: A Rust field-value for a property to capture.
+
+# Control parameters
+
+This macro accepts the following optional control parameters:
+
+- `rt: impl emit::runtime::Runtime`: The runtime to emit the event through.
+- `event: impl emit::event::ToEvent`: A base event to emit. Any properties captured by the macro will be appended to the base event. If this control parameter is specified then `module`, `props`, and `extent` cannot also be set.
+- `module: impl Into<emit::Path>`: The module the event belongs to. If unspecified the current module path is used.
+- `props: impl emit::Props`: A base set of properties to add to the event.
+- `extent: impl emit::ToExtent`: The extent to use on the event. If it resolves to `None` then the clock on the runtime will be used to assign a point extent.
+- `when: impl emit::Filter`: A filter to use instead of the one configured on the runtime.
+
+# Template
+
+The template for the event. See the [`tpl`] macro for syntax.
+
+# Properties
+
+Properties that appear within the template or after it are added to the emitted event. The identifier of the property is its key. Property capturing can be adjusted through the `as_*` attribute macros.
 */
 #[proc_macro]
 pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -350,6 +529,10 @@ pub fn emit(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Emit a debug event.
+
+# Syntax
+
+See the [`emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -358,6 +541,10 @@ pub fn debug(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Emit a info event.
+
+# Syntax
+
+See the [`emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -366,6 +553,10 @@ pub fn info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Emit a warn event.
+
+# Syntax
+
+See the [`emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -374,6 +565,10 @@ pub fn warn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Emit an error event.
+
+# Syntax
+
+See the [`emit`] macro for syntax.
 */
 #[proc_macro]
 pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -382,6 +577,16 @@ pub fn error(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /**
 Construct a set of properties.
+
+# Syntax
+
+```text
+(property),*
+```
+
+where
+
+- `property`: A Rust field-value for a property. The identifier of the field-value is the key of the property.
 */
 #[proc_macro]
 pub fn props(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -391,6 +596,23 @@ pub fn props(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .unwrap_or_compile_error()
 }
 
+/**
+Specify Rust format flags to use when rendering a property in a template.
+
+# Syntax
+
+```text
+fmt_string
+```
+
+where
+
+- `fmt_string`: A string literal with the format flags, like `":?"`. See the [`std::fmt`] docs for details on available flags.
+
+# Applicable to
+
+This attribute can be applied to properties that appear in a template.
+*/
 #[proc_macro_attribute]
 pub fn fmt(
     args: proc_macro::TokenStream,
@@ -400,6 +622,23 @@ pub fn fmt(
         .unwrap_or_compile_error()
 }
 
+/**
+Specify the key for a property.
+
+# Syntax
+
+```text
+key
+```
+
+where
+
+- `key`: A string literal with the key to use. The key doesn't need to be a valid Rust identifier.
+
+# Applicable to
+
+This attribute can be applied to properties.
+*/
 #[proc_macro_attribute]
 pub fn key(
     args: proc_macro::TokenStream,
@@ -409,6 +648,17 @@ pub fn key(
         .unwrap_or_compile_error()
 }
 
+/**
+Specify that a property value of `None` should not be captured, instead of being captured as `null`.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
+*/
 #[proc_macro_attribute]
 pub fn optional(
     args: proc_macro::TokenStream,
@@ -419,7 +669,15 @@ pub fn optional(
 }
 
 /**
-Capture a key-value pair using its `ToValue` implementation.
+Capture a property using its `ToValue` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_value(
@@ -431,7 +689,15 @@ pub fn as_value(
 }
 
 /**
-Capture a key-value pair using its `Debug` implementation.
+Capture a property using its `Debug` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_debug(
@@ -443,7 +709,15 @@ pub fn as_debug(
 }
 
 /**
-Capture a key-value pair using its `Display` implementation.
+Capture a property using its `Display` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_display(
@@ -455,7 +729,15 @@ pub fn as_display(
 }
 
 /**
-Capture a key-value pair using its `sval::Value` implementation.
+Capture a property using its `sval::Value` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_sval(
@@ -467,7 +749,15 @@ pub fn as_sval(
 }
 
 /**
-Capture a key-value pair using its `serde::Serialize` implementation.
+Capture a property using its `serde::Serialize` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_serde(
@@ -479,7 +769,15 @@ pub fn as_serde(
 }
 
 /**
-Capture a key-value pair using its `Error` implementation.
+Capture a property using its `Error` implementation.
+
+# Syntax
+
+This macro doesn't accept any arguments.
+
+# Applicable to
+
+This attribute can be applied to properties.
 */
 #[proc_macro_attribute]
 pub fn as_error(
