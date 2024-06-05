@@ -22,8 +22,11 @@ type DefaultClock = system_clock::SystemClock;
 #[cfg(feature = "rand")]
 type DefaultIdGen = rand_rng::RandRng;
 
+/**
+The default [`crate::Ctxt`] to use in [`crate::setup()`].
+*/
 #[cfg(feature = "std")]
-pub(crate) type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
+pub type DefaultCtxt = thread_local_ctxt::ThreadLocalCtxt;
 
 /**
 A type-erased container for system services used when intiailizing runtimes.

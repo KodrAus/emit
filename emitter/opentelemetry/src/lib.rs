@@ -21,12 +21,7 @@ Initialize `emit` to send diagnostics to the OpenTelemetry SDK using [`new`]:
 fn main() {
     // Configure the OpenTelemetry SDK
 
-    let mut builder = emit_opentelemetry::new("my_app");
-
-    let rt = emit::setup()
-        .emit_to(builder.emitter())
-        .map_ctxt(|ctxt| builder.ctxt(ctxt))
-        .init();
+    let rt = emit_opentelemetry::setup().init();
 
     // Your app code goes here
 
@@ -81,12 +76,7 @@ The `name` argument is passed to the underlying [`opentelemetry::global::tracer`
 fn main() {
     // Configure the OpenTelemetry SDK
 
-    let mut builder = emit_opentelemetry::new("my_app");
-
-    let rt = emit::setup()
-        .emit_to(builder.emitter())
-        .map_ctxt(|ctxt| builder.ctxt(ctxt))
-        .init();
+    let rt = emit_opentelemetry::setup().init();
 
     // Your app code goes here
 
@@ -98,8 +88,16 @@ fn main() {
 
 Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
 */
-pub fn new(name: &'static str) -> EmitOpenTelemetry {
-    EmitOpenTelemetry::new(name)
+pub fn setup() -> emit::Setup<
+    OpenTelemetryEmitter,
+    emit::setup::DefaultFilter,
+    OpenTelemetryCtxt<emit::setup::DefaultCtxt>,
+> {
+    let mut bridge = EmitOpenTelemetry::new("emit");
+
+    emit::setup()
+        .emit_to(bridge.emitter())
+        .map_ctxt(|ctxt| bridge.ctxt(ctxt))
 }
 
 /**
@@ -113,33 +111,7 @@ pub struct EmitOpenTelemetry {
 }
 
 impl EmitOpenTelemetry {
-    /**
-    Start a builder for the `emit` to OpenTelemetry SDK integration.
-
-    The `name` argument is passed to the underlying [`opentelemetry::global::tracer`] and [`opentelemetry::global::logger`] used by the integration. Pass the result of [`OpenTelemetry::emitter`] to [`emit::Setup::emit_to`] and [`OpenTelemetry::ctxt`] to [`emit::Setup::map_ctxt`] to complete configuration:
-
-    ```
-    fn main() {
-        // Configure the OpenTelemetry SDK
-
-        let mut builder = emit_opentelemetry::new("my_app");
-
-        let rt = emit::setup()
-            .emit_to(builder.emitter())
-            .map_ctxt(|ctxt| builder.ctxt(ctxt))
-            .init();
-
-        // Your app code goes here
-
-        rt.blocking_flush(std::time::Duration::from_secs(30));
-
-        // Shutdown the OpenTelemetry SDK
-    }
-    ```
-
-    Both the `emitter` and `ctxt` values must be set in order for `emit` to integrate with the OpenTelemetry SDK properly.
-    */
-    pub fn new(name: &'static str) -> Self {
+    fn new(name: &'static str) -> Self {
         EmitOpenTelemetry {
             name,
             metrics: Default::default(),

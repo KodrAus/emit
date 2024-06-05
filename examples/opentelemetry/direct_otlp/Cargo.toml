@@ -7,3 +7,9 @@ publish = false
 
 [dependencies.emit]
 path = "../../../"
+
+[dependencies.emit_otlp]
+path = "../../../emitter/otlp"
+
+[dependencies.emit_term]
+path = "../../../emitter/term"

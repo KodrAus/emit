@@ -89,7 +89,7 @@ use emit_core::{
     runtime::{InternalCtxt, InternalEmitter, InternalFilter},
 };
 
-use crate::platform::{DefaultCtxt, Platform};
+use crate::platform::{self, Platform};
 
 /**
 Configure `emit` with [`Emitter`]s, [`Filter`]s, and [`Ctxt`].
@@ -100,8 +100,17 @@ pub fn setup() -> Setup {
     Setup::default()
 }
 
-type DefaultEmitter = Empty;
-type DefaultFilter = Empty;
+pub use platform::DefaultCtxt;
+
+/**
+The default [`crate::Emitter`] to use in [`crate::setup()`].
+*/
+pub type DefaultEmitter = Empty;
+
+/**
+The default [`crate::Filter`] to use in [`crate::setup()`].
+*/
+pub type DefaultFilter = Empty;
 
 /**
 A configuration builder for an `emit` runtime.
