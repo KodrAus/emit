@@ -42,3 +42,5 @@ This is alpha-level software. It implements a complete framework but has almost 
 ## Getting started
 
 See the `examples/getting_started` directory and `emit` documentation for how to get started with `emit`.
+
+The `examples/common_patterns` directory has mini examples for common tasks.

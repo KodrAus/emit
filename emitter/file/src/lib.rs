@@ -90,6 +90,7 @@ If writing a batch fails while attempting to write to a file then the file being
 mod internal_metrics;
 
 use std::{
+    fmt,
     fs::{self, File},
     io::{self, Write},
     mem,
@@ -108,7 +109,31 @@ pub use internal_metrics::*;
 /**
 An error attempting to create a [`FileSet`].
 */
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub struct Error(Box<dyn std::error::Error + Send + Sync>);
+
+impl Error {
+    fn new(e: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
+        Error(e.into())
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
 
 /**
 Create a builder for a [`FileSet`] using the default newline-delimited JSON format.
@@ -316,7 +341,7 @@ impl FileSetBuilder {
     Complete the builder, returning a [`FileSet`] to pass to [`emit::Setup::emit_to`].
     */
     pub fn spawn(self) -> Result<FileSet, Error> {
-        let (dir, file_prefix, file_ext) = dir_prefix_ext(self.file_set)?;
+        let (dir, file_prefix, file_ext) = dir_prefix_ext(self.file_set).map_err(Error::new)?;
 
         let metrics = Arc::new(InternalMetrics::default());
 
@@ -934,7 +959,8 @@ fn dir_prefix_ext(file_set: impl AsRef<Path>) -> Result<(String, String, String)
     let dir = if let Some(parent) = file_set.parent() {
         parent
             .to_str()
-            .ok_or_else(|| "paths must be valid UTF8")?
+            .ok_or_else(|| "paths must be valid UTF8")
+            .map_err(Error::new)?
             .to_owned()
     } else {
         String::new()
@@ -942,14 +968,17 @@ fn dir_prefix_ext(file_set: impl AsRef<Path>) -> Result<(String, String, String)
 
     let prefix = file_set
         .file_stem()
-        .ok_or_else(|| "paths must include a file name")?
+        .ok_or_else(|| "paths must include a file name")
+        .map_err(Error::new)?
         .to_str()
-        .ok_or_else(|| "paths must be valid UTF8")?
+        .ok_or_else(|| "paths must be valid UTF8")
+        .map_err(Error::new)?
         .to_owned();
 
     let ext = if let Some(ext) = file_set.extension() {
         ext.to_str()
-            .ok_or_else(|| "paths must be valid UTF8")?
+            .ok_or_else(|| "paths must be valid UTF8")
+            .map_err(Error::new)?
             .to_owned()
     } else {
         String::from("log")

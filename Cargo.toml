@@ -8,6 +8,10 @@ members = [
     "emitter/otlp/gen",
     "emitter/opentelemetry",
     "macros",
+    "examples/common_patterns",
+    "examples/getting_started",
+    "examples/opentelemetry/direct_otlp",
+    "examples/opentelemetry/via_sdk",
 ]
 
 [package]

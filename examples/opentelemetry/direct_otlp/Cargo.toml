@@ -1,0 +1,9 @@
+[package]
+name = "emit_exmaple_opentelemetry_direct_otlp"
+version = "0.0.0"
+authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+edition = "2021"
+publish = false
+
+[dependencies.emit]
+path = "../../../"
