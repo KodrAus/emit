@@ -805,6 +805,15 @@ An error encountered attempting to parse a [`TraceId`] or [`SpanId`].
 #[derive(Debug)]
 pub struct ParseIdError {}
 
+impl fmt::Display for ParseIdError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the input was not a valid id")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseIdError {}
+
 struct Buffer<const N: usize> {
     hex: [u8; N],
     idx: usize,

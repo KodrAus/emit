@@ -147,6 +147,15 @@ An error attempting to parse a [`Level`] from text.
 #[derive(Debug)]
 pub struct ParseLevelError {}
 
+impl fmt::Display for ParseLevelError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the input was not a valid level")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseLevelError {}
+
 impl ToValue for Level {
     fn to_value(&self) -> Value {
         Value::capture_display(self)

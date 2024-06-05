@@ -393,6 +393,15 @@ An error attempting to parse a [`Timestamp`] from text.
 #[derive(Debug)]
 pub struct ParseTimestampError {}
 
+impl fmt::Display for ParseTimestampError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the input was not a valid timestamp")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseTimestampError {}
+
 fn parse_rfc3339(fmt: &str) -> Result<Timestamp, ParseTimestampError> {
     if fmt.len() > 30 || fmt.len() < 19 {
         unimplemented!("invalid len {}", fmt.len());

@@ -104,7 +104,17 @@ impl FromStr for Kind {
 /**
 An error attempting to parse a [`Kind`] from text.
 */
+#[derive(Debug)]
 pub struct ParseKindError {}
+
+impl fmt::Display for ParseKindError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the input was not a valid kind")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseKindError {}
 
 /**
 A [`Filter`] that matches events with a specific [`Kind`].

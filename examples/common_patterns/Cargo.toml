@@ -53,3 +53,7 @@ path = "filter_per_emitter.rs"
 [[example]]
 name = "span_manual_completion"
 path = "span_manual_completion.rs"
+
+[[example]]
+name = "span_trace_propagation"
+path = "span_trace_propagation.rs"
