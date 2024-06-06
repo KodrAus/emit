@@ -6,6 +6,8 @@ When your application executes key operations, you can emit span events that dov
 `emit` supports tracing operations through attribute macros on functions. These macros use the same syntax as those for emitting regular events:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{thread, time::Duration};
 #[emit::span("wait a bit", sleep_ms)]
 fn wait_a_bit(sleep_ms: u64) {
@@ -13,6 +15,7 @@ fn wait_a_bit(sleep_ms: u64) {
 }
 
 wait_a_bit(1200);
+# }
 ```
 
 ```text
@@ -42,6 +45,7 @@ Asynchronous functions are also supported:
 # use std::{thread, time::Duration};
 # fn main() {}
 # async fn sleep(_: Duration) {}
+# #[cfg(feature = "std")]
 # async fn main_async() {
 #[emit::span("wait a bit", sleep_ms)]
 async fn wait_a_bit(sleep_ms: u64) {
@@ -55,6 +59,8 @@ wait_a_bit(1200).await;
 Span events may also be created manually:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{time::Duration, thread};
 use emit::Filter;
 
@@ -91,11 +97,14 @@ frame.call(move || {
     // complete before the future does
     span.complete();
 });
+# }
 ```
 
 Spans can also be emitted directly as regular events:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{thread, time::Duration, panic};
 use emit::{well_known::EVENT_KIND_SPAN, Filter};
 
@@ -139,6 +148,7 @@ frame.call(|| {
         Err(r) => panic::resume_unwind(r),
     }
 });
+# }
 ```
 
 # Data model
@@ -156,6 +166,8 @@ The data model of spans is an extension of `emit`'s events. Span events include 
 Properties added to the span macros are added to an ambient context and automatically included on any events emitted within that operation:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{thread, time::Duration};
 #[emit::span("wait a bit", sleep_ms)]
 fn wait_a_bit(sleep_ms: u64) {
@@ -165,6 +177,7 @@ fn wait_a_bit(sleep_ms: u64) {
 
     thread::sleep(Duration::from_millis(sleep_ms));
 }
+# }
 ```
 
 ```text
@@ -199,6 +212,8 @@ Event {
 Any operations started within a span will inherit its identifiers:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{thread, time::Duration};
 #[emit::span("outer span", sleep_ms)]
 fn outer_span(sleep_ms: u64) {
@@ -211,6 +226,7 @@ fn outer_span(sleep_ms: u64) {
 fn inner_span(sleep_ms: u64) {
     thread::sleep(Duration::from_millis(sleep_ms));
 }
+# }
 ```
 
 ```text
@@ -252,6 +268,8 @@ Notice the `span_parent` of `inner_span` is the same as the `span_id` of `outer_
 Ambient span properties are not shared across threads by default. This context needs to be fetched and sent across threads manually:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::thread;
 # fn my_operation() {}
 thread::spawn({
@@ -261,17 +279,21 @@ thread::spawn({
         // Your code goes here
     })
 });
+# }
 ```
 
 This same process is also needed for async code that involves thread spawning:
 
 ```
 # mod tokio { pub fn spawn(_: impl std::future::Future) {} }
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 tokio::spawn(
     emit::Frame::current(emit::runtime::shared().ctxt()).in_future(async {
         // Your code goes here
     }),
 );
+# }
 ```
 
 Async functions that simply migrate across threads in work-stealing runtimes don't need any manual work to keep their context across those threads.
@@ -283,6 +305,8 @@ Async functions that simply migrate across threads in work-stealing runtimes don
 When an incoming request arrives, you can parse the trace and span ids from its traceparent header and push them onto the current context:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 // Parsed from a traceparent header
 let trace_id = "12b2fde225aebfa6758ede9cac81bf4d";
 let span_id = "23995f85b4610391";
@@ -298,6 +322,7 @@ frame.call(handle_request);
 fn handle_request() {
     // Your code goes here
 }
+# }
 ```
 
 ```text
@@ -322,6 +347,8 @@ This pattern of pushing the incoming traceparent onto the context and then immed
 When making outbound requests, you can pull the current trace and span ids from the current context and format them into a traceparent header:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 use emit::{well_known::{KEY_SPAN_ID, KEY_TRACE_ID}, Ctxt, Props};
 
 let (trace_id, span_id) = emit::runtime::shared().ctxt().with_current(|props| {
@@ -336,6 +363,7 @@ if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
 
     // Push the traceparent header onto the request
 }
+# }
 ```
 
 # Completing spans manually
@@ -343,6 +371,8 @@ if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
 The `arg` control parameter can be applied to span macros to bind an identifier in the body of the annotated function for the [`Span`] that's created for it. This span can be completed manually, changing properties of the span along the way:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::{thread, time::Duration};
 #[emit::span(arg: span, "wait a bit", sleep_ms)]
 fn wait_a_bit(sleep_ms: u64) {
@@ -361,6 +391,7 @@ fn wait_a_bit(sleep_ms: u64) {
 
 wait_a_bit(100);
 wait_a_bit(1200);
+# }
 ```
 
 ```text

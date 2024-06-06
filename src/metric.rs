@@ -6,6 +6,8 @@ Metrics are an effective approach to monitoring applications at scale. They can 
 A standard kind of metric is a monotonic counter, which can be represented as an atomic integer. In this example, our counter is for the number of bytes written to a file, which we'll call `bytes_written`. We can report a sample of this counter as an event by wrapping it in a [`Metric`]:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # fn sample_bytes_written() -> usize { 4643 }
 use emit::{well_known::METRIC_AGG_COUNT, Clock};
 
@@ -21,6 +23,7 @@ emit::emit!(
         emit::Empty,
     )
 );
+# }
 ```
 
 ```text
@@ -42,6 +45,8 @@ Event {
 Metrics may also be emitted manually:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # fn sample_bytes_written() -> usize { 4643 }
 use emit::well_known::{EVENT_KIND_METRIC, METRIC_AGG_COUNT};
 
@@ -54,6 +59,7 @@ emit::emit!(
     metric_name: "bytes_written",
     metric_value: sample,
 );
+# }
 ```
 
 # Data model
@@ -77,6 +83,8 @@ Metric events with a point extent are cumulative. Their `metric_value` is the re
 The following metric reports the current number of bytes written as 591:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
 emit::emit!(
@@ -89,6 +97,7 @@ emit::emit!(
         emit::Empty,
     )
 );
+# }
 ```
 
 ```text
@@ -114,6 +123,8 @@ Metric events with a span extent are deltas. Their `metric_value` is the result 
 The following metric reports that the number of bytes written changed by 17 over the last 30 seconds:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
 let now = emit::now!();
@@ -129,6 +140,7 @@ emit::emit!(
         emit::Empty,
     )
 );
+# }
 ```
 
 ```text
@@ -154,6 +166,8 @@ Metric events with a span extent, where the `metric_value` is an array are a com
 The following metric is for a time-series with 15 buckets, where each bucket covers 1 second:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
 let now = emit::now!();
@@ -185,6 +199,7 @@ emit::emit!(
         emit::Empty,
     )
 );
+# }
 ```
 
 ```text
@@ -224,6 +239,8 @@ Event {
 The [`Source`] trait represents some underlying data source that can be sampled to provide [`Metric`]s. You can sample sources directly, or combine them into a [`Reporter`] to sample all the sources of metrics in your application together:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 use emit::metric::{Source as _, Sampler as _};
 
 // Create some metric sources
@@ -266,6 +283,7 @@ std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(30));
     }
 });
+# }
 ```
 */
 

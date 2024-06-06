@@ -19,6 +19,8 @@ version = "*"
 Here's an example of a simple configuration with an emitter that prints events using [`std::fmt`]:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")]
 fn main() {
     let rt = emit::setup()
         .emit_to(emit::emitter::from_fn(|evt| println!("{evt:#?}")))
@@ -45,7 +47,10 @@ Producing useful diagnostics in your applications is a critical aspect of buildi
 `emit` uses macros with a special syntax to log events. Here's an example of an event:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!("Hello, World");
+# }
 ```
 
 Using the `std::fmt` emitter from earlier, it will output:
@@ -75,9 +80,12 @@ This example is a perfect opportunity to introduce `emit`'s model of diagnostics
 The string literal argument to the [`emit!`] macro is its template. Properties can be attached to events by interpolating them into the template between braces:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 let user = "World";
 
 emit::emit!("Hello, {user}!");
+# }
 ```
 
 ```text
@@ -96,13 +104,19 @@ Event {
 `emit` uses Rust's field value syntax between braces in its templates, where the identifier becomes the key of the property. This is the same syntax used for struct field initialization. The above example could be written equivalently in other ways:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 let greet = "World";
 
 emit::emit!("Hello, {user: greet}!");
+# }
 ```
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!("Hello, {user: \"World\"}!");
+# }
 ```
 
 In these examples we've been using the string `"World"` as the property value. Other primitive types such as booleans, integers, floats, and most library-defined datastructures like UUIDs and URIs can be captured by default in templates.
@@ -112,11 +126,14 @@ In these examples we've been using the string `"World"` as the property value. O
 Additional properties can be added to an event by listing them as field values after the template:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 let user = "World";
 let greeter = "emit";
 let lang = "en";
 
 emit::emit!("Hello, {user}!", lang, greeter);
+# }
 ```
 
 ```text
@@ -137,7 +154,10 @@ Event {
 Properties inside templates may be initialized outside of them:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!("Hello, {user}", user: "World");
+# }
 ```
 
 ```text
@@ -160,7 +180,10 @@ Control parameters appear before the template. They use the same field value syn
 The `module` control parameter sets the module:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!(module: "my_module", "Hello, World!");
+# }
 ```
 
 ```text
@@ -177,11 +200,14 @@ Event {
 The `extent` control parameter sets the extent:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # use std::time::Duration;
 emit::emit!(
     extent: emit::Timestamp::from_unix(Duration::from_secs(1000000000)),
     "Hello, World!",
 );
+# }
 ```
 
 ```text
@@ -198,6 +224,8 @@ Event {
 The `props` control parameter adds a base set of [`Props`] to an event in addition to any added through the template:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!(
     props: emit::props! {
         lang: "en",
@@ -205,6 +233,7 @@ emit::emit!(
     "Hello, {user}!",
     user: "World",
 );
+# }
 ```
 
 ```text
@@ -226,11 +255,14 @@ Event {
 Property capturing is controlled by regular Rust attributes. For example, the [`key`] attribute can be used to set the key of a property to an arbitrary string:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 emit::emit!(
     "Hello, {user}!",
     #[emit::key("user.name")]
     user: "World",
 );
+# }
 ```
 
 ```text
@@ -249,6 +281,8 @@ Event {
 By default, properties are captured based on their [`std::fmt::Display`] implementation. This can be changed by applying one of the `as` attributes to the property. For example, applying the [`as_debug`] attribute will capture the property using uts [`std::fmt::Debug`] implementation instead:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 #[derive(Debug)]
 struct User {
     name: &'static str,
@@ -261,6 +295,7 @@ emit::emit!(
         name: "World",
     },
 );
+# }
 ```
 
 ```text
@@ -294,8 +329,8 @@ In the above example, the structure of the `user` property is lost. It can be fo
 To retain the structure of complex values, you can use the [`as_serde`] or [`as_sval`] attributes:
 
 ```
-# #[cfg(not(feature = "serde"))] fn main() {}
-# #[cfg(feature = "serde")]
+# #[cfg(not(all(feature = "std", feature = "serde")))] fn main() {}
+# #[cfg(all(feature = "std", feature = "serde"))]
 # fn main() {
 #[derive(serde::Serialize)]
 struct User {
@@ -334,6 +369,8 @@ Primitive types like booleans and numbers are always structure-preserving, so `a
 Managing the volume of diagnostic data is an important activity in application development to keep costs down and make debugging more efficient. Ideally, applications would only produce useful diagnostics, but reality demands tooling to limit volume at a high-level. `emit` lets you configure a [`Filter`] during [`setup()`] to reduce the volume of diagnostic data. A useful filter is [`level::min_by_path_filter`], which only emits events when they are produced for at least a given [`Level`] within a given module:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")]
 fn main() {
     let rt = emit::setup()
         .emit_to(emit::emitter::from_fn(|evt| println!("{evt:#?}")))
@@ -349,6 +386,7 @@ fn main() {
     rt.blocking_flush(std::time::Duration::from_secs(5));
 }
 
+# #[cfg(feature = "std")]
 mod submodule {
     pub fn greet(user: &str) {
         emit::debug!("Preparing to greet {user}");
@@ -384,6 +422,8 @@ Event {
 Filters can apply to any feature of a candidate event. For example, this filter only matches events with a property `lang` that matches `"en"`:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # let e =
 emit::filter::from_fn(|evt| {
     use emit::Props as _;
@@ -391,16 +431,20 @@ emit::filter::from_fn(|evt| {
     evt.props().pull::<emit::Str, _>("lang") == Some(emit::Str::new("en"))
 });
 # ;
+# }
 ```
 
 The `when` control parameter of the emit macros can be used to override the globally configured filter for a specific event:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 // This event matches the filter
 emit::emit!(
     when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
     "Hello, World!",
 );
+# }
 ```
 
 ```text
@@ -415,12 +459,15 @@ Event {
 ```
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 // This event does not match the filter
 emit::emit!(
     when: emit::filter::from_fn(|evt| evt.module() == "my_app"),
     module: "not_my_app",
     "Hello, World!",
 );
+# }
 ```
 
 ```text
@@ -430,11 +477,14 @@ emit::emit!(
 This can be useful to guarantee an event will always be emitted, regardless of any filter configuration:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 // This event is never filtered out
 emit::emit!(
     when: emit::filter::always(),
     "Hello, World!",
 );
+# }
 ```
 
 ## Tracing and metrics
@@ -446,17 +496,23 @@ emit::emit!(
 Templates are parsed at compile-time, but are rendered at runtime by passing the properties they capture back. The [`Event::msg`] method is a convenient way to render the template of an event using its properties. Taking an earlier example:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 let user = "World";
 
 emit::emit!("Hello, {user}!");
+# }
 ```
 
 If we change our emitter to:
 
 ```
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")] fn main() {
 # let e =
 emit::emitter::from_fn(|evt| println!("{}", evt.msg()))
 # ;
+# }
 ```
 
 then it will produce the output:
@@ -475,6 +531,8 @@ Emitters write their own diagnostics to an alternative `emit` runtime, which you
 
 ```
 # mod emit_term { pub fn stdout() -> impl emit::runtime::InternalEmitter { emit::runtime::AssertInternal(emit::emitter::from_fn(|_| {})) } }
+# #[cfg(not(feature = "std"))] fn main() {}
+# #[cfg(feature = "std")]
 fn main() {
     // Configure the internal runtime before your regular setup
     let internal_rt = emit::setup()
@@ -496,7 +554,7 @@ fn main() {
 */
 
 #![deny(missing_docs)]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
