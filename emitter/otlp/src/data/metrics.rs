@@ -393,25 +393,3 @@ impl<'a> sval::Value for EncodedScopeMetrics<'a> {
         })
     }
 }
-
-#[cfg(feature = "decode_responses")]
-pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
-    match body {
-        Ok(body) => {
-            emit::debug!(
-                rt: emit::runtime::internal(),
-                "received metrics {response}",
-                #[emit::as_debug]
-                response: crate::data::generated::response::decode::<crate::data::generated::collector::metrics::v1::ExportMetricsServiceResponse>(body),
-            );
-        }
-        Err(body) => {
-            emit::warn!(
-                rt: emit::runtime::internal(),
-                "received metrics {response}",
-                #[emit::as_debug]
-                response: crate::data::generated::response::decode::<crate::data::generated::google::rpc::Status>(body),
-            );
-        }
-    }
-}

@@ -88,25 +88,3 @@ impl<'a> sval::Value for EncodedScopeLogs<'a> {
         })
     }
 }
-
-#[cfg(feature = "decode_responses")]
-pub(crate) fn decode_response(body: Result<&[u8], &[u8]>) {
-    match body {
-        Ok(body) => {
-            emit::debug!(
-                rt: emit::runtime::internal(),
-                "received logs {response}",
-                #[emit::as_debug]
-                response: crate::data::generated::response::decode::<crate::data::generated::collector::logs::v1::ExportLogsServiceResponse>(body),
-            );
-        }
-        Err(body) => {
-            emit::warn!(
-                rt: emit::runtime::internal(),
-                "received logs {response}",
-                #[emit::as_debug]
-                response: crate::data::generated::response::decode::<crate::data::generated::google::rpc::Status>(body),
-            );
-        }
-    }
-}
