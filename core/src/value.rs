@@ -168,6 +168,8 @@ impl<'v> Value<'v> {
             fn visit_any(&mut self, value: value_bag::ValueBag) -> Result<(), value_bag::Error> {
                 #[cfg(feature = "alloc")]
                 {
+                    use alloc::string::ToString;
+
                     self.0 = value.to_string().parse().ok();
 
                     Ok(())
@@ -420,7 +422,7 @@ impl ToValue for (dyn std::error::Error + 'static) {
 mod alloc_support {
     use super::*;
 
-    use alloc::borrow::Cow;
+    use alloc::{borrow::Cow, vec::Vec};
 
     impl<'v> Value<'v> {
         /**

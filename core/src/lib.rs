@@ -11,7 +11,10 @@ If you're looking to use `emit` in an application you can use this library direc
 */
 
 #![deny(missing_docs)]
-#![cfg_attr(not(any(test, feature = "std")), no_std)]
+#![cfg_attr(not(test), no_std)]
+
+#[cfg(feature = "std")]
+extern crate std;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

@@ -242,7 +242,7 @@ impl<'a> serde::Serialize for Path<'a> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::borrow::Cow;
+    use alloc::{boxed::Box, borrow::Cow};
 
     use super::*;
 

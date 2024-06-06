@@ -660,6 +660,8 @@ enum PartKind<'a> {
 mod alloc_support {
     use super::*;
 
+    use alloc::vec::Vec;
+
     impl Template<'static> {
         /**
         Create a template from a set of owned parts.

@@ -257,6 +257,7 @@ mod internal {
 #[cfg(feature = "alloc")]
 mod alloc_support {
     use core::any::Any;
+    use alloc::boxed::Box;
 
     use crate::props::ErasedProps;
 
