@@ -34,21 +34,7 @@ Event {
 
 When the annotated function returns, a span event for its execution is emitted. The extent of a span event is a range, where the start is the time the function began executing, and the end is the time the function returned.
 
-On nightly compilers, the same attributes can also be applied to blocks instead of functions:
-
-```
-#![feature(proc_macro_hygiene, stmt_expr_attributes)]
-
-# use std::{thread, time::Duration};
-# fn main() {
-let sleep_ms = 1200;
-
-#[emit::span("wait a bit", sleep_ms)]
-{
-    thread::sleep(Duration::from_millis(sleep_ms))
-}
-# }
-```
+On nightly compilers, the same attributes can also be applied to blocks instead of functions.
 
 Asynchronous functions are also supported:
 
