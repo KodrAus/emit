@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use syn::{parse::Parse, FieldValue};
+use syn::{parse::Parse, spanned::Spanned, FieldValue};
 
 use crate::{args, props::Props, template};
 
@@ -44,7 +44,12 @@ impl Parse for PartsArgs {
 }
 
 pub fn expand_template_parts_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
+    let span = opts.input.span();
+
     let (_, template, props) = template::parse2::<PartsArgs>(opts.input, false)?;
+
+    let template =
+        template.ok_or_else(|| syn::Error::new(span, "missing template string literal"))?;
 
     validate_props(&props)?;
 
@@ -52,7 +57,12 @@ pub fn expand_template_parts_tokens(opts: ExpandTemplateTokens) -> Result<TokenS
 }
 
 pub fn expand_template_tokens(opts: ExpandTemplateTokens) -> Result<TokenStream, syn::Error> {
+    let span = opts.input.span();
+
     let (_, template, props) = template::parse2::<TemplateArgs>(opts.input, false)?;
+
+    let template =
+        template.ok_or_else(|| syn::Error::new(span, "missing template string literal"))?;
 
     validate_props(&props)?;
 

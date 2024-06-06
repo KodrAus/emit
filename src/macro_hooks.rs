@@ -15,6 +15,7 @@ use emit_core::{
     runtime::Runtime,
     str::{Str, ToStr},
     template::{Formatter, Part, Template},
+    timestamp::Timestamp,
     value::{ToValue, Value},
 };
 
@@ -494,6 +495,20 @@ impl<A: Filter, B: Filter> Filter for FirstDefined<A, B> {
 
         self.1.matches(evt)
     }
+}
+
+#[track_caller]
+pub fn __private_now<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
+) -> Option<Timestamp> {
+    rt.clock().now()
+}
+
+#[track_caller]
+pub fn __private_start_timer<'a, 'b, E: Emitter, F: Filter, C: Ctxt, T: Clock, R: Rng>(
+    rt: &'a Runtime<E, F, C, T, R>,
+) -> Timer<&'a T> {
+    Timer::start(rt.clock())
 }
 
 #[track_caller]

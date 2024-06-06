@@ -9,7 +9,7 @@ use crate::{fmt, props::Props, util::FieldValueKey};
 pub fn parse2<A: Parse>(
     input: TokenStream,
     captured: bool,
-) -> Result<(A, Template, Props), syn::Error> {
+) -> Result<(A, Option<Template>, Props), syn::Error> {
     let template =
         fv_template::Template::parse2(input).map_err(|e| syn::Error::new(e.span(), e))?;
 
@@ -108,14 +108,16 @@ pub fn parse2<A: Parse>(
         )
     };
 
-    Ok((
-        args,
-        Template {
+    let template = if template.has_literal() {
+        Some(Template {
             template_parts_tokens,
             template_literal_tokens,
-        },
-        props,
-    ))
+        })
+    } else {
+        None
+    };
+
+    Ok((args, template, props))
 }
 
 pub struct Template {

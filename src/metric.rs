@@ -9,15 +9,12 @@ A standard kind of metric is a monotonic counter, which can be represented as an
 # fn sample_bytes_written() -> usize { 4643 }
 use emit::{well_known::METRIC_AGG_COUNT, Clock};
 
-let rt = emit::runtime::shared();
-
-let now = rt.clock().now();
 let sample = sample_bytes_written();
 
-rt.emit(
-    emit::Metric::new(
+emit::emit!(
+    event: emit::Metric::new(
         emit::module!(),
-        now,
+        emit::Empty,
         "bytes_written",
         METRIC_AGG_COUNT,
         sample,
@@ -82,14 +79,10 @@ The following metric reports the current number of bytes written as 591:
 ```
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
-let rt = emit::runtime::shared();
-
-let now = rt.clock().now();
-
-rt.emit(
-    emit::Metric::new(
+emit::emit!(
+    event: emit::Metric::new(
         emit::module!(),
-        now,
+        emit::Empty,
         "bytes_written",
         METRIC_AGG_COUNT,
         591,
@@ -123,13 +116,11 @@ The following metric reports that the number of bytes written changed by 17 over
 ```
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
-let rt = emit::runtime::shared();
-
-let now = rt.clock().now();
+let now = emit::now!();
 let last_sample = now.map(|now| now - std::time::Duration::from_secs(30));
 
-rt.emit(
-    emit::Metric::new(
+emit::emit!(
+    event: emit::Metric::new(
         emit::module!(),
         last_sample..now,
         "bytes_written",
@@ -165,13 +156,11 @@ The following metric is for a time-series with 15 buckets, where each bucket cov
 ```
 use emit::{Clock, well_known::METRIC_AGG_COUNT};
 
-let rt = emit::runtime::shared();
-
-let now = rt.clock().now();
+let now = emit::now!();
 let last_sample = now.map(|now| now - std::time::Duration::from_secs(15));
 
-rt.emit(
-    emit::Metric::new(
+emit::emit!(
+    event: emit::Metric::new(
         emit::module!(),
         last_sample..now,
         "bytes_written",

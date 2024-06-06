@@ -20,7 +20,7 @@ authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 edition = "2021"
 
 [features]
-default = ["std", "rand", "implicit_rt"]
+default = ["std", "rand", "implicit_rt", "implicit_internal_rt"]
 std = ["alloc", "emit_macros/std", "emit_core/std", "rand"]
 alloc = ["emit_core/alloc"]
 sval = ["emit_macros/sval", "emit_core/sval", "dep:sval"]

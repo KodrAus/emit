@@ -59,7 +59,12 @@ impl Parse for Args {
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
+    let span = opts.input.span();
+
     let (args, template, ctxt_props) = template::parse2::<Args>(opts.input, true)?;
+
+    let template =
+        template.ok_or_else(|| syn::Error::new(span, "missing template string literal"))?;
 
     let mut evt_props = Props::new();
     push_event_props(&mut evt_props, opts.level)?;

@@ -84,13 +84,7 @@ let mut span = emit::Span::filtered_new(
     "wait a bit",
     emit::span::SpanCtxt::current(rt.ctxt()).new_child(rt.rng()),
     emit::Empty,
-    |span| {
-        emit::emit!(
-            event: span,
-            when: emit::filter::always(),
-            "wait a bit",
-        );
-    },
+    |span| emit::emit!(event: span),
 );
 
 // Push the span onto the current context

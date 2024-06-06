@@ -85,7 +85,8 @@ impl Parse for Args {
 }
 
 pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
-    // NOTE: It would be nice if you could specify just `event` and not need to supply a template
+    let span = opts.input.span();
+
     let (args, template, mut props) = template::parse2::<Args>(opts.input, true)?;
 
     push_event_props(&mut props, opts.level)?;
@@ -97,15 +98,22 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
     let rt_tokens = args.rt;
     let when_tokens = args.when;
 
-    let template_tokens = template.template_tokens();
-
     let emit_tokens = if let Some(event_tokens) = args.event {
+        // If the `event` parameter is present, then we can emit it without a template
+        let template_tokens = template
+            .map(|template| {
+                let template_tokens = template.template_tokens();
+
+                quote!(Some(#template_tokens))
+            })
+            .unwrap_or_else(|| quote!(None));
+
         quote!(
             emit::__private::__private_emit_event(
                 #rt_tokens,
                 #when_tokens,
                 &#event_tokens,
-                Some(#template_tokens),
+                #template_tokens,
                 #props_tokens,
             );
         )
@@ -113,6 +121,10 @@ pub fn expand_tokens(opts: ExpandTokens) -> Result<TokenStream, syn::Error> {
         let base_props_tokens = args.props;
         let extent_tokens = args.extent;
         let module_tokens = args.module;
+
+        let template =
+            template.ok_or_else(|| syn::Error::new(span, "missing template string literal"))?;
+        let template_tokens = template.template_tokens();
 
         quote!(
             emit::__private::__private_emit(
