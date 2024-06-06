@@ -1,9 +1,12 @@
 [package]
 name = "emit_macros"
-version = "0.0.0"
-authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+version = "0.11.0-alpha.1"
+authors = ["emit contributors"]
 edition = "2021"
 build = "build.rs"
+
+[package.metadata.docs.rs]
+features = ["std", "sval", "serde", "implicit_rt"]
 
 [lib]
 proc-macro = true
@@ -25,6 +28,7 @@ version = "2"
 features = ["full", "extra-traits", "visit-mut"]
 
 [dependencies.emit_core]
+version = "0.11.0-alpha.1"
 path = "../core"
 
 [dependencies.fv-template]

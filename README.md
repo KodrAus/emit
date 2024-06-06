@@ -10,10 +10,10 @@ Structured diagnostics for Rust applications.
 
 ```toml
 [dependencies.emit]
-version = "0.0.0"
+version = "0.11.0-alpha.1"
 
 [dependencies.emit_term]
-version = "0.0.0"
+version = "0.11.0-alpha.1"
 ```
 
 ```rust

@@ -1,6 +1,13 @@
 [package]
 name = "emit_otlp"
-version = "0.0.0"
+version = "0.11.0-alpha.1"
+authors = ["emit contributors"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/kodraus/emit"
+description = "Emit diagnostic events to an OpenTelemetry-compatible collector."
+keywords = ["logging", "tracing", "metrics", "observability"]
+categories = ["development-tools::debugging"]
 edition = "2021"
 
 [features]
@@ -9,11 +16,13 @@ gzip = ["flate2"]
 tls = ["tokio-rustls", "rustls-native-certs"]
 
 [dependencies.emit]
+version = "0.11.0-alpha.1"
 path = "../../"
 features = ["std", "sval", "implicit_internal_rt"]
 default-features = false
 
 [dependencies.emit_batcher]
+version = "0.11.0-alpha.1"
 path = "../../batcher"
 features = ["tokio"]
 
@@ -76,5 +85,6 @@ version = "1"
 features = ["full"]
 
 [dev-dependencies.emit]
+version = "0.11.0-alpha.1"
 path = "../../"
 features = ["implicit_rt"]

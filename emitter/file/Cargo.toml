@@ -1,13 +1,24 @@
 [package]
 name = "emit_file"
-version = "0.0.0"
+version = "0.11.0-alpha.1"
+authors = ["emit contributors"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/kodraus/emit"
+description = "Emit diagnostic events to rolling files."
+keywords = ["logging", "tracing", "metrics", "observability"]
+categories = ["development-tools::debugging"]
 edition = "2021"
+
+[package.metadata.docs.rs]
+features = ["default_writer"]
 
 [features]
 default = ["default_writer"]
 default_writer = ["emit/sval", "sval_json"]
 
 [dependencies.emit]
+version = "0.11.0-alpha.1"
 path = "../../"
 default-features = false
 features = ["std"]
@@ -21,6 +32,7 @@ features = ["std"]
 optional = true
 
 [dependencies.emit_batcher]
+version = "0.11.0-alpha.1"
 path = "../../batcher"
 
 [dependencies.rand]

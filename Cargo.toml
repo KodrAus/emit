@@ -15,12 +15,21 @@ members = [
 
 [package]
 name = "emit"
-version = "0.0.0"
-authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
+version = "0.11.0-alpha.1"
+authors = ["emit contributors"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/kodraus/emit"
+description = "Structured diagnostics for Rust applications."
+keywords = ["logging", "tracing", "metrics", "observability"]
+categories = ["development-tools::debugging"]
 edition = "2021"
 
+[package.metadata.docs.rs]
+features = ["std", "sval", "serde", "implicit_rt", "implicit_internal_rt"]
+
 [features]
-default = ["std", "rand", "implicit_rt", "implicit_internal_rt"]
+default = ["std", "implicit_rt", "implicit_internal_rt"]
 std = ["alloc", "emit_macros/std", "emit_core/std", "rand"]
 alloc = ["emit_core/alloc"]
 sval = ["emit_macros/sval", "emit_core/sval", "dep:sval"]
@@ -29,9 +38,11 @@ implicit_rt = ["emit_core/implicit_rt", "emit_macros/implicit_rt"]
 implicit_internal_rt = ["emit_core/implicit_internal_rt"]
 
 [dependencies.emit_macros]
+version = "0.11.0-alpha.1"
 path = "macros"
 
 [dependencies.emit_core]
+version = "0.11.0-alpha.1"
 path = "core"
 default-features = false
 
