@@ -65,6 +65,10 @@ jobs:
         working-directory: ./core
         run: cargo +nightly miri test --lib
 
+      - name: All features
+        working-directory: ./core
+        run: cargo +nightly miri test --lib --all-features
+
       - name: No features
         working-directory: ./core
         run: cargo +nightly miri test --lib --no-default-features
