@@ -235,11 +235,13 @@ mod internal {
     pub struct Slot<T: ?Sized>(*const T, PhantomData<*mut fn()>);
 
     impl<T: ?Sized> Slot<T> {
+        // SAFETY: `Slot<T>` must not outlive `&T`
         pub(super) unsafe fn new(v: &T) -> Slot<T> {
             Slot(v as *const T, PhantomData)
         }
 
         pub(super) fn get(&self) -> &T {
+            // SAFETY: `Slot<T>` must not outlive `&T`, as per `Slot::new`
             unsafe { &*self.0 }
         }
     }
@@ -256,8 +258,8 @@ mod internal {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use core::any::Any;
     use alloc::boxed::Box;
+    use core::any::Any;
 
     use crate::props::ErasedProps;
 
@@ -275,7 +277,7 @@ mod alloc_support {
         use super::ErasedFrame;
 
         pub trait DispatchCtxt {
-            fn dispatch_with_current(&self, with: &mut dyn FnMut(ErasedCurrent));
+            fn dispatch_with_current(&self, with: &mut dyn FnMut(&ErasedCurrent));
 
             fn dispatch_open_root(&self, props: &dyn ErasedProps) -> ErasedFrame;
             fn dispatch_open_push(&self, props: &dyn ErasedProps) -> ErasedFrame;
@@ -294,6 +296,7 @@ mod alloc_support {
         );
 
         impl ErasedCurrent {
+            // SAFETY: `ErasedCurrent` must not outlive `&v`
             pub(super) unsafe fn new<'a>(v: &'a impl Props) -> Self {
                 let v: &'a dyn ErasedProps = v;
                 let v: &'a (dyn ErasedProps + 'static) =
@@ -303,6 +306,7 @@ mod alloc_support {
             }
 
             pub(super) fn get<'a>(&'a self) -> &'a (dyn ErasedProps + 'a) {
+                // SAFETY: `ErasedCurrent` must not outlive `&v`, as per `ErasedCurrent::new`
                 unsafe { &*self.0 }
             }
         }
@@ -344,8 +348,10 @@ mod alloc_support {
     where
         C::Frame: Send + 'static,
     {
-        fn dispatch_with_current(&self, with: &mut dyn FnMut(internal::ErasedCurrent)) {
-            self.with_current(move |props| with(unsafe { internal::ErasedCurrent::new(&props) }))
+        fn dispatch_with_current(&self, with: &mut dyn FnMut(&internal::ErasedCurrent)) {
+            // SAFETY: The borrow passed to `with` is arbitarily short, so `ErasedCurrent::get`
+            // cannot outlive `props`
+            self.with_current(move |props| with(&unsafe { internal::ErasedCurrent::new(&props) }))
         }
 
         fn dispatch_open_root(&self, props: &dyn ErasedProps) -> ErasedFrame {

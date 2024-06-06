@@ -487,8 +487,8 @@ impl<T: Rng> Rng for AssertInternal<T> {
 
 #[cfg(feature = "std")]
 mod std_support {
-    use core::any::Any;
     use alloc::boxed::Box;
+    use core::any::Any;
     use std::sync::OnceLock;
 
     use crate::{
@@ -726,9 +726,13 @@ mod std_support {
 
             self.0
                 .get()
-                .map(|rt| unsafe {
-                    &*(&rt.runtime as *const AmbientSyncRuntime as *const AmbientRuntime)
-                })
+                .map(|rt|
+                    // SAFETY: The borrow of `self` cannot outlive the components
+                    // it contains. This block is converting `*const dyn T + Send + Sync`
+                    // to `&'_ dyn T + Send + Sync`
+                    unsafe {
+                        &*(&rt.runtime as *const AmbientSyncRuntime as *const AmbientRuntime)
+                    })
                 .unwrap_or(&EMPTY_AMBIENT_RUNTIME)
         }
     }

@@ -132,6 +132,7 @@ impl<'a, C: Ctxt> Drop for EnterGuard<'a, C> {
 
 impl<C: Ctxt> Drop for Frame<C> {
     fn drop(&mut self) {
+        // SAFETY: We're being dropped, so won't access `scope` again
         self.ctxt
             .close(unsafe { mem::ManuallyDrop::take(&mut self.scope) })
     }
@@ -150,9 +151,12 @@ impl<C: Ctxt, F: Future> Future for FrameFuture<C, F> {
 
     #[track_caller]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: The fields of `FrameFuture` remain pinned
         let unpinned = unsafe { Pin::get_unchecked_mut(self) };
 
         let __guard = unpinned.frame.enter();
+
+        // SAFETY: `FrameFuture::future` is pinned
         unsafe { Pin::new_unchecked(&mut unpinned.future) }.poll(cx)
     }
 }

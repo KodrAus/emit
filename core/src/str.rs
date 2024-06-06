@@ -176,6 +176,7 @@ impl<'k> Str<'k> {
         // NOTE: It's important here that the lifetime returned is not `'k`
         // If it was it would be possible to return a `&'static str` from
         // an owned value
+        // SAFETY: `self.value` is guaranteed to outlive the borrow of `self`
         unsafe { &(*self.value) }
     }
 
@@ -339,7 +340,10 @@ impl<'k> serde::Serialize for Str<'k> {
 
 #[cfg(feature = "alloc")]
 mod alloc_support {
-    use alloc::{borrow::{Cow, ToOwned}, string::String};
+    use alloc::{
+        borrow::{Cow, ToOwned},
+        string::String,
+    };
 
     use super::*;
 

@@ -297,6 +297,7 @@ mod alloc_support {
 
     impl<P: ?Sized> Dedup<P> {
         pub(super) fn new<'a>(props: &'a P) -> &'a Dedup<P> {
+            // SAFETY: `Dedup<P>` and `P` have the same ABI
             unsafe { &*(props as *const P as *const Dedup<P>) }
         }
     }

@@ -630,6 +630,7 @@ impl HttpResponse {
             type Output = Result<bool, Error>;
 
             fn poll(self: Pin<&mut Self>, ctx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
+                // SAFETY: `self` does not use interior pinning
                 let BufNext(incoming, body, trailer) = unsafe { Pin::get_unchecked_mut(self) };
 
                 match Pin::new(incoming).poll_frame(ctx) {
@@ -675,13 +676,17 @@ impl<T: tokio::io::AsyncRead> hyper::rt::Read for HttpIo<T> {
         cx: &mut Context<'_>,
         mut buf: hyper::rt::ReadBufCursor<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
+        // SAFETY: `io` inherits the pinning requirements of `self`
         let io = unsafe { self.map_unchecked_mut(|io| &mut io.0) };
 
+        // SAFETY: `io` does not uninitialize any bytes
         let mut read_buf = tokio::io::ReadBuf::uninit(unsafe { buf.as_mut() });
 
         match tokio::io::AsyncRead::poll_read(io, cx, &mut read_buf) {
             Poll::Ready(Ok(())) => {
                 let read = read_buf.filled().len();
+
+                // SAFETY: The bytes being advanced have been initialized by `read_buf`
                 unsafe { buf.advance(read) };
 
                 Poll::Ready(Ok(()))
@@ -698,12 +703,14 @@ impl<T: tokio::io::AsyncWrite> hyper::rt::Write for HttpIo<T> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, std::io::Error>> {
+        // SAFETY: `io` inherits the pinning requirements of `self`
         let io = unsafe { self.map_unchecked_mut(|io| &mut io.0) };
 
         tokio::io::AsyncWrite::poll_write(io, cx, buf)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+        // SAFETY: `io` inherits the pinning requirements of `self`
         let io = unsafe { self.map_unchecked_mut(|io| &mut io.0) };
 
         tokio::io::AsyncWrite::poll_flush(io, cx)
@@ -713,6 +720,7 @@ impl<T: tokio::io::AsyncWrite> hyper::rt::Write for HttpIo<T> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
+        // SAFETY: `io` inherits the pinning requirements of `self`
         let io = unsafe { self.map_unchecked_mut(|io| &mut io.0) };
 
         tokio::io::AsyncWrite::poll_shutdown(io, cx)

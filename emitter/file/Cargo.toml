@@ -37,3 +37,8 @@ path = "../../batcher"
 
 [dependencies.rand]
 version = "0.8"
+
+[dev-dependencies.emit]
+version = "0.11.0-alpha.1"
+path = "../../"
+features = ["implicit_rt"]

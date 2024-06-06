@@ -627,6 +627,7 @@ impl __PrivateMacroProps<'static> {
 
 impl<'a> __PrivateMacroProps<'a> {
     pub fn new_ref<'b>(props: &'b [(Str<'a>, Option<Value<'a>>)]) -> &'b Self {
+        // SAFETY: `__PrivateMacroProps` and the array have the same ABI
         unsafe {
             &*(props as *const [(Str<'a>, Option<Value<'a>>)] as *const __PrivateMacroProps<'a>)
         }

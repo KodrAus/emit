@@ -482,7 +482,10 @@ fn default_writer(
 ) -> io::Result<()> {
     use std::ops::ControlFlow;
 
-    use emit::{Props as _, well_known::{KEY_MSG, KEY_TPL, KEY_TS, KEY_TS_START}};
+    use emit::{
+        well_known::{KEY_MSG, KEY_TPL, KEY_TS, KEY_TS_START},
+        Props as _,
+    };
 
     struct EventValue<'a, P>(&'a emit::Event<'a, P>);
 
