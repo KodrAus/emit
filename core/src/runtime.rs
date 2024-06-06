@@ -488,6 +488,7 @@ impl<T: Rng> Rng for AssertInternal<T> {
 #[cfg(feature = "std")]
 mod std_support {
     use core::any::Any;
+    use alloc::boxed::Box;
     use std::sync::OnceLock;
 
     use crate::{
@@ -790,6 +791,11 @@ mod no_std_support {
     */
     pub struct AmbientSlot {}
 
+    /**
+    A slot for the internal runtime.
+
+    Without the `std` feature enabled, this slot cannot be initialized.
+    */
     #[cfg(feature = "implicit_internal_rt")]
     pub struct AmbientInternalSlot(AmbientSlot);
 
