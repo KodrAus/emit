@@ -2,6 +2,12 @@
 name = "emit_macros"
 version = "0.11.0-alpha.1"
 authors = ["emit contributors"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/kodraus/emit"
+description = "Emit diagnostic events to rolling files."
+keywords = ["logging", "tracing", "metrics", "observability"]
+categories = ["development-tools::debugging"]
 edition = "2021"
 build = "build.rs"
 

@@ -1,6 +1,6 @@
 # `emit`
 
-[![Rust](https://github.com/KodrAus/emit/actions/workflows/rust.yml/badge.svg)](https://github.com/KodrAus/emit/actions/workflows/rust.yml)
+[![all](https://github.com/KodrAus/emit/actions/workflows/all.yml/badge.svg)](https://github.com/KodrAus/emit/actions/workflows/all.yml)
 
 Structured diagnostics for Rust applications.
 
