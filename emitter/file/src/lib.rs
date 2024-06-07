@@ -85,6 +85,8 @@ Diagnostic events are written to files in asynchronous batches. Under normal ope
 If writing a batch fails while attempting to write to a file then the file being written to is considered poisoned and no future attempts will be made to write to it. The batch will instead be retried on a new file. Batches that fail attempting to sync are not retried. Since batches don't have explicit transactions, it's possible on failure for part or all of the failed batch to actually be present in the original file. That means diagnostic events may be duplicated in the case of an IO error while writing them.
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 
 mod internal_metrics;

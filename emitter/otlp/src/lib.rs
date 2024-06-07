@@ -1161,6 +1161,8 @@ fn main() {
 Diagnostics include when batches are emitted, and any failures observed along the way.
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 
 #[macro_use]

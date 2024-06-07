@@ -16,6 +16,8 @@ This crate contains the proc-macros that are exported in the `emit` crate. It ex
 Code is transformed through _hooks_. A hook is a well-known method call, like `a.__private_emit_capture_as_default()`. The behavior of the hook is defined in `emit::macro_hooks`. Attribute macros look for these hooks and replace them to change behavior. For example, `#[emit::as_debug]` looks for any `__private_emit_capture_as_*` method and replaces it with `__private_emit_capture_as_debug`.
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 extern crate proc_macro;
 
 #[macro_use]

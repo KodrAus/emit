@@ -553,6 +553,8 @@ fn main() {
 ```
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 

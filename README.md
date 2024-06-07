@@ -1,8 +1,10 @@
-# `emit`
+<h1 style="display: flex; align-items: center">
+<img style="display: inline" height="80px" width="80px" src="https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg" aria-hidden="true"> emit
+</h1>
 
 [![all](https://github.com/KodrAus/emit/actions/workflows/all.yml/badge.svg)](https://github.com/KodrAus/emit/actions/workflows/all.yml)
 
-Structured diagnostics for Rust applications.
+## Structured diagnostics for Rust applications.
 
 `emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org).
 

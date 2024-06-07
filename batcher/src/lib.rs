@@ -13,6 +13,8 @@ This library implements a channel that can be used to spawn background workers o
 This library is still experimental, so its API may change.
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 
 use crate::internal_metrics::InternalMetrics;

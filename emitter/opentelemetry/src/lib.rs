@@ -40,6 +40,8 @@ Diagnostic events produced by the [`macro@emit::span`] macro are sent to an [`op
 This library doesn't support `emit`'s metrics as OpenTelemetry metrics. Any metric samples produced by `emit` will be emitted as log records.
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 
 use std::{cell::RefCell, fmt, ops::ControlFlow, sync::Arc};

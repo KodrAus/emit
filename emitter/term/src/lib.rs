@@ -48,6 +48,8 @@ fn main() {
 ```
 */
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg")]
+
 #![deny(missing_docs)]
 
 use core::{fmt, str, time::Duration};
