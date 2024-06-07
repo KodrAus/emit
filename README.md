@@ -4,6 +4,8 @@
 
 [![all](https://github.com/KodrAus/emit/actions/workflows/all.yml/badge.svg)](https://github.com/KodrAus/emit/actions/workflows/all.yml)
 
+[Current docs](https://docs.rs/emit/0.11.0-alpha.1/emit/index.html)
+
 ## Structured diagnostics for Rust applications.
 
 `emit` is a structured logging framework for manually instrumenting Rust applications with an expressive syntax inspired by [Message Templates](https://messagetemplates.org).
