@@ -4,7 +4,7 @@
 
 [![all](https://github.com/KodrAus/emit/actions/workflows/all.yml/badge.svg)](https://github.com/KodrAus/emit/actions/workflows/all.yml)
 
-[Current docs](https://docs.rs/emit/0.11.0-alpha.1/emit/index.html)
+[Current docs](https://docs.rs/emit/0.11.0-alpha.2/emit/index.html)
 
 ## Structured diagnostics for Rust applications.
 
@@ -14,10 +14,10 @@
 
 ```toml
 [dependencies.emit]
-version = "0.11.0-alpha.1"
+version = "0.11.0-alpha.2"
 
 [dependencies.emit_term]
-version = "0.11.0-alpha.1"
+version = "0.11.0-alpha.2"
 ```
 
 ```rust

@@ -34,9 +34,9 @@ fn main() {
 
 In real applications, you'll want to use a more sophisticated emitter, such as:
 
-- [`emit_term`](https://docs.rs/emit_term/0.11.0-alpha.1/emit_term/index.html): Emit diagnostics to the console.
-- [`emit_file`](https://docs.rs/emit_file/0.11.0-alpha.1/emit_file/index.html): Emit diagnostics to a set of rolling files.
-- [`emit_otlp`](https://docs.rs/emit_otlp/0.11.0-alpha.1/emit_otlp/index.html): Emit diagnostics to a remote collector via OpenTelemetry Protocol.
+- [`emit_term`](https://docs.rs/emit_term/0.11.0-alpha.2/emit_term/index.html): Emit diagnostics to the console.
+- [`emit_file`](https://docs.rs/emit_file/0.11.0-alpha.2/emit_file/index.html): Emit diagnostics to a set of rolling files.
+- [`emit_otlp`](https://docs.rs/emit_otlp/0.11.0-alpha.2/emit_otlp/index.html): Emit diagnostics to a remote collector via OpenTelemetry Protocol.
 
 For more advanced setup options, see the [`mod@setup`] module.
 
