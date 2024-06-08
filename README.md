@@ -1,3 +1,5 @@
+> **Archived:** This project has been moved back into https://github.com/emit-rs/emit.
+
 <h1 style="display: flex; align-items: center">
 <img style="display: inline" height="80px" width="80px" src="https://raw.githubusercontent.com/KodrAus/emit/main/asset/logo.svg" aria-hidden="true"> emit
 </h1>
